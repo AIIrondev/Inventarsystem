@@ -21,6 +21,6 @@
 ```
 ## Server
 
-Interner Server der eine Website und Datenbank hosted mit allen Funktionen
+Interner Server der eine Website und Datenbank hosten mit allen Funktionen
 
 ## Web
