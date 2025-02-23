@@ -11,7 +11,7 @@
 ### Inventar
 
 ```json
-{"_id": 123456789, "name": "Test Item", "Ort": "Test", "Image": "String saving", "Verfügbar": "Ja/Nein", "Zustand":"1-10"}
+{"_id": 123456789, "name": "Test Item", "Ort": "Test", "Image": "String saving", "Verfügbar": "Ja/Nein", "Zustand":"1-10", "Last Change": [("User":"user_id"),("Datum":20.03.2024)}
 ```
 
 ### Ausleihungen
