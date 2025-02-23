@@ -1,0 +1,63 @@
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+
+app = Flask(__name__)
+__version__ = '0.0.1'
+
+
+
+@app.route('/test_connection', methods=['GET'])
+def test_connection():
+    return {'status': 'success', 'message': 'Connection successful', 'version': __version__, 'status_code': 200}
+
+@app.route('/')
+def home():
+    if 'username' in session:
+        return render_template('main.html', username=session['username'])
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if not username or not password:
+            flash('Please fill all fields', 'error')
+            return redirect(url_for('login'))
+        
+        user_instance = us()
+        user = user_instance.check_nm_pwd(username, password)
+
+        if user:
+            session['username'] = username
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid credentials', 'error')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if not username or not password:
+            flash('Please fill all fields', 'error')
+            return redirect(url_for('register'))
+        if us.get_user(username):
+            flash('User already exists', 'error')
+            return redirect(url_for('register'))
+        if not us.check_password_strength(password):
+            flash('Password is too weak', 'error')
+            return redirect(url_for('register'))
+        us.add_user(username, password)
+        session['username'] = username
+        return redirect(url_for('home'))
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    app.secret
+    app.run(debug=True)
