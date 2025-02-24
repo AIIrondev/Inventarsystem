@@ -24,3 +24,5 @@
 Interner Server der eine Website und Datenbank hosten mit allen Funktionen
 
 ## Web
+
+Beim Betreten der Website wird man auf den Login Template geroutet oder falls ein Session Token vorliegt direkt in die Haupt Seite geschoben. Auf dieser kann direkt durch alle Database Items zugegriffen werden, wenn eine Höhere Berechtigung besteht können neue Nutzer und Items erstellt werden. Wenn man als Client auf ein Item klickt, gibt einem die Website die Möglichkeit den Lagerort(mit Bild) einzusehen, ob es im Moment verfügbar ist und wenn man es benötigt auch ausleihen kann.
