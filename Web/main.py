@@ -1,4 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from database import User as us
+from database import Inventory as it
+from database import Auslehungen as au
+from bson.objectid import ObjectId
+import hashlib
+from tkinter import messagebox
 
 app = Flask(__name__)
 __version__ = '0.0.1'
@@ -58,6 +64,9 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
 
+@app.route('/get_items', methods=['GET'])
+def get_items():
+    return us.get_items()
+
 if __name__ == '__main__':
-    app.secret
     app.run(debug=True)
