@@ -7,6 +7,7 @@ import hashlib
 from tkinter import messagebox
 
 app = Flask(__name__)
+app.secret_key = 'secret'
 __version__ = '0.0.1'
 
 
@@ -57,7 +58,7 @@ def register():
         us.add_user(username, password)
         session['username'] = username
         return redirect(url_for('home'))
-    return render_template('register.html')
+    return render_template('login.html')
 
 @app.route('/logout')
 def logout():
@@ -66,7 +67,7 @@ def logout():
 
 @app.route('/get_items', methods=['GET'])
 def get_items():
-    return us.get_items()
+    return it.get_items()
 
 if __name__ == '__main__':
     app.run(debug=True)

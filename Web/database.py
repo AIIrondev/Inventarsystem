@@ -102,6 +102,7 @@ class Inventory:
         db = client['Chatsystem']
         items = db['items']
         items_return = items.find()
+        items_return = list(items_return)
         client.close()
         return items_return
 
