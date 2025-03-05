@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory
 from werkzeug.utils import secure_filename
 from database import User as us
 from database import Inventory as it
@@ -17,6 +17,10 @@ __version__ = '0.0.1'
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/test_connection', methods=['GET'])
 def test_connection():
@@ -107,7 +111,7 @@ def upload_item():
     else:
         flash('Invalid file type', 'error')
     
-    return redirect(url_for('home'))
+    return redirect(url_for('home_admin'))
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):

@@ -55,7 +55,7 @@
                     <td>${item.Name}</td>
                     <td>${item.Ort}</td>
                     <td>${item.Beschreibung}</td>
-                    <td><img src="/uploads/${item.Image}" alt="${item.Name}" width="100"></td>
+                    <td><img src="{{ url_for('uploaded_file', filename='') }}${item.Image}" alt="${item.Name}" width="100"></td>
                 `;
                 itemsTableBody.appendChild(row);
             });
