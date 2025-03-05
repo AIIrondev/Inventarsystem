@@ -1,5 +1,7 @@
 # Inventarsystem
 
+[![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
+
 ## Database
 
 ### User
@@ -19,6 +21,7 @@
 ```json
 {"_id": 1234567890, "user_id": 12345678, "inventar_object_id": 123456789, "datum": "20.03.2025"}
 ```
+
 ## Server
 
 Interner Server der eine Website und Datenbank hosten mit allen Funktionen
