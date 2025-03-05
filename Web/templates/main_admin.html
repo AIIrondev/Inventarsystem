@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Inventarsystem{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="content">
+        <h1>Inventory Items</h1>
+        <ul id="items-list">
+            <!-- Items will be dynamically loaded here -->
+        </ul>
+    </div>
+    <div class="upload-form">
+        <h2>Upload Item</h2>
+        <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="ort">Ort:</label>
+                <input type="text" id="ort" name="ort" required>
+            </div>
+            <div class="form-group">
+                <label for="beschreibung">Beschreibung:</label>
+                <textarea id="beschreibung" name="beschreibung" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="image">Image:</label>
+                <input type="file" id="image" name="image" accept="image/*" required>
+            </div>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+</div>
+<script>
+    // Fetch items from the backend and display them
+    fetch("{{ url_for('get_items') }}")
+        .then(response => response.json())
+        .then(data => {
+            const itemsList = document.getElementById('items-list');
+            data.forEach(item => {
+                const listItem = document.createElement('li');
+                listItem.textContent = item.name;
+                itemsList.appendChild(listItem);
+            });
+        })
+        .catch(error => console.error('Error fetching items:', error));
+</script>
+{% endblock %}

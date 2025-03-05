@@ -169,3 +169,12 @@ class User:
         users_return = users.find_one({'Username': username})
         client.close()
         return users_return
+
+    @staticmethod
+    def get_admins():
+        client = MongoClient('localhost', 27017)
+        db = client['Chatsystem']
+        users = db['users']
+        users_return = users.find({'Admin': True})
+        client.close()
+        return users_return

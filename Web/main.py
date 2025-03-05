@@ -1,4 +1,6 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from werkzeug.utils import secure_filename
 from database import User as us
 from database import Inventory as it
 from database import Auslehungen as au
@@ -8,9 +10,13 @@ from tkinter import messagebox
 
 app = Flask(__name__)
 app.secret_key = 'secret'
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 __version__ = '0.0.1'
 
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 @app.route('/test_connection', methods=['GET'])
 def test_connection():
@@ -20,6 +26,12 @@ def test_connection():
 def home():
     if 'username' in session:
         return render_template('main.html', username=session['username'])
+    return redirect(url_for('login'))
+
+@app.route('/home_admin')
+def home_admin():
+    if 'username' in session and session['username'] in us.get_admins():
+        return render_template('main_admin.html', username=session['username'])
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -36,6 +48,8 @@ def login():
 
         if user:
             session['username'] = username
+            if user['Admin']:
+                return redirect(url_for('home_admin'))
             return redirect(url_for('home'))
         else:
             flash('Invalid credentials', 'error')
@@ -69,5 +83,28 @@ def logout():
 def get_items():
     return it.get_items()
 
+@app.route('/upload_item', methods=['POST'])
+def upload_item():
+    if 'username' not in session or not session['username'] in us.get_admins():
+        flash('You are not authorized to upload items', 'error')
+        return redirect(url_for('login'))
+    
+    name = request.form['name']
+    ort = request.form['ort']
+    beschreibung = request.form['beschreibung']
+    image = request.files['image']
+
+    if image and allowed_file(image.filename):
+        filename = secure_filename(image.filename)
+        image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        it.add_item(name, ort, beschreibung, filename)
+        flash('Item uploaded successfully', 'success')
+    else:
+        flash('Invalid file type', 'error')
+    
+    return redirect(url_for('home'))
+
 if __name__ == '__main__':
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
     app.run(debug=True)
