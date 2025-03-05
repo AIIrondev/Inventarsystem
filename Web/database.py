@@ -23,28 +23,28 @@ from tkinter import messagebox
 class Auslehungen:
     def add_auslehnung(item_id, user_id, start, end):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': end})
         client.close()
     
     def remove_auslehnung(id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnungen.delete_one({'_id': ObjectId(id)})
         client.close()
     
     def update_auslehnung(id, item_id, user_id, start, end):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnungen.update_one({'_id': ObjectId(id)}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': end}})
         client.close()
     
     def get_auslehnungen():
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnungen_return = auslehnungen.find()
         client.close()
@@ -52,7 +52,7 @@ class Auslehungen:
 
     def get_auslehnung(id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnung = auslehnungen.find_one({'_id': ObjectId(id)})
         client.close()
@@ -60,7 +60,7 @@ class Auslehungen:
 
     def get_auslehnung_by_user(user_id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnung = auslehnungen.find_one({'User': user_id})
         client.close()
@@ -68,7 +68,7 @@ class Auslehungen:
     
     def get_auslehnung_by_item(item_id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         auslehnungen = db['auslehnungen']
         auslehnung = auslehnungen.find_one({'Item': item_id})
         client.close()
@@ -78,28 +78,28 @@ class Auslehungen:
 class Inventory:
     def add_item(name, ort, beschreibung, image):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': True, "Zustandt": 1})
         client.close()
 
     def remove_item(id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         items.delete_one({'_id': ObjectId(id)})
         client.close()
     
     def update_item(id, name, ort, beschreibung, image, verfügbar, zustandt):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         items.update_one({'_id': ObjectId(id)}, {'$set': {'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': verfügbar, 'Zustandt': zustandt}})
         client.close()
 
     def get_items():
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         items_return = items.find()
         items_return = list(items_return)
@@ -108,7 +108,7 @@ class Inventory:
 
     def get_item(id):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         item = items.find_one({'_id': ObjectId(id)})
         client.close()
@@ -116,7 +116,7 @@ class Inventory:
     
     def get_item_by_name(name):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         items = db['items']
         item = items.find_one({'Name': name})
         client.close()
@@ -126,7 +126,7 @@ class Inventory:
 class User:
     def __init__(self):
         self.client = MongoClient('localhost', 27017)
-        self.db = self.client['Chatsystem']
+        self.db = self.client['Inventarsystem']
         self.users = self.db['users']
 
     @staticmethod
@@ -143,7 +143,7 @@ class User:
     @staticmethod
     def check_nm_pwd(username, password):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         users = db['users']
         hashed_password = hashlib.sha512(password.encode()).hexdigest()
         user = users.find_one({'Username': username, 'Password': hashed_password})
@@ -153,7 +153,7 @@ class User:
     @staticmethod
     def add_user(username, password):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         users = db['users']
         if not User.check_password_strength(password):
             return False
@@ -164,17 +164,17 @@ class User:
     @staticmethod
     def get_user(username):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         users = db['users']
         users_return = users.find_one({'Username': username})
         client.close()
         return users_return
 
     @staticmethod
-    def get_admins():
+    def check_admin(username):
         client = MongoClient('localhost', 27017)
-        db = client['Chatsystem']
+        db = client['Inventarsystem']
         users = db['users']
-        users_return = users.find({'Admin': True})
+        user = users.find_one({'Username': username})
         client.close()
-        return users_return
+        return user['Admin']

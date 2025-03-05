@@ -30,7 +30,10 @@ def home():
 
 @app.route('/home_admin')
 def home_admin():
-    if 'username' in session and session['username'] in us.get_admins():
+    if 'username' in session:
+        if not us.check_admin(session['username']):
+            flash('You are not authorized to view this page', 'error')
+            return redirect(url_for('login'))
         return render_template('main_admin.html', username=session['username'])
     return redirect(url_for('login'))
 
@@ -62,6 +65,7 @@ def register():
         password = request.form['password']
         if not username or not password:
             flash('Please fill all fields', 'error')
+            Flask.get_flash_messages()
             return redirect(url_for('register'))
         if us.get_user(username):
             flash('User already exists', 'error')
@@ -72,7 +76,7 @@ def register():
         us.add_user(username, password)
         session['username'] = username
         return redirect(url_for('home'))
-    return render_template('login.html')
+    return render_template('register.html')
 
 @app.route('/logout')
 def logout():
