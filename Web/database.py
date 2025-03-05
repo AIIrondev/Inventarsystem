@@ -16,6 +16,7 @@
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from bson import ObjectId
 import hashlib
 from tkinter import messagebox
 
@@ -97,15 +98,18 @@ class Inventory:
         items.update_one({'_id': ObjectId(id)}, {'$set': {'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': verfügbar, 'Zustandt': zustandt}})
         client.close()
 
+    @staticmethod
     def get_items():
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
         items_return = items.find()
-        items_return = list(items_return)
+        items_list = []
+        for item in items_return:
+            item['_id'] = str(item['_id'])
+            items_list.append(item)
         client.close()
-        return items_return
-
+        return items_list
     def get_item(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']

@@ -85,11 +85,12 @@ def logout():
 
 @app.route('/get_items', methods=['GET'])
 def get_items():
-    return it.get_items()
+    items = it.get_items()
+    return {'items': items}
 
 @app.route('/upload_item', methods=['POST'])
 def upload_item():
-    if 'username' not in session or not session['username'] in us.get_admins():
+    if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to upload items', 'error')
         return redirect(url_for('login'))
     

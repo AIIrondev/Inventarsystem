@@ -6,9 +6,19 @@
 <div class="container">
     <div class="content">
         <h1>Inventory Items</h1>
-        <ul id="items-list">
-            <!-- Items will be dynamically loaded here -->
-        </ul>
+        <table id="items-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Ort</th>
+                    <th>Beschreibung</th>
+                    <th>Bild</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Items will be dynamically loaded here -->
+            </tbody>
+        </table>
     </div>
     <div class="upload-form">
         <h2>Upload Item</h2>
@@ -38,11 +48,16 @@
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
-            const itemsList = document.getElementById('items-list');
-            data.forEach(item => {
-                const listItem = document.createElement('li');
-                listItem.textContent = item.name;
-                itemsList.appendChild(listItem);
+            const itemsTableBody = document.querySelector('#items-table tbody');
+            data.items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.Name}</td>
+                    <td>${item.Ort}</td>
+                    <td>${item.Beschreibung}</td>
+                    <td><img src="/uploads/${item.Image}" alt="${item.Name}" width="100"></td>
+                `;
+                itemsTableBody.appendChild(row);
             });
         })
         .catch(error => console.error('Error fetching items:', error));
