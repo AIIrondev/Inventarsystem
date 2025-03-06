@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.utils import secure_filename
 from database import User as us
 from database import Inventory as it
-from database import Auslehungen as au
+from database import ausleihung as au
 from bson.objectid import ObjectId
 import hashlib
 from tkinter import messagebox
@@ -118,7 +118,7 @@ def upload_item():
     
     return redirect(url_for('home_admin'))
 
-@app.route('/delete_item/<id>', methods=['POST'])
+@app.route('/delete_item/<id>', methods=['POST', 'GET'])
 def delete_item(id):
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to delete items', 'error')
@@ -133,19 +133,19 @@ def get_ausleihungen():
     ausleihungen = au.get_ausleihungen()
     return {'ausleihungen': ausleihungen}
 
-@app.route('/ausleihen', methods=['GET', 'POST'])
+@app.route('/ausleihen/<id>', methods=['GET', 'POST'])
 def ausleihen():
     if 'username' not in session:
-        flash('You need to be logged in to borrow items', 'error')
+        flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
-    else:
-        item_id = request.form['item_id']
-        user = session['username']
-        au.add_ausleihe(item_id, user)
-        flash('Item borrowed successfully', 'success')
-        if us.check_admin(user):
-            return redirect(url_for('home_admin'))
+    item = it.get_item(id)
+    if not item:
+        flash('Item not found', 'error')
         return redirect(url_for('home'))
+    it.update_item(id, 'available', False)
+    au.add_ausleihe(session['username'], id)
+    flash('Item borrowed successfully', 'success')
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):

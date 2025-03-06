@@ -21,57 +21,57 @@ import hashlib
 from tkinter import messagebox
 
 
-class Auslehungen:
-    def add_auslehnung(item_id, user_id, start, end):
+class ausleihung:
+    def add_ausleihung(item_id, user_id, start, end):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': end})
+        ausleihungen = db['ausleihungen']
+        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': end})
         client.close()
     
-    def remove_auslehnung(id):
+    def remove_ausleihung(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnungen.delete_one({'_id': ObjectId(id)})
+        ausleihungen = db['ausleihungen']
+        ausleihungen.delete_one({'_id': ObjectId(id)})
         client.close()
     
     def update_auslehnung(id, item_id, user_id, start, end):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnungen.update_one({'_id': ObjectId(id)}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': end}})
+        ausleihungen = db['ausleihungen']
+        ausleihungen.update_one({'_id': ObjectId(id)}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': end}})
         client.close()
     
-    def get_auslehnungen():
+    def get_ausleihungen():
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnungen_return = auslehnungen.find()
+        ausleihungen = db['ausleihungen']
+        ausleihungen_return = ausleihungen.find()
         client.close()
-        return auslehnungen_return
+        return ausleihungen_return
 
     def get_auslehnung(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnung = auslehnungen.find_one({'_id': ObjectId(id)})
+        ausleihungen = db['ausleihungen']
+        auslehnung = ausleihungen.find_one({'_id': ObjectId(id)})
         client.close()
         return auslehnung
 
     def get_auslehnung_by_user(user_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnung = auslehnungen.find_one({'User': user_id})
+        ausleihungen = db['ausleihungen']
+        auslehnung = ausleihungen.find_one({'User': user_id})
         client.close()
         return auslehnung
     
     def get_auslehnung_by_item(item_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        auslehnungen = db['auslehnungen']
-        auslehnung = auslehnungen.find_one({'Item': item_id})
+        ausleihungen = db['ausleihungen']
+        auslehnung = ausleihungen.find_one({'Item': item_id})
         client.close()
         return auslehnung
 
@@ -161,7 +161,7 @@ class User:
         users = db['users']
         if not User.check_password_strength(password):
             return False
-        users.insert_one({'Username': username, 'Password': User.hashing(password)})
+        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': false})
         client.close()
         return True
 
