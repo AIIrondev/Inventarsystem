@@ -28,8 +28,10 @@ def test_connection():
 
 @app.route('/')
 def home():
-    if 'username' in session:
+    if 'username' in session and not us.check_admin(session['username']):
         return render_template('main.html', username=session['username'])
+    elif 'username' in session and us.check_admin(session['username']):
+        return redirect(url_for('home_admin'))
     return redirect(url_for('login'))
 
 @app.route('/home_admin')
