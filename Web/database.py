@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 '''
-import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from bson import ObjectId
@@ -22,11 +21,11 @@ from tkinter import messagebox
 
 
 class ausleihung:
-    def add_ausleihung(item_id, user_id, start, end):
+    def add_ausleihung(item_id, user_id, start):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': end})
+        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start})
         client.close()
     
     def remove_ausleihung(id):
@@ -96,6 +95,13 @@ class Inventory:
         db = client['Inventarsystem']
         items = db['items']
         items.update_one({'_id': ObjectId(id)}, {'$set': {'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': verfügbar, 'Zustandt': zustandt}})
+        client.close()
+
+    def update_item_status(id, verfügbar):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        items.update_one({'_id': ObjectId(id)}, {'$set': {'Verfügbar': verfügbar}})
         client.close()
 
     @staticmethod

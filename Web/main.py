@@ -6,6 +6,7 @@ from database import Inventory as it
 from database import ausleihung as au
 from bson.objectid import ObjectId
 import hashlib
+import datetime
 from tkinter import messagebox
 
 
@@ -134,7 +135,7 @@ def get_ausleihungen():
     return {'ausleihungen': ausleihungen}
 
 @app.route('/ausleihen/<id>', methods=['GET', 'POST'])
-def ausleihen():
+def ausleihen(id):
     if 'username' not in session:
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
@@ -142,8 +143,14 @@ def ausleihen():
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
-    it.update_item(id, 'available', False)
-    au.add_ausleihe(session['username'], id)
+    if item['Status']:
+        if item['user'] == session['username']:
+            it.update_item_status(id, True)
+            return redirect(url_for('home'))
+        flash('Item is already borrowed', 'error')
+        return redirect(url_for('home'))
+    it.update_item_status(id, False)
+    au.add_ausleihung(id, session['username'], datetime.datetime.now())
     flash('Item borrowed successfully', 'success')
     return redirect(url_for('home'))
 
