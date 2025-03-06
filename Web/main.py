@@ -117,14 +117,13 @@ def upload_item():
     
     return redirect(url_for('home_admin'))
 
-@app.route('/delete_item', methods=['POST'])
-def delete_item():
+@app.route('/delete_item/<id>', methods=['POST'])
+def delete_item(id):
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to delete items', 'error')
         return redirect(url_for('login'))
     
-    item_id = request.form['item_id']
-    it.delete_item(item_id)
+    it.remove_item(id)
     flash('Item deleted successfully', 'success')
     return redirect(url_for('home_admin'))
 
