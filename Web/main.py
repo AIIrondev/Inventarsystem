@@ -117,6 +117,36 @@ def upload_item():
     
     return redirect(url_for('home_admin'))
 
+@app.route('/delete_item', methods=['POST'])
+def delete_item():
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('You are not authorized to delete items', 'error')
+        return redirect(url_for('login'))
+    
+    item_id = request.form['item_id']
+    it.delete_item(item_id)
+    flash('Item deleted successfully', 'success')
+    return redirect(url_for('home_admin'))
+
+@app.route('/get_ausleihungen', methods=['GET'])
+def get_ausleihungen():
+    ausleihungen = au.get_ausleihungen()
+    return {'ausleihungen': ausleihungen}
+
+@app.route('/ausleihen', methods=['POST'])
+def ausleihen():
+    if 'username' not in session:
+        flash('You need to be logged in to borrow items', 'error')
+        return redirect(url_for('login'))
+    else:
+        item_id = request.form['item_id']
+        user = session['username']
+        au.add_ausleihe(item_id, user)
+        flash('Item borrowed successfully', 'success')
+        if us.check_admin(user):
+            return redirect(url_for('home_admin'))
+        return redirect(url_for('home'))
+
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
