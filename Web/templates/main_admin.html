@@ -25,6 +25,7 @@
     <div class="upload-form">
         <h2>Upload Item</h2>
         <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="name">Name:</label>
                 <input type="text" id="name" name="name" required>
@@ -46,34 +47,38 @@
     </div>
 </div>
 <script>
-    // Fetch items from the backend and display them
-    fetch("{{ url_for('get_items') }}")
-        .then(response => response.json())
-        .then(data => {
-            const itemsTableBody = document.querySelector('#items-table tbody');
-            data.items.forEach(item => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${item.Name}</td>
-                    <td>${item.Ort}</td>
-                    <td><div class="description">${item.Beschreibung}</div></td>
-                    <td><img src="{{ url_for('uploaded_file', filename=item.Image) }}" alt="${item.Name}" width="100"></td>
-                    <td>
-                        <form method="POST" action="{{ url_for('ausleihen') }}">
-                            <input type="hidden" name="item_id" value="${item._id}">
-                            <button type="submit">Ausleihen</button>
-                        </form>
-                    </td>
-                    <td>
-                        <form method="POST" action="{{ url_for('delete_item', id=item._id) }}">
-                            <button type="submit">Delete</button>
-                        </form>
-                    </td>
-                `;
-                itemsTableBody.appendChild(row);
-            });
-        })
-        .catch(error => console.error('Error fetching items:', error));
+    document.addEventListener("DOMContentLoaded", function() {
+        fetch("{{ url_for('get_items') }}")
+            .then(response => response.json())
+            .then(data => {
+                const itemsTableBody = document.querySelector('#items-table tbody');
+                console.log("Fetched items:", data.items); // Debugging
+                data.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>\${item.Name}</td>
+                        <td>\${item.Ort}</td>
+                        <td><div class="description">\${item.Beschreibung}</div></td>
+                        <td><img src="/uploads/\${item.Image}" alt="\${item.Name}" width="100"></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('ausleihen') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="item_id" value="\${item._id || ''}">
+                                <button type="submit">Ausleihen</button>
+                            </form>
+                        </td>
+                        <td>
+                            <form method="POST" action="/delete_item/\${item._id || ''}" onsubmit="return confirm('Möchten Sie dieses Item wirklich löschen?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </td>
+                    `;
+                    itemsTableBody.appendChild(row);
+                });
+            })
+            .catch(error => console.error('Error fetching items:', error));
+    });
 </script>
 <style>
 body {
@@ -89,7 +94,7 @@ body {
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     width: 80%;
-    margin: 20px auto; /* Center the container horizontally */
+    margin: 20px auto;
 }
 
 h1, h2 {
@@ -156,9 +161,9 @@ button:hover {
 }
 
 .description {
-    max-height: 200px; /* Set the maximum height of the div */
-    max-width: 400px; /* Set the maximum width of the div */
-    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 200px;
+    max-width: 400px;
+    overflow-y: auto;
 }
 </style>
 {% endblock %}
