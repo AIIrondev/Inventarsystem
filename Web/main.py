@@ -143,9 +143,11 @@ def ausleihen(id):
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
-    if item['Status']:
+    if item['Verfügbar']:
         if item['user'] == session['username']:
             it.update_item_status(id, True)
+            au.update_auslehnung(id, datetime.datetime.now())
+            flash('Item returned successfully', 'success')
             return redirect(url_for('home'))
         flash('Item is already borrowed', 'error')
         return redirect(url_for('home'))
