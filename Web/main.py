@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 import hashlib
 from tkinter import messagebox
 
+
 app = Flask(__name__)
 app.secret_key = 'secret'
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -132,7 +133,7 @@ def get_ausleihungen():
     ausleihungen = au.get_ausleihungen()
     return {'ausleihungen': ausleihungen}
 
-@app.route('/ausleihen', methods=['POST'])
+@app.route('/ausleihen', methods=['GET', 'POST'])
 def ausleihen():
     if 'username' not in session:
         flash('You need to be logged in to borrow items', 'error')
