@@ -140,22 +140,22 @@ def ausleihen(id):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
     item = it.get_item(id)
-    ausleihung = au.get_auslehnung_by_item(id)
+    ausleihung = au.get_ausleihung_by_item(id)
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
-    if item['Status']:
+    if item['Verfügbar'] == False:
         if ausleihung and ausleihung['User'] == session['username']:
             it.update_item_status(id, True)
-            au.update_auslehnung(ausleihung['_id'], id, session['username'], ausleihung['Start'], datetime.datetime.now())
-            us.add_user_item(session['username'], id)
+            au.update_ausleihung(ausleihung['_id'], id, session['username'], ausleihung['Start'], datetime.datetime.now())
+            us.update_active_ausleihung(session['username'], id, False)
             flash('Item returned successfully', 'success')
             return redirect(url_for('home'))
         flash('Item already borrowed', 'error')
         return redirect(url_for('home'))
     it.update_item_status(id, False)
     au.add_ausleihung(id, session['username'], datetime.datetime.now())
-    us.add_user_item(session['username'], id)
+    us.update_active_ausleihung(session['username'], id, True)
     flash('Item borrowed successfully', 'success')
     return redirect(url_for('home'))
 

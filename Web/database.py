@@ -35,7 +35,7 @@ class ausleihung:
         ausleihungen.delete_one({'_id': ObjectId(id)})
         client.close()
     
-    def update_auslehnung(id, item_id, user_id, start, end):
+    def update_ausleihung(id, item_id, user_id, start, end):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
@@ -50,29 +50,29 @@ class ausleihung:
         client.close()
         return ausleihungen_return
 
-    def get_auslehnung(id):
+    def get_ausleihung(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        auslehnung = ausleihungen.find_one({'_id': ObjectId(id)})
+        ausleihung = ausleihungen.find_one({'_id': ObjectId(id)})
         client.close()
-        return auslehnung
+        return ausleihung
 
-    def get_auslehnung_by_user(user_id):
+    def get_ausleihung_by_user(user_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        auslehnung = ausleihungen.find_one({'User': user_id})
+        ausleihung = ausleihungen.find_one({'User': user_id})
         client.close()
-        return auslehnung
+        return ausleihung
     
-    def get_auslehnung_by_item(item_id):
+    def get_ausleihung_by_item(item_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        auslehnung = ausleihungen.find_one({'Item': item_id})
+        ausleihung = ausleihungen.find_one({'Item': item_id})
         client.close()
-        return auslehnung
+        return ausleihung
 
 
 class Inventory:
@@ -189,11 +189,18 @@ class User:
         client.close()
         return user['Admin']
 
-    def update_active_ausleihung(self, username, ausleihung):
-        self.users.update_one({'Username': username}, {'$set': {'active_ausleihung': ausleihung}})
+    @staticmethod
+    def update_active_ausleihung(username, ausleihung):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users.update_one({'Username': username}, {'$set': {'active_ausleihung': ausleihung}})
         return True
 
     @staticmethod
-    def get_active_ausleihung(self, username):
-        user = self.users.find_one({'Username': username})
+    def get_active_ausleihung( username):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        user = users.find_one({'Username': username})
         return user['active_ausleihung']
