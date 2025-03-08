@@ -25,7 +25,7 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start})
+        ausleihungen.insert_one({'_id': ObjectId(id)}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'}})
         client.close()
     
     def remove_ausleihung(id):
