@@ -190,7 +190,6 @@ class User:
         return user['Admin']
 
     def update_active_ausleihung(self, username, ausleihung):
-        user = self.users.find_one
         self.users.update_one({'Username': username}, {'$set': {'active_ausleihung': ausleihung}})
         return True
 
