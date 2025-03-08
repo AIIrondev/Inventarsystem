@@ -190,15 +190,16 @@ class User:
         return user['Admin']
 
     @staticmethod
-    def update_active_ausleihung(username, ausleihung):
+    def update_active_ausleihung(username, id_item, ausleihung):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         users = db['users']
-        users.update_one({'Username': username}, {'$set': {'active_ausleihung': ausleihung}})
+        users.update_one({'Username': username}, {'$set': {'active_ausleihung': {'Item': id_item, 'Ausleihung': ausleihung}}})
+        client.close()
         return True
 
     @staticmethod
-    def get_active_ausleihung( username):
+    def get_active_ausleihung(username):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         users = db['users']
