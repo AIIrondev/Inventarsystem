@@ -140,25 +140,25 @@ def ausleihen(id):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
     item = it.get_item(id)
+    ausleihung = au.get_auslehnung_by_item(id)
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
+    if item['Status']:
+        if ausleihung and ausleihung['User'] == session['username']:
+            it.update_item_status(id, True)
+            au.update_auslehnung(ausleihung['_id'], id, session['username'], ausleihung['Start'], datetime.datetime.now())
+            us.add_user_item(session['username'], id)
+            flash('Item returned successfully', 'success')
+            return redirect(url_for('home'))
+        flash('Item already borrowed', 'error')
+        return redirect(url_for('home'))
     it.update_item_status(id, False)
     au.add_ausleihung(id, session['username'], datetime.datetime.now())
+    us.add_user_item(session['username'], id)
     flash('Item borrowed successfully', 'success')
     return redirect(url_for('home'))
 
-@app.route('/zurueckgeben/<id>', methods=['POST', 'GET'])
-def zurueckgeben(id):
-    if 'username' not in session:
-        flash('You need to be logged in to return items', 'error')
-        return redirect(url_for('login'))
-    
-    item_id = request.form['item_id']
-    # Fügen Sie hier die Logik zum Zurückgeben des Items hinzu
-    it.return_item(item_id)
-    flash('Item returned successfully', 'success')
-    return redirect(url_for('home_admin'))
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):

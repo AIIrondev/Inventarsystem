@@ -167,7 +167,7 @@ class User:
         users = db['users']
         if not User.check_password_strength(password):
             return False
-        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': false, 'Last_Ausleihung': None})
+        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': false, 'active_ausleihung': None})
         client.close()
         return True
 
@@ -188,3 +188,13 @@ class User:
         user = users.find_one({'Username': username})
         client.close()
         return user['Admin']
+
+    def update_active_ausleihung(self, username, ausleihung):
+        user = self.users.find_one
+        self.users.update_one({'Username': username}, {'$set': {'active_ausleihung': ausleihung}})
+        return True
+
+    @staticmethod
+    def get_active_ausleihung(self, username):
+        user = self.users.find_one({'Username': username})
+        return user['active_ausleihung']
