@@ -148,8 +148,8 @@ def ausleihen(id):
     flash('Item borrowed successfully', 'success')
     return redirect(url_for('home'))
 
-@app.route('/zurueckgeben', methods=['POST', 'GET'])
-def zurueckgeben():
+@app.route('/zurueckgeben/<id>', methods=['POST', 'GET'])
+def zurueckgeben(id):
     if 'username' not in session:
         flash('You need to be logged in to return items', 'error')
         return redirect(url_for('login'))
