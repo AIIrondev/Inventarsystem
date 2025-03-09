@@ -140,14 +140,18 @@ def ausleihen(id):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
     item = it.get_item(id)
-    ausleihung = au.get_ausleihung_by_item(id)
+    try :
+        ausleihung = au.get_ausleihung_by_item(id)
+        _id, user, start, end = ausleihung
+    except:
+        ausleihung = None
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
     if item['Verfügbar'] == False:
-        if ausleihung and ausleihung['$set']["User"] == session['username']: # TODO: Doesent work as expected? maybe because of the database restruckture
+        if ausleihung and user == session['username']:
             it.update_item_status(id, True)
-            au.update_ausleihung(ausleihung['_id'], id, session['username'], ausleihung['Start'], datetime.datetime.now())
+            au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
             us.update_active_ausleihung(session['username'], id, False)
             flash('Item returned successfully', 'success')
             return redirect(url_for('home'))

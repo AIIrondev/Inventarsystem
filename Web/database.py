@@ -56,13 +56,14 @@ class ausleihung:
         ausleihungen = db['ausleihungen']
         ausleihung = ausleihungen.find_one({'_id': ObjectId(id)})
         client.close()
-        return ausleihung
+        return ausleihung.get('$set')
 
     def get_ausleihung_by_user(user_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihung = ausleihungen.find_one({'User': user_id})
+        ausleihung = ausleihungen.find({'$set', {'User': user_id}})
+        ausleihung = ausleihung["$set"]
         client.close()
         return ausleihung
     
@@ -70,9 +71,11 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihung = ausleihungen.find_one({'Item': item_id})
-        client.close()
-        return ausleihung
+        ausleihung = ausleihungen.find()
+        for ausleihung in ausleihung:
+            if ausleihung["$set"]["Item"] == item_id:
+                client.close()
+                return f"{ausleihung["_id"]}", f"{ausleihung["$set"]["User"]}", f"{ausleihung["$set"]["Start"]}", f"{ausleihung["$set"]["End"]}"
 
 
 class Inventory:
