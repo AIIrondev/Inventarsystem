@@ -25,7 +25,7 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({'_id': ObjectId.__generate()}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'}})
+        ausleihungen.insert_one({'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'}})
         client.close()
     
     def remove_ausleihung(id):
@@ -80,7 +80,7 @@ class Inventory:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
-        items.insert_one({'_id': ObjectId.__generate() ,'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': True, "Zustandt": 1})
+        items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': True, "Zustandt": 1})
         client.close()
 
     def remove_item(id):
@@ -116,6 +116,7 @@ class Inventory:
             items_list.append(item)
         client.close()
         return items_list
+    
     def get_item(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']

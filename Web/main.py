@@ -145,7 +145,7 @@ def ausleihen(id):
         flash('Item not found', 'error')
         return redirect(url_for('home'))
     if item['Verfügbar'] == False:
-        if ausleihung and ausleihung['User'] == session['username']:
+        if ausleihung and ausleihung['$set']["User"] == session['username']: # TODO: Doesent work as expected? maybe because of the database restruckture
             it.update_item_status(id, True)
             au.update_ausleihung(ausleihung['_id'], id, session['username'], ausleihung['Start'], datetime.datetime.now())
             us.update_active_ausleihung(session['username'], id, False)
