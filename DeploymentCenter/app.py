@@ -10,6 +10,7 @@ import datetime
 
 app = Flask(__name__)
 app.secret_key = 'secret'
+__version__ = '1.0.0'
 
 
 @app.route('/test_connection', methods=['GET'])
@@ -41,7 +42,7 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
 
-@app.route('/register_new_user', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
@@ -60,3 +61,27 @@ def register():
         session['username'] = username
         return redirect(url_for('home'))
     return render_template('register.html')
+
+@app.route('/delete_user', methods=['GET', 'POST'])
+def delete_user():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if not username or not password:
+            flash('Please fill all fields', 'error')
+            return redirect(url_for('delete_user'))
+        user_instance = us()
+        user = user_instance.check_nm_pwd(username, password)
+        if not user:
+            flash('Invalid credentials', 'error')
+            return redirect(url_for('delete_user'))
+        user_instance.delete_user(username)
+        session.pop('username', None)
+        return redirect(url_for('login'))
+    return render_template('delete_user.html')
+
+@app.route('/logs', methods=['GET'])
+def logs():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    return render_template('logs.html')
