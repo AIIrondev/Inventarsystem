@@ -46,7 +46,6 @@
     </div>
 </div>
 <script>
-    // Fetch items from the backend and display them
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -80,7 +79,8 @@ body {
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     width: 80%;
-    margin: 20px auto; /* Center the container horizontally */
+    max-width: 1200px;
+    margin: 20px auto;
 }
 
 h1, h2 {
@@ -147,9 +147,9 @@ button:hover {
 }
 
 .description {
-    max-height: 200px; /* Set the maximum height of the div */
-    max-width: 400px; /* Set the maximum width of the div */
-    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 200px;
+    max-width: 400px;
+    overflow-y: auto;
 }
 
 .flash {
@@ -166,6 +166,32 @@ button:hover {
 .flash.error {
     background-color: #f8d7da;
     color: #721c24;
+}
+
+@media (max-width: 768px) {
+    .container {
+        width: 95%;
+    }
+    th, td {
+        padding: 6px;
+    }
+    img {
+        max-width: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        width: 98%;
+        padding: 10px;
+    }
+    th, td {
+        font-size: 14px;
+        padding: 4px;
+    }
+    img {
+        max-width: 70px;
+    }
 }
 </style>
 {% endblock %}
