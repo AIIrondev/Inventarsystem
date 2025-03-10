@@ -18,9 +18,6 @@ else
     exit 1
 fi
 
-# Clone the repository
-git clone https://github.com/AIIrondev/Chatsystem.git /opt/Chatsystem
-cd /opt/Chatsystem
 
 # Install Python dependencies
 pip3 install -r requirements.txt

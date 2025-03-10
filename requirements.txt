@@ -1,0 +1,5 @@
+flask
+bson
+werkzeug
+gunicorn
+pymongo

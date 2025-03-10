@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Update the system
-sudo apt update && sudo apt upgrade -y
-
-# Install dependencies including the updated MongoDB version
-sudo apt install -y python3 python3-pip git mongodb-org fail2ban nginx
-
 # Start and enable MongoDB
 sudo systemctl start mongod
 sudo systemctl enable mongod
