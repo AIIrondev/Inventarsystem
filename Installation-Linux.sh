@@ -1,29 +1,83 @@
 #!/bin/bash
 
-# Update the system
+# Set the project directory to the current path
+PROJECT_DIR=$(pwd)
+
+# Get the local network IP address
+DOMAIN=$(hostname -I | awk '{print $1}')
+
+# Clone the repository
+git clone https://github.com/yourusername/yourrepository.git $PROJECT_DIR
+
+# Update and upgrade the system
 sudo apt update && sudo apt upgrade -y
 
-# Install dependencies
-sudo apt install -y python3 python3-pip git mongodb fail2ban nginx
+# Install necessary packages
+sudo apt install -y python3 python3-venv python3-pip nginx mongodb
 
-# Start and enable MongoDB
+# Set up the virtual environment
+python3 -m venv $PROJECT_DIR/.venv
+source $PROJECT_DIR/.venv/bin/activate
+
+# Install Python dependencies
+pip install -r $PROJECT_DIR/requirements.txt
+
+# Set up Gunicorn
+pip install gunicorn
+
+# Create a systemd service file for Gunicorn
+sudo tee /etc/systemd/system/inventarsystem.service > /dev/null <<EOF
+[Unit]
+Description=Gunicorn instance to serve Inventarsystem
+After=network.target
+
+[Service]
+User=web
+Group=www-data
+WorkingDirectory=$PROJECT_DIR/Web
+Environment="PATH=$PROJECT_DIR/.venv/bin"
+ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock -m 007 main:app
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Start and enable the Gunicorn service
+sudo systemctl start inventarsystem
+sudo systemctl enable inventarsystem
+
+# Configure Nginx to proxy requests to Gunicorn
+sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:$PROJECT_DIR/Web/inventarsystem.sock;
+    }
+
+    location /static/ {
+        alias $PROJECT_DIR/Web/static/;
+    }
+
+    location /uploads/ {
+        alias $PROJECT_DIR/Web/uploads/;
+    }
+}
+EOF
+
+# Enable the Nginx server block configuration
+sudo ln -s /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled
+
+# Test the Nginx configuration
+sudo nginx -t
+
+# Restart Nginx to apply the changes
+sudo systemctl restart nginx
+
+# Ensure MongoDB is running
 sudo systemctl start mongodb
 sudo systemctl enable mongodb
 
-# Verify MongoDB status
-if systemctl is-active --quiet mongodb; then
-    echo "MongoDB is running successfully."
-else
-    echo "MongoDB failed to start. Exiting..."
-    exit 1
-fi
-
-
-# Install Python dependencies
-pip3 install -r requirements.txt
-
-# Start the DeploymentCenter application
-nohup python3 DeploymentCenter/main.py > /dev/null 2>&1 &
-
-# Display success message
-echo "DeploymentCenter application has been successfully deployed."
+echo "Installation and setup complete. Your Flask application is now running with Gunicorn and Nginx on your local network."

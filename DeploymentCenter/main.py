@@ -4,7 +4,7 @@ import webbrowser
 
 
 __version__ = "1.0.0"
-website = "http://localhost:8000"
+website = "http://127.0.0.1:8000"
 
 class app:
     def __init__(self):
@@ -47,7 +47,8 @@ class app:
         label_version.config(font=("Arial", 10), fg="blue")
 
     def deploy(self):
-        pass
+        # deploy website to server with gunicorn or uwsgi
+        os.system("source ./start.sh")
 
     def open_web_online(self):
         webbrowser.open(website)
