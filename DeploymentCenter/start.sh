@@ -1,8 +1,14 @@
 #!/bin/bash
 
-# start the Database
-service mongodb start
-service mongodb status
+# Set the project directory to the current path
+PROJECT_DIR=$(pwd)
 
-# Start the gunicorn server
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+# Activate the virtual environment
+source $PROJECT_DIR/.venv/bin/activate
+
+# Start the MongoDB service
+sudo service mongodb start
+sudo service mongodb status
+
+# Start the Gunicorn server
+gunicorn -w 4 -b 0.0.0.0:5000 main:app
