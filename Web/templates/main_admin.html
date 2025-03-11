@@ -13,7 +13,7 @@
                     <th>Ort</th>
                     <th>Beschreibung</th>
                     <th>Bilder</th>
-                    <th>Ausleihen</th>
+                    <th>Aktion</th>
                     <th>Delete</th>
                 </tr>
             </thead>
@@ -52,19 +52,53 @@
             const itemsTableBody = document.querySelector('#items-table tbody');
             data.items.forEach(item => {
                 const row = document.createElement('tr');
-                const imagesHtml = item.Images.map(image => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" width="100">`).join('');
+                const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 row.innerHTML = `
                     <td>${item.Name}</td>
                     <td>${item.Ort}</td>
                     <td><div class="description">${item.Beschreibung}</div></td>
-                    <td>${imagesHtml}</td>
-                    <td><a href="{{ url_for('ausleihen', id='') }}${item._id}">Ausleihen</a></td>
-                    <td><a href="{{ url_for('delete_item', id='') }}${item._id}">Delete</a></td>
+                    <td>
+                        <div class="image-container">
+                            ${imagesHtml}
+                            <button class="prev-button" onclick="prevImage(event)">&#10094;</button>
+                            <button class="next-button" onclick="nextImage(event)">&#10095;</button>
+                        </div>
+                    </td>
+                    <td>
+                        ${item.Verfuegbar ? `
+                            <form method="POST" action="{{ url_for('ausleihen', id=item._id) }}">
+                                <button type="submit">Ausleihen</button>
+                            </form>
+                        ` : `
+                            <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                                <button type="submit">Zurückgeben</button>
+                            </form>
+                        `}
+                    </td>
+                    <td><a href="{{ url_for('delete_item', id=item._id) }}">Delete</a></td>
                 `;
                 itemsTableBody.appendChild(row);
             });
         })
         .catch(error => console.error('Error fetching items:', error));
+
+    function prevImage(event) {
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex - 1 + images.length) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+
+    function nextImage(event) {
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex + 1) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
 </script>
 <style>
 body {
@@ -167,6 +201,36 @@ button:hover {
 .flash.error {
     background-color: #f8d7da;
     color: #721c24;
+}
+
+.image-container {
+    position: relative;
+    max-width: 100px;
+}
+
+.item-image {
+    width: 100%;
+    display: none;
+}
+
+.prev-button, .next-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+}
+
+.prev-button {
+    left: -20px;
+}
+
+.next-button {
+    right: -20px;
 }
 
 @media (max-width: 768px) {

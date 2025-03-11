@@ -100,11 +100,18 @@ class Inventory:
         items.delete_one({'_id': ObjectId(id)})
         client.close()
     
-    def update_item(id, name, ort, beschreibung, image, verfügbar, zustandt):
+    def update_item(id, name, ort, beschreibung, images, verfügbar, zustandt):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
-        items.update_one({'_id': ObjectId(id)}, {'$set': {'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': verfügbar, 'Zustandt': zustandt}})
+        item = {
+            'Name': name,
+            'Ort': ort,
+            'Beschreibung': beschreibung,
+            'Images': images,
+            'Verfügbar': True
+        }
+        items.update_one({'_id': ObjectId(id), '$set': item})
         client.close()
 
     def update_item_status(id, verfügbar):
