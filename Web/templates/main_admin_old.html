@@ -6,13 +6,21 @@
 <div class="container">
     <div class="content">
         <h1>Inventory Items</h1>
-        <div id="items-container" class="items-container">
-            <!-- Items will be dynamically loaded here -->
-        </div>
-        <div class="navigation-buttons">
-            <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
-            <button class="next-button" onclick="scrollNext()">&#10095;</button>
-        </div>
+        <table id="items-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Ort</th>
+                    <th>Beschreibung</th>
+                    <th>Bilder</th>
+                    <th>Aktion</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Items will be dynamically loaded here -->
+            </tbody>
+        </table>
     </div>
     <div class="upload-form">
         <h2>Upload Item</h2>
@@ -41,21 +49,22 @@
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
-            const itemsContainer = document.querySelector('#items-container');
+            const itemsTableBody = document.querySelector('#items-table tbody');
             data.items.forEach(item => {
-                const card = document.createElement('div');
-                card.classList.add('item-card');
+                const row = document.createElement('tr');
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
-                card.innerHTML = `
-                    <h3>${item.Name}</h3>
-                    <p><strong>Ort:</strong> ${item.Ort}</p>
-                    <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
-                    <div class="image-container">
-                        ${imagesHtml}
-                        <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
-                        <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
-                    </div>
-                    <div class="actions">
+                row.innerHTML = `
+                    <td>${item.Name}</td>
+                    <td>${item.Ort}</td>
+                    <td><div class="description">${item.Beschreibung}</div></td>
+                    <td>
+                        <div class="image-container">
+                            <button class="prev-button" onclick="prevImage(event)">&#10094;</button>
+                            ${imagesHtml}
+                            <button class="next-button" onclick="nextImage(event)">&#10095;</button>
+                        </div>
+                    </td>
+                    <td>
                         ${item.Verfuegbar ? `
                             <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                 <button class="ausleihen" type="submit">Ausleihen</button>
@@ -65,10 +74,10 @@
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
                             </form>
                         `}
-                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
-                    </div>
+                    </td>
+                    <td><a href="{{ url_for('delete_item', id='') }}${item._id}">Delete</a></td>
                 `;
-                itemsContainer.appendChild(card);
+                itemsTableBody.appendChild(row);
             });
         })
         .catch(error => console.error('Error fetching items:', error));
@@ -89,16 +98,6 @@
         images[currentIndex].style.display = 'none';
         currentIndex = (currentIndex + 1) % images.length;
         images[currentIndex].style.display = 'block';
-    }
-
-    function scrollPrev() {
-        const itemsContainer = document.querySelector('#items-container');
-        itemsContainer.scrollBy({ left: -300, behavior: 'smooth' });
-    }
-
-    function scrollNext() {
-        const itemsContainer = document.querySelector('#items-container');
-        itemsContainer.scrollBy({ left: 300, behavior: 'smooth' });
     }
 </script>
 <style>
@@ -123,105 +122,28 @@ h1, h2 {
     text-align: center;
 }
 
-.items-container {
-    display: flex;
-    overflow-x: auto;
-    gap: 20px;
-    padding: 20px 0;
-    justify-content: center;
-}
-
-.item-card {
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    padding: 20px;
-    max-width: 300px;
-    flex-shrink: 0;
-}
-
-.item-card h3 {
-    margin-top: 0;
-}
-
-.item-card .description {
-    max-height: 100px;
-    overflow-y: auto;
-}
-
-.item-card .image-container {
-    position: relative;
-    max-width: 300px;
-    margin: 10px 0;
-}
-
-.item-card .item-image {
+table {
     width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+table, th, td {
+    border: 1px solid #ddd;
+}
+
+th, td {
+    padding: 8px;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+}
+
+img {
+    max-width: 100px;
     height: auto;
-    max-height: 300px; /* Set a maximum height for the images */
-    display: none;
-    object-fit: cover;
-}
-
-.item-card .item-image:first-child {
-    display: block;
-}
-
-.prev-image-button, .next-image-button {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    border: none;
-    cursor: pointer;
-    padding: 5px;
-    border-radius: 50%;
-}
-
-.prev-image-button {
-    left: -30px;
-}
-
-.next-image-button {
-    right: -30px;
-}
-
-.actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-button.ausleihen {
-    flex: 1;
-    padding: 10px;
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-button.ausleihen:hover {
-    background-color: #0056b3;
-}
-
-a.delete-button {
-    flex: 1;
-    padding: 10px;
-    background-color: #dc3545;
-    color: #fff;
-    text-align: center;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    text-decoration: none;
-}
-
-a.delete-button:hover {
-    background-color: #c82333;
 }
 
 .upload-form {
@@ -245,6 +167,27 @@ input[type="file"] {
     box-sizing: border-box;
 }
 
+button.ausleihen {
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button.ausleihen:hover {
+    background-color: #0056b3;
+}
+
+.description {
+    max-height: 200px;
+    max-width: 400px;
+    overflow-y: auto;
+}
+
 .flash {
     padding: 10px;
     margin-bottom: 10px;
@@ -261,34 +204,44 @@ input[type="file"] {
     color: #721c24;
 }
 
-.navigation-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 20px;
+.image-container {
+    position: relative;
+    max-width: 100px;
 }
 
-.navigation-buttons .prev-button,
-.navigation-buttons .next-button {
-    background-color: #007bff;
-    color: #fff;
+.item-image {
+    width: 100%;
+    display: none;
+}
+
+.prev-button, .next-button {
+    position: absolute;
+    top: 25%;
+    transform: translateY(-25%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
     border: none;
     cursor: pointer;
-    padding: 10px;
-    border-radius: 5px;
+    padding: 5px;
 }
 
-.navigation-buttons .prev-button:hover,
-.navigation-buttons .next-button:hover {
-    background-color: #0056b3;
+.prev-button {
+    left: -20px;
+}
+
+.next-button {
+    right: -20px;
 }
 
 @media (max-width: 768px) {
     .container {
         width: 95%;
     }
-    .item-card {
-        min-width: 250px;
+    th, td {
+        padding: 6px;
+    }
+    img {
+        max-width: 80px;
     }
 }
 
@@ -297,8 +250,12 @@ input[type="file"] {
         width: 98%;
         padding: 10px;
     }
-    .item-card {
-        min-width: 200px;
+    th, td {
+        font-size: 14px;
+        padding: 4px;
+    }
+    img {
+        max-width: 70px;
     }
 }
 </style>
