@@ -95,6 +95,8 @@ def logout():
 @app.route('/get_items', methods=['GET'])
 def get_items():
     items = it.get_items()
+    for item in items:
+        item['Images'] = item.get('Images', [])
     return {'items': items}
 
 @app.route('/upload_item', methods=['POST'])
@@ -106,15 +108,20 @@ def upload_item():
     name = request.form['name']
     ort = request.form['ort']
     beschreibung = request.form['beschreibung']
-    image = request.files['image']
+    images = request.files.getlist('images')
 
-    if image and allowed_file(image.filename):
-        filename = secure_filename(image.filename)
-        image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-        it.add_item(name, ort, beschreibung, filename)
-        flash('Item uploaded successfully', 'success')
-    else:
-        flash('Invalid file type', 'error')
+    image_filenames = []
+    for image in images:
+        if image and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            image_filenames.append(filename)
+        else:
+            flash('Invalid file type', 'error')
+            return redirect(url_for('home_admin'))
+
+    it.add_item(name, ort, beschreibung, image_filenames)
+    flash('Item uploaded successfully', 'success')
     
     return redirect(url_for('home_admin'))
 

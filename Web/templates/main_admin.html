@@ -12,7 +12,7 @@
                     <th>Name</th>
                     <th>Ort</th>
                     <th>Beschreibung</th>
-                    <th>Bild</th>
+                    <th>Bilder</th>
                     <th>Ausleihen</th>
                     <th>Delete</th>
                 </tr>
@@ -38,8 +38,8 @@
                 <textarea id="beschreibung" name="beschreibung" required></textarea>
             </div>
             <div class="form-group">
-                <label for="image">Bild:</label>
-                <input type="file" id="image" name="image" accept="image/*" required>
+                <label for="images">Bilder:</label>
+                <input type="file" id="images" name="images" accept="image/*" multiple required>
             </div>
             <button type="submit">Upload</button>
         </form>
@@ -52,11 +52,12 @@
             const itemsTableBody = document.querySelector('#items-table tbody');
             data.items.forEach(item => {
                 const row = document.createElement('tr');
+                const imagesHtml = item.Images.map(image => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" width="100">`).join('');
                 row.innerHTML = `
                     <td>${item.Name}</td>
                     <td>${item.Ort}</td>
                     <td><div class="description">${item.Beschreibung}</div></td>
-                    <td><img src="{{ url_for('uploaded_file', filename='') }}${item.Image}" alt="${item.Name}" width="100"></td>
+                    <td>${imagesHtml}</td>
                     <td><a href="{{ url_for('ausleihen', id='') }}${item._id}">Ausleihen</a></td>
                     <td><a href="{{ url_for('delete_item', id='') }}${item._id}">Delete</a></td>
                 `;

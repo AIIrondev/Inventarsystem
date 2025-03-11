@@ -79,11 +79,18 @@ class ausleihung:
 
 
 class Inventory:
-    def add_item(name, ort, beschreibung, image):
+    def add_item(name, ort, beschreibung, images):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
-        items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': image, 'Verfügbar': True, "Zustandt": 1})
+        item = {
+            'Name': name,
+            'Ort': ort,
+            'Beschreibung': beschreibung,
+            'Images': images,
+            'Verfügbar': True
+        }
+        items.insert_one(item)
         client.close()
 
     def remove_item(id):
