@@ -154,7 +154,7 @@ def ausleihen(id):
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
-    if item['Verfügbar'] == False:
+    if item['Verfuegbar'] == False:
         if ausleihung and user == session['username']:
             it.update_item_status(id, True)
             au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())

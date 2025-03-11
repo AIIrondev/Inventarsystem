@@ -66,16 +66,16 @@
                     </td>
                     <td>
                         ${item.Verfuegbar ? `
-                            <form method="POST" action="{{ url_for('ausleihen', id=item._id) }}">
+                            <form method="POST" action="{{ url_for('ausleihen') }}${item._id}">
                                 <button type="submit">Ausleihen</button>
                             </form>
                         ` : `
-                            <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                            <form method="POST" action="{{ url_for('zurueckgeben') }}${item._id}">
                                 <button type="submit">Zurückgeben</button>
                             </form>
                         `}
                     </td>
-                    <td><a href="{{ url_for('delete_item', id=item._id) }}">Delete</a></td>
+                    <td><a href="{{ url_for('delete_item') }}${item._id}">Delete</a></td>
                 `;
                 itemsTableBody.appendChild(row);
             });
