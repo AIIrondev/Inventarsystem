@@ -104,14 +104,7 @@ class Inventory:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
-        item = {
-            'Name': name,
-            'Ort': ort,
-            'Beschreibung': beschreibung,
-            'Images': images,
-            'Verfügbar': True
-        }
-        items.update_one({'_id': ObjectId(id), '$set': item})
+        items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': images, 'Verfügbar': True})
         client.close()
 
     def update_item_status(id, verfügbar):

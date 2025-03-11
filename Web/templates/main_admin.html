@@ -58,24 +58,24 @@
                     <td>${item.Ort}</td>
                     <td><div class="description">${item.Beschreibung}</div></td>
                     <td>
+                        <button class="prev-button" onclick="prevImage(event)">&#10094;</button>
                         <div class="image-container">
                             ${imagesHtml}
-                            <button class="prev-button" onclick="prevImage(event)">&#10094;</button>
-                            <button class="next-button" onclick="nextImage(event)">&#10095;</button>
                         </div>
+                        <button class="next-button" onclick="nextImage(event)">&#10095;</button>
                     </td>
                     <td>
                         ${item.Verfuegbar ? `
-                            <form method="POST" action="{{ url_for('ausleihen') }}${item._id}">
+                            <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                 <button type="submit">Ausleihen</button>
                             </form>
                         ` : `
-                            <form method="POST" action="{{ url_for('zurueckgeben') }}${item._id}">
+                            <form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
                                 <button type="submit">Zurückgeben</button>
                             </form>
                         `}
                     </td>
-                    <td><a href="{{ url_for('delete_item') }}${item._id}">Delete</a></td>
+                    <td><a href="{{ url_for('delete_item', id='') }}${item._id}">Delete</a></td>
                 `;
                 itemsTableBody.appendChild(row);
             });
@@ -213,24 +213,24 @@ button:hover {
     display: none;
 }
 
+
 .prev-button, .next-button {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 25%;
+    transform: translateY(-25%);
     background-color: rgba(0, 0, 0, 0.5);
     color: white;
     border: none;
     cursor: pointer;
     padding: 5px;
-    border-radius: 50%;
 }
 
 .prev-button {
-    left: -20px;
+    left: -50px;
 }
 
 .next-button {
-    right: -20px;
+    right: -50px;
 }
 
 @media (max-width: 768px) {

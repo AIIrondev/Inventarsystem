@@ -140,6 +140,7 @@ def get_ausleihungen():
     ausleihungen = au.get_ausleihungen()
     return {'ausleihungen': ausleihungen}
 
+'''
 @app.route('/ausleihen/<id>', methods=['GET', 'POST'])
 def ausleihen(id):
     if 'username' not in session:
@@ -168,9 +169,44 @@ def ausleihen(id):
     us.update_active_ausleihung(session['username'], id, True)
     flash('Item borrowed successfully', 'success')
     return redirect(url_for('home'))
+'''
 
+@app.route('/ausleihen/<id>', methods=['POST'])
+def ausleihen(id):
+    if 'username' not in session:
+        flash('You need to be logged in to borrow items', 'error')
+        return redirect(url_for('login'))
+    
+    item = it.get_item(id)
+    if item and item['Verfuegbar']:
+        it.update_item_status(id, False)
+        au.add_ausleihung(id, session['username'], datetime.datetime.now())
+        flash('Item borrowed successfully', 'success')
+    else:
+        flash('Item is not available', 'error')
+    
+    return redirect(url_for('home_admin'))
+
+@app.route('/zurueckgeben/<id>', methods=['POST'])
+def zurueckgeben(id):
+    if 'username' not in session:
+        flash('You need to be logged in to return items', 'error')
+        return redirect(url_for('login'))
+    
+    item = it.get_item(id)
+    if item and not item['Verfuegbar']:
+        it.update_item_status(id, True)
+        ausleihung = au.get_ausleihung_by_item(id)
+        _id, user, start, end = ausleihung
+        au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
+        us.update_active_ausleihung(session['username'], id, False)
+        flash('Item returned successfully', 'success')
+    else:
+        flash('Item is already available', 'error')
+    
+    return redirect(url_for('home_admin'))
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
-    app.run("0.0.0.0", 8000)
+    app.run("0.0.0.0", 8000, debug=True)
