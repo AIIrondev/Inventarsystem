@@ -11,4 +11,4 @@ sudo service mongodb start
 sudo service mongodb status
 
 # Start the Gunicorn server
-gunicorn -w 4 -b 0.0.0.0:5000 main:app
+gunicorn -w 4 -b 0.0.0.0:5000 app:app
