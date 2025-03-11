@@ -9,7 +9,7 @@
         <table id="items-table">
             <tbody>
                 <tr>
-                    <td><button onclick="location.href='{{ url_for('register_new_user') }}'">Add User</button></td>
+                    <td><button onclick="location.href='{{ url_for('register') }}'">Add User</button></td>
                     <td><button onclick="location.href='{{ url_for('delete_user') }}'">Delete User</button></td>
                     <td><button onclick="location.href='{{ url_for('logs') }}'">Show all logs</button></td>
                 </tr>
@@ -23,6 +23,13 @@ body {
     background-color: #f4f4f4;
     margin: 0;
     padding: 0;
+}
+
+.content {
+    background-color: #fff;
+    padding: 20px;
+    margin-top: 20px;
+    border-radius: 5px;
 }
 
 .flash {

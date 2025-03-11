@@ -19,7 +19,9 @@ def test_connection():
 
 @app.route('/')
 def home():
-    return render_template('home.html')
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('main.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -34,7 +36,7 @@ def login():
         user_instance = us()
         user = user_instance.check_nm_pwd(username, password)
 
-        return render_template('home.html')
+        return render_template('main.html')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -85,3 +87,13 @@ def logs():
     if not session.get('username'):
         return redirect(url_for('login'))
     return render_template('logs.html')
+
+@app.route('/start_website', methods=['POST', 'GET'])
+def start_website():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    # start the website with the .sh file
+    return redirect(url_for('home'))
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
