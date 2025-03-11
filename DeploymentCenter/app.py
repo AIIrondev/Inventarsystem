@@ -19,9 +19,10 @@ def test_connection():
 
 @app.route('/')
 def home():
-    if 'username' not in session:
-        return redirect(url_for('login'))
-    return render_template('main.html')
+    if 'username' in session and us.check_admin(session['username']):
+        return render_template('main.html')
+    flash('You are not authorized to view this page', 'error')
+    return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -30,13 +31,16 @@ def login():
         password = request.form['password']
         if not username or not password:
             flash('Please fill all fields', 'error')
-            get_flashed_messages()
             return redirect(url_for('login'))
-        
+
         user_instance = us()
         user = user_instance.check_nm_pwd(username, password)
 
-        return render_template('main.html')
+        if 'username' in session and us.check_admin(session['username']):
+            return redirect(url_for('home'))
+
+        flash('Invalid credentials', 'error')
+        return redirect(url_for('login'))
     return render_template('login.html')
 
 @app.route('/logout')
@@ -46,47 +50,46 @@ def logout():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if not username or not password:
-            flash('Please fill all fields', 'error')
-            Flask.get_flash_messages()
-            return redirect(url_for('register'))
-        if us.get_user(username):
-            flash('User already exists', 'error')
-            return redirect(url_for('register'))
-        if not us.check_password_strength(password):
-            flash('Password is too weak', 'error')
-            return redirect(url_for('register'))
-        us.add_user(username, password)
-        session['username'] = username
-        return redirect(url_for('home'))
-    return render_template('register.html')
+    if 'username' in session and us.check_admin(session['username']):
+        if request.method == 'POST':
+            username = request.form['username']
+            password = request.form['password']
+            if not username or not password:
+                flash('Please fill all fields', 'error')
+                return redirect(url_for('register'))
+            if us.get_user(username):
+                flash('User already exists', 'error')
+                return redirect(url_for('register'))
+            if not us.check_password_strength(password):
+                flash('Password is too weak', 'error')
+                return redirect(url_for('register'))
+            us.add_user(username, password)
+            return redirect(url_for('home'))
+        return render_template('register.html')
+    flash('You are not authorized to view this page', 'error')
+    return redirect(url_for('login'))
 
-@app.route('/delete_user', methods=['GET', 'POST'])
-def delete_user():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if not username or not password:
-            flash('Please fill all fields', 'error')
-            return redirect(url_for('delete_user'))
-        user_instance = us()
-        user = user_instance.check_nm_pwd(username, password)
-        if not user:
-            flash('Invalid credentials', 'error')
-            return redirect(url_for('delete_user'))
-        user_instance.delete_user(username)
-        session.pop('username', None)
-        return redirect(url_for('login'))
-    return render_template('delete_user.html')
+@app.route('/delete_user/<id>', methods=['GET', 'POST'])
+def delete_user(id):
+    if 'username' in session and us.check_admin(session['username']):
+        us.delete_user(id)
+        return redirect(url_for('home'))
+    flash('You are not authorized to view this page', 'error')
+    return redirect(url_for('login'))
 
 @app.route('/logs', methods=['GET'])
 def logs():
     if not session.get('username'):
         return redirect(url_for('login'))
     return render_template('logs.html')
+
+@app.route('/get_logs', methods=['GET'])
+def get_logs():
+    if not session.get('username'):
+        return redirect(url_for('login'))
+    # get logs from the ausleihung Database
+    logs = au.get_ausleihungen()
+    return {'status': 'success', 'message': 'Logs retrieved', 'logs': logs, 'status_code': 200}
 
 @app.route('/start_website', methods=['POST', 'GET'])
 def start_website():
