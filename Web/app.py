@@ -52,7 +52,6 @@ def login():
         password = request.form['password']
         if not username or not password:
             flash('Please fill all fields', 'error')
-            get_flashed_messages()
             return redirect(url_for('login'))
         
         user_instance = us()

@@ -5,13 +5,13 @@
 {% block content %}
 <div class="container">
     <div class="content">
-        <h1>Inventory Items</h1>
+        <h1>Optionen</h1>
         <table id="items-table">
             <tbody>
                 <tr>
-                    <td><button onclick="location.href='{{ url_for('register') }}'">Add User</button></td>
-                    <td><button onclick="location.href='{{ url_for('delete_user') }}'">Delete User</button></td>
-                    <td><button onclick="location.href='{{ url_for('logs') }}'">Show all logs</button></td>
+                    <td><button onclick="location.href='{{ url_for('register') }}'">Nutzer Hinzufügen</button></td>
+                    <td><button onclick="location.href='{{ url_for('user_del') }}'">Nutzer Entfernen</button></td>
+                    <td><button onclick="location.href='{{ url_for('logs') }}'">Ausleihungen</button></td>
                 </tr>
             </tbody>
         </table>

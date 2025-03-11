@@ -36,8 +36,14 @@ def login():
         user_instance = us()
         user = user_instance.check_nm_pwd(username, password)
 
-        if 'username' in session and us.check_admin(session['username']):
-            return redirect(url_for('home'))
+        if user:
+            session['username'] = username
+            if user['Admin']:
+                return redirect(url_for('home'))
+            flash("You dont have a valid Permision to enter.")
+            return redirect(url_for('login'))
+        else:
+            flash('Invalid credentials', 'error')
 
         flash('Invalid credentials', 'error')
         return redirect(url_for('login'))
@@ -68,6 +74,10 @@ def register():
         return render_template('register.html')
     flash('You are not authorized to view this page', 'error')
     return redirect(url_for('login'))
+
+@app.route('/user_del', methods=['GET'])
+def user_del():
+    return render_template('user_del.html')
 
 @app.route('/delete_user/<id>', methods=['GET', 'POST'])
 def delete_user(id):
