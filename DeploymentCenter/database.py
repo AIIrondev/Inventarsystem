@@ -175,7 +175,13 @@ class User:
         client.close()
         return True
 
-    @staticmethod
+    def delete_user(username):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users.delete_one({'Username': username})
+        client.close()
+
     def get_user(username):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
