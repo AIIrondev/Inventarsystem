@@ -70,6 +70,9 @@
                 `;
                 itemsContainer.appendChild(card);
             });
+            // Center the first card
+            const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
+            itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
         })
         .catch(error => console.error('Error fetching items:', error));
 
@@ -127,10 +130,9 @@ h1, h2 {
 
 .items-container {
     display: flex;
-    overflow-x: auto;
+    overflow-x: hidden;
     gap: 20px;
     padding: 20px 0;
-    justify-content: center;
     scroll-snap-type: x mandatory;
 }
 
@@ -181,7 +183,7 @@ h1, h2 {
     border: none;
     cursor: pointer;
     padding: 5px;
-    border-radius: 50%;
+    border-radius: 5px;
 }
 
 .prev-image-button {
@@ -247,20 +249,6 @@ input[type="file"] {
     width: 100%;
     padding: 8px;
     box-sizing: border-box;
-}
-
-button {
-    width: 100%;
-    padding: 10px;
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #0056b3;
 }
 
 .flash {
