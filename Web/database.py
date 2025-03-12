@@ -79,7 +79,7 @@ class ausleihung:
 
 
 class Inventory:
-    def add_item(name, ort, beschreibung, images):
+    def add_item(name, ort, beschreibung, images, filter):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
@@ -88,7 +88,8 @@ class Inventory:
             'Ort': ort,
             'Beschreibung': beschreibung,
             'Images': images,
-            'Verfuegbar': True
+            'Verfuegbar': True,
+            'Filter': filter
         }
         items.insert_one(item)
         client.close()
@@ -100,11 +101,11 @@ class Inventory:
         items.delete_one({'_id': ObjectId(id)})
         client.close()
     
-    def update_item(id, name, ort, beschreibung, images, verfügbar, zustandt):
+    def update_item(id, name, ort, beschreibung, images, verfügbar, filter):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
-        items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': images, 'Verfuegbar': True})
+        items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': images, 'Verfuegbar': verfügbar, 'Filter': filter})
         client.close()
 
     def update_item_status(id, verfügbar):
@@ -140,6 +141,14 @@ class Inventory:
         db = client['Inventarsystem']
         items = db['items']
         item = items.find_one({'Name': name})
+        client.close()
+        return item
+
+    def get_item_by_filter(filter):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        item = items.find({'Filter': filter})
         client.close()
         return item
 

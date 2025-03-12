@@ -9,6 +9,14 @@
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
         </div>
+        <div class="filter">
+            <label for="filter">Filter:</label>
+            <select id="filter">
+                <option value="all">All</option>
+                <option value="available">Available</option>
+                <option value="unavailable">Unavailable</option>
+            </select>
+        </div>
         <div class="navigation-buttons">
             <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
             <button class="next-button" onclick="scrollNext()">&#10095;</button>

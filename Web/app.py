@@ -120,7 +120,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames)
+    it.add_item(name, ort, beschreibung, image_filenames, "Test")
     flash('Item uploaded successfully', 'success')
     
     return redirect(url_for('home_admin'))
