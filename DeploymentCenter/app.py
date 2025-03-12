@@ -99,15 +99,13 @@ def logs():
 def get_logs():
     if not session.get('username'):
         return redirect(url_for('login'))
-    # get logs from the ausleihung Database
     logs = au.get_ausleihungen()
-    return {'status': 'success', 'message': 'Logs retrieved', 'logs': logs, 'status_code': 200}
+    return logs
 
 @app.route('/start_website', methods=['POST', 'GET'])
 def start_website():
     if not session.get('username'):
         return redirect(url_for('login'))
-    # start the website with the .sh file
     return redirect(url_for('home'))
 
 if __name__ == "__main__":
