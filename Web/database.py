@@ -151,6 +151,14 @@ class Inventory:
         item = items.find({'Filter': filter})
         client.close()
         return item
+    
+    def get_filter():
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        filters = items.distinct('Filter')
+        client.close()
+        return filters
 
 
 class User:

@@ -6,9 +6,6 @@
 <div class="container">
     <div class="content">
         <h1>Inventory Items</h1>
-        <div id="items-container" class="items-container">
-            <!-- Items will be dynamically loaded here -->
-        </div>
         <div class="filter">
             <label for="filter">Filter:</label>
             <select id="filter">
@@ -16,6 +13,9 @@
                 <option value="available">Available</option>
                 <option value="unavailable">Unavailable</option>
             </select>
+        </div>
+        <div id="items-container" class="items-container">
+            <!-- Items will be dynamically loaded here -->
         </div>
         <div class="navigation-buttons">
             <button class="prev-button" onclick="scrollPrev()">&#10094;</button>

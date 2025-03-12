@@ -206,6 +206,10 @@ def zurueckgeben(id):
     
     return redirect(url_for('home_admin'))
 
+@app.route('/get_filter', methods=['GET'])
+def get_filter():
+    return {'filter': it.get_filter()}
+
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
