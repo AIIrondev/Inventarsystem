@@ -79,8 +79,10 @@ def register():
 def user_del():
     return render_template('user_del.html')
 
-@app.route('/delete_user/<id>', methods=['GET', 'POST'])
-def delete_user(id):
+@app.route('/delete_user', methods=['POST'])
+def delete_user():
+    username = request.form['username']
+    id = us.get_user(username)
     if 'username' in session and us.check_admin(session['username']):
         us.delete_user(id)
         return redirect(url_for('home'))
