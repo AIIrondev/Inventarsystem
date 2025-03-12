@@ -93,12 +93,14 @@
 
     function scrollPrev() {
         const itemsContainer = document.querySelector('#items-container');
-        itemsContainer.scrollBy({ left: -300, behavior: 'smooth' });
+        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
+        itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
     }
 
     function scrollNext() {
         const itemsContainer = document.querySelector('#items-container');
-        itemsContainer.scrollBy({ left: 300, behavior: 'smooth' });
+        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
+        itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
     }
 </script>
 <style>
@@ -129,6 +131,7 @@ h1, h2 {
     gap: 20px;
     padding: 20px 0;
     justify-content: center;
+    scroll-snap-type: x mandatory;
 }
 
 .item-card {
@@ -139,6 +142,7 @@ h1, h2 {
     padding: 20px;
     max-width: 300px;
     flex-shrink: 0;
+    scroll-snap-align: center;
 }
 
 .item-card h3 {
@@ -243,6 +247,20 @@ input[type="file"] {
     width: 100%;
     padding: 8px;
     box-sizing: border-box;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
 }
 
 .flash {
