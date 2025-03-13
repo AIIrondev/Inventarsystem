@@ -1,33 +1,131 @@
-# Inventarsystem
+## Inventarsystem
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
-## Database
+Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung und eine filterbasierte Artikelsuche.
 
-### User
+## Funktionen
+- Benutzeranmeldung mit sicheren Passwort-Richtlinien (Das Password braucht midestens 12 Zeichen!)
+- Rollenbasierter Zugriff (Admin und reguläre Benutzer)
+- Artikelverwaltung (hinzufügen, löschen, ausleihen, zurückgeben)
+- Mehrfachbild-Upload und Verwaltung für jeden Artikel
+- Artikel-Filterung basierend auf benutzerdefinierten Kategorien
+- QR-Code-Generierung zur einfachen Identifikation von Artikeln
+- Responsives Design für Desktop- und Mobilgeräte
 
-```json
-{"_id": 12345678, "username": "Test Nutzer", "password": "Verschlüsseltes Password", "Berechtigungslevel": 1}
-```
+## Installation
 
-### Inventar
+### Voraussetzungen
+- Python 3.7+
+- MongoDB
+- pip
 
-```json
-{"_id": 123456789, "name": "Test Item", "Ort": "Test", "Beschreibung":"Beschreibung", "Image": "String saving", "Verfügbar": "True", "Zustand":"1-10", "Last Change": ["User":"user_id","datum":"20.03.2024"]}
-```
+### Einrichtung
 
-### Ausleihungen
+1. Repository klonen:
+   ```sh
+   git clone <repository-url>
+   cd <repository>
+   ```
+2. Abhängigkeiten installieren:
+   ```sh
+   pip install -r requirements.txt
+   ```
+3. Erforderliche Ordner erstellen:
+   ```sh
+   mkdir uploads
+   ```
+4. MongoDB-Dienst starten:
+   ```sh
+   mongod --dbpath <pfad-zum-datenbankordner>
+   ```
+5. Anwendung starten:
+   ```sh
+   python app.py
+   ```
+6. Anwendung im Browser aufrufen:
+   ```
+   http://localhost:5000
+   ```
 
-```json
-{"_id": 1234567890, "user_id": 12345678, "inventar_object_id": 123456789, "datum": "20.03.2025"}
-```
+## Benutzerhandbuch
 
-## Server
+### Für reguläre Benutzer
 
-Interner Server der eine Website und Datenbank hosten mit allen Funktionen
+#### Login und Hauptseite
+1. Den Nutzernamen und das Password in die Dafür vorhergesehenen Felder eintragen.
 
-## Web
+![Login Screen](Images/Login.png)
 
-Beim Betreten der Website wird man auf den Login Template geroutet oder falls ein Session Token vorliegt direkt in die Haupt Seite geschoben. 
-Auf dieser kann direkt durch alle Database Items zugegriffen werden, wenn eine Höhere Berechtigung besteht können neue Nutzer und Items erstellt werden. 
-Wenn man als Client auf ein Item klickt, gibt einem die Website die Möglichkeit den Lagerort(mit Bild) einzusehen, ob es im Moment verfügbar ist und wenn man es benötigt auch ausleihen kann.
+2. Auf den Blauen Knopf mit der Aufschrift "Login" tippen.
+
+![Login Credentials](Images/Login_cred.png)
+
+
+#### Artikel durchsuchen
+- Die Hauptseite zeigt alle verfügbaren Artikel in einer kartenbasierten Ansicht.
+- Navigationspfeile (links/rechts) zum Durchblättern der Artikel nutzen.
+- Jeder Artikel zeigt:
+  - Name
+  - Ort
+  - Beschreibung
+  - Bilder (mit Pfeilen durch mehrere Bilder blättern)
+  - Filterkategorien
+
+![no_admin](Images/no_admin.png)
+
+#### Artikel filtern
+- Die Dropdown-Menüs "Filter 1" und "Filter 2" zur Eingrenzung der Suche nutzen.
+
+![Filter1](Images/Filter1.png) ![Filter2](Images/Filter2.png)
+
+- Optionen aus beiden Dropdown-Menüs auswählen, um kombinierte Filter anzuwenden.
+
+![Filter3](Images/Filter3.png) ![Filter4](Images/Filter4.png)
+
+- Um alle Artikel wieder anzuzeigen, "Alle" in beiden Filtern auswählen.
+
+#### Artikel ausleihen und zurückgeben
+- Um einen verfügbaren Artikel auszuleihen, auf den "Ausleihen"-Button klicken.
+![Ausleihen](Images/Ausleihen.png)
+- Um einen ausgeliehenen Artikel zurückzugeben, den Artikel suchen und auf "Zurückgeben" klicken.
+![Zurueckgeben](Images/Zurueckgeben.png)
+- Das System verfolgt die Zeitpunkte von Ausleihe und Rückgabe.
+
+### Für Administratoren
+
+#### Admin-Oberfläche
+- Mit Administrator-Zugangsdaten anmelden, um auf die Admin-Oberfläche zuzugreifen.
+- Die Admin-Oberfläche bietet alle Standardfunktionen sowie zusätzliche Verwaltungsfunktionen.
+
+#### Neue Artikel hinzufügen
+1. In der Admin-Oberfläche zum Formular "Artikel hochladen" scrollen.
+2. Folgende Informationen eingeben:
+   - **Name**: Eindeutige Bezeichnung des Artikels
+   - **Ort**: Lagerort des Artikels
+   - **Beschreibung**: Detaillierte Informationen
+   - **Filter 1 & Filter 2**: Kategorien zur Organisation
+   - **Bilder hochladen**: Ein oder mehrere Bilder des Artikels auswählen
+3. Auf "Hochladen" klicken, um den Artikel zum Inventar hinzuzufügen.
+
+![Upload](Images/Upload.png)
+
+#### Artikel löschen
+- Den gewünschten Artikel finden und auf "Delete" klicken.
+- Der Artikel und zugehörige Bilder werden aus dem System entfernt.
+![delete](Images/delete.png)
+
+#### Ausgeliehene Artikel verwalten
+- Administratoren können alle Artikel einsehen, einschließlich ausgeliehener Artikel.
+- Falls erforderlich, können Administratoren Artikel im Namen der Benutzer zurückgeben.
+
+### QR-Code-System
+Jeder Artikel wird bei der Erstellung automatisch mit einem eindeutigen QR-Code versehen. Diese QR-Codes können ausgedruckt und an physischen Gegenständen angebracht werden, um eine einfache Identifikation durch Scannen zu ermöglichen.
+
+## Lizenz
+Dieses Projekt ist unter der Apache License, Version 2.0 lizenziert. Siehe die LICENSE-Datei für Details.
+
+## Mitwirkende
+**Maximilian Gründinger** - Projektgründer
+
+Für technische Unterstützung oder Fragen bitte ein Issue im GitHub-Repository eröffnen.

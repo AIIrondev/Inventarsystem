@@ -203,7 +203,7 @@ def create_qr_code(id):
             box_size=10,
             border=4,
         )
-        qr.add_data(f'http://localhost:8000/item/{id}')
+        qr.add_data(f'{id}')
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
