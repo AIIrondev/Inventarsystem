@@ -128,10 +128,14 @@ def upload_item():
 
     it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2)
     flash('Item uploaded successfully', 'success')
-    name = it.get_item_by_name(name)
-    id = name['_id']
-    create_qr_code(id)
-    return redirect(url_for('home_admin'))
+    
+    # Get the item ID and create QR code
+    item = it.get_item_by_name(name)
+    item_id = str(item['_id'])
+    create_qr_code(item_id)
+    
+    # Pass the item ID to download the QR code
+    return redirect(url_for('home_admin', new_item_id=item_id))
 
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
 def delete_item(id):
@@ -196,22 +200,75 @@ def get_filter():
 
     
 def create_qr_code(id):
-        import qrcode
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(f'{id}')
-        qr.make(fit=True)
+    import qrcode
+    if not os.path.exists(app.config['QR_CODE_FOLDER']):
+        os.makedirs(app.config['QR_CODE_FOLDER'])
+        
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    
+    # Ensure HTTPS URL
+    base_url = request.host_url
+    if base_url.startswith('http:'):
+        base_url = base_url.replace('http:', 'https:')
+    
+    # URL that will open this item directly
+    qr.add_data(f"{base_url}item/{id}")
+    qr.make(fit=True)
 
-        img = qr.make_image(fill_color="black", back_color="white")
-        item = it.get_item(id)
-        name = item['Name']
-        img.save(f'QRCodes/{name}{id}.png')
+    img = qr.make_image(fill_color="black", back_color="white")
+    item = it.get_item(id)
+    name = item['Name']
+    filename = f"{name}_{id}.png"
+    img.save(os.path.join(app.config['QR_CODE_FOLDER'], filename))
+    return filename
+
+@app.route('/qr_code/<id>')
+def get_qr_code(id):
+    item = it.get_item(id)
+    if not item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home_admin'))
+    
+    filename = f"{item['Name']}_{id}.png"
+    qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+    
+    # If QR code doesn't exist yet, create it
+    if not os.path.exists(qr_path):
+        filename = create_qr_code(id)
+    
+    return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
+
+@app.route('/item/<id>')
+def show_item(id):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+        
+    item = it.get_item(id)
+    if not item:
+        flash('Item not found', 'error')
+        if us.check_admin(session['username']):
+            return redirect(url_for('home_admin'))
+        return redirect(url_for('home'))
+    
+    # Pass the item ID to template to highlight it
+    if us.check_admin(session['username']):
+        return render_template('main_admin.html', highlight_item=str(id))
+    return render_template('main.html', highlight_item=str(id))
+
+QR_CODE_FOLDER = 'QRCodes'
+app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
-    app.run("0.0.0.0", 8000, debug=True)
+    if not os.path.exists(app.config['QR_CODE_FOLDER']):
+        os.makedirs(app.config['QR_CODE_FOLDER'])
+    
+    # SSL configuration
+    ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
+    app.run("0.0.0.0", 8000, debug=True, ssl_context=ssl_context)
