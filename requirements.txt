@@ -3,3 +3,5 @@ bson
 werkzeug
 gunicorn
 pymongo
+pillow
+qrcode
