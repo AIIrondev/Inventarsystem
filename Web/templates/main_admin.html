@@ -8,10 +8,9 @@
         <h1>Inventory Items</h1>
         <div class="filter">
             <label for="filter">Filter:</label>
-            <select id="filter">
+            <select id="filter" name="filter" onchange="filterItems()">
+                <!-- Filter options will be dynamically loaded here -->
                 <option value="all">All</option>
-                <option value="available">Available</option>
-                <option value="unavailable">Unavailable</option>
             </select>
         </div>
         <div id="items-container" class="items-container">
@@ -83,6 +82,19 @@
             itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
         })
         .catch(error => console.error('Error fetching items:', error));
+
+    fetch("{{ url_for('get_filter') }}")
+        .then(response => response.json())
+        .then(data => {
+            const filter = document.querySelector('#filter');
+            data.filters.forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error fetching filters:', error));
 
     function prevImage(event) {
         const container = event.target.closest('.image-container');

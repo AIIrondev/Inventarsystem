@@ -208,6 +208,7 @@ def zurueckgeben(id):
 
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
+    flash(f"Filter: {it.get_filter()}", 'success')
     return {'filter': it.get_filter()}
 
 if __name__ == '__main__':
