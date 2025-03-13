@@ -123,7 +123,9 @@ def upload_item():
 
     it.add_item(name, ort, beschreibung, image_filenames, filter_upload)
     flash('Item uploaded successfully', 'success')
-    
+    name = it.get_item_by_name(name)
+    id = name['_id']
+    create_qr_code(id)
     return redirect(url_for('home_admin'))
 
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
@@ -179,6 +181,21 @@ def zurueckgeben(id):
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
     return it.get_filter()
+
+    
+def create_qr_code(id):
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(f'http://localhost:8000/item/{id}')
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(f'uploads/{id}.png')
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
