@@ -62,23 +62,6 @@
     </div>
 </div>
 <script>
-    function onScanSuccess(decodedText, decodedResult) {
-        // Handle the scanned code as you like, for example:
-        console.log(`Code matched = ${decodedText}`, decodedResult);
-        window.location.href = `/search_item/${decodedText}`;
-    }
-
-    function onScanFailure(error) {
-        // Handle scan failure, usually better to ignore and keep scanning.
-        console.warn(`Code scan error = ${error}`);
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "qr-reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-    });
-
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {

@@ -110,6 +110,11 @@ def upload_item():
     beschreibung = request.form['beschreibung']
     images = request.files.getlist('images')
     filter_upload = request.form.getlist('filter')
+    filter_upload2 = request.form.getlist('filter2')
+    
+    if not name or not ort or not beschreibung or not images:
+        flash('Please fill all fields', 'error')
+        return redirect(url_for('home_admin'))
 
     image_filenames = []
     for image in images:
@@ -121,7 +126,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload)
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2)
     flash('Item uploaded successfully', 'success')
     name = it.get_item_by_name(name)
     id = name['_id']
