@@ -7,7 +7,6 @@ from database import ausleihung as au
 from bson.objectid import ObjectId
 import hashlib
 import datetime
-from tkinter import messagebox
 
 
 app = Flask(__name__)
@@ -208,8 +207,7 @@ def zurueckgeben(id):
 
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
-    flash(f"Filter: {it.get_filter()}", 'success')
-    return {'filter': it.get_filter()}
+    return it.get_filter()
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):

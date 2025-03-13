@@ -85,14 +85,18 @@
 
     fetch("{{ url_for('get_filter') }}")
         .then(response => response.json())
-        .then(data => {
-            const filter = document.querySelector('#filter');
-            data.filters.forEach(filterName => {
-                const option = document.createElement('option');
-                option.value = filterName;
-                option.textContent = filterName;
-                filter.appendChild(option);
-            });
+        .then(filters => {
+            if (Array.isArray(filters)) {
+                const filter = document.querySelector('#filter');
+                filters.forEach(filterName => {
+                    const option = document.createElement('option');
+                    option.value = filterName;
+                    option.textContent = filterName;
+                    filter.appendChild(option);
+                });
+            } else {
+                console.error('Invalid filters data:', filters);
+            }
         })
         .catch(error => console.error('Error fetching filters:', error));
 
