@@ -108,6 +108,7 @@ def upload_item():
     ort = request.form['ort']
     beschreibung = request.form['beschreibung']
     images = request.files.getlist('images')
+    filter_upload = request.form.getlist('filter')
 
     image_filenames = []
     for image in images:
@@ -119,7 +120,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, "Test")
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload)
     flash('Item uploaded successfully', 'success')
     
     return redirect(url_for('home_admin'))
@@ -138,37 +139,6 @@ def delete_item(id):
 def get_ausleihungen():
     ausleihungen = au.get_ausleihungen()
     return {'ausleihungen': ausleihungen}
-
-'''
-@app.route('/ausleihen/<id>', methods=['GET', 'POST'])
-def ausleihen(id):
-    if 'username' not in session:
-        flash('You are not authorized to view this page', 'error')
-        return redirect(url_for('login'))
-    item = it.get_item(id)
-    try :
-        ausleihung = au.get_ausleihung_by_item(id)
-        _id, user, start, end = ausleihung
-    except:
-        ausleihung = None
-    if not item:
-        flash('Item not found', 'error')
-        return redirect(url_for('home'))
-    if item['Verfuegbar'] == False:
-        if ausleihung and user == session['username']:
-            it.update_item_status(id, True)
-            au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
-            us.update_active_ausleihung(session['username'], id, False)
-            flash('Item returned successfully', 'success')
-            return redirect(url_for('home'))
-        flash('Item already borrowed', 'error')
-        return redirect(url_for('home'))
-    it.update_item_status(id, False)
-    au.add_ausleihung(id, session['username'], datetime.datetime.now())
-    us.update_active_ausleihung(session['username'], id, True)
-    flash('Item borrowed successfully', 'success')
-    return redirect(url_for('home'))
-'''
 
 @app.route('/ausleihen/<id>', methods=['POST'])
 def ausleihen(id):
