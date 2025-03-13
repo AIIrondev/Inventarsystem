@@ -207,7 +207,9 @@ def create_qr_code(id):
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
-        img.save(f'uploads/{id}.png')
+        item = it.get_item(id)
+        name = item['Name']
+        img.save(f'QRCodes/{name}{id}.png')
 
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):

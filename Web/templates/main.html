@@ -6,12 +6,21 @@
 <div class="container">
     <div class="content">
         <h1>Inventory Items</h1>
-        <div class="filter">
-            <label for="filter">Filter:</label>
-            <select id="filter" name="filter" onchange="filterItems(event.target.value)">
-                <!-- Filter options will be dynamically loaded here -->
-                <option value="all">All</option>
-            </select>
+        <div class="filter-container">
+            <div class="filter">
+                <label for="filter1">Filter 1:</label>
+                <select id="filter1" name="filter1" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="filter">
+                <label for="filter2">Filter 2:</label>
+                <select id="filter2" name="filter2" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
         </div>
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
@@ -27,15 +36,37 @@
         .then(response => response.json())
         .then(data => {
             const itemsContainer = document.querySelector('#items-container');
+            // Creating a Set to store unique filter values
+            const filter1Values = new Set();
+            const filter2Values = new Set();
+            
             data.items.forEach(item => {
                 const card = document.createElement('div');
                 card.classList.add('item-card');
-                card.dataset.Filter = item.Filter;
+                
+                // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
+                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
+                const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                
+                card.dataset.filter1 = filter1Value;
+                card.dataset.filter2 = filter2Value;
+                
+                // Add filter values to their respective sets
+                if (filter1Value && filter1Value.trim() !== '') {
+                    filter1Values.add(filter1Value);
+                }
+                if (filter2Value && filter2Value.trim() !== '') {
+                    filter2Values.add(filter2Value);
+                }
+
+                // Rest of card creation code remains the same
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
                     <p><strong>Ort:</strong> ${item.Ort}</p>
                     <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
+                    <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
+                    <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
                     <div class="image-container">
                         ${imagesHtml}
                         <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -51,44 +82,69 @@
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
                             </form>
                         `}
-                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
                     </div>
                 `;
                 itemsContainer.appendChild(card);
             });
+            
+            // Now populate the filter dropdowns with the collected unique values
+            const filter1 = document.querySelector('#filter1');
+            const filter2 = document.querySelector('#filter2');
+            
+            // Sort and populate filter1 dropdown
+            [...filter1Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter1.appendChild(option);
+            });
+            
+            // Sort and populate filter2 dropdown
+            [...filter2Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter2.appendChild(option);
+            });
+            
             // Center the first card
-            const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
-            itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
+            const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
+            if (cardWidth > 0) {
+                itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
+            }
+            
+            // Nach dem Laden der Items Filter anwenden
+            applyFilters();
         })
         .catch(error => console.error('Error fetching items:', error));
 
-    fetch("{{ url_for('get_filter') }}")
-        .then(response => response.json())
-        .then(filters => {
-            if (Array.isArray(filters)) {
-                const filter = document.querySelector('#filter');
-                filters.forEach(filterName => {
-                    const option = document.createElement('option');
-                    option.value = filterName;
-                    option.textContent = filterName;
-                    filter.appendChild(option);
-                });
-            } else {
-                console.error('Invalid filters data:', filters);
-            }
-        })
-        .catch(error => console.error('Error fetching filters:', error));
-
-    function filterItems(filterValue) {
+    // Verbesserte Filter-Anwendungsfunktion
+    function applyFilters() {
+        const filter1Value = document.querySelector('#filter1').value;
+        const filter2Value = document.querySelector('#filter2').value;
+        
         const itemsContainer = document.querySelector('#items-container');
         const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
         items.forEach(item => {
-            if (filterValue === 'all' || item.dataset.Filter === filterValue) {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            
+            const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
+            const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
+            
+            // Beide Filter müssen übereinstimmen (UND-Operation)
+            if (matchesFilter1 && matchesFilter2) {
                 item.style.display = 'block';
+                visibleCount++;
             } else {
                 item.style.display = 'none';
             }
         });
+        
+        // Informationen zur Anzahl der sichtbaren Elemente
+        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
     }
 
     function prevImage(event) {
@@ -141,6 +197,19 @@ body {
 
 h1, h2 {
     text-align: center;
+}
+
+.filter-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .items-container {
@@ -304,12 +373,21 @@ input[type="file"] {
     background-color: #0056b3;
 }
 
+.qr-scanner {
+    margin-top: 20px;
+    text-align: center;
+}
+
 @media (max-width: 768px) {
     .container {
         width: 95%;
     }
     .item-card {
         min-width: 250px;
+    }
+    .filter-container {
+        flex-direction: column;
+        align-items: center;
     }
 }
 

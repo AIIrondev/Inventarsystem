@@ -66,14 +66,30 @@
         .then(response => response.json())
         .then(data => {
             const itemsContainer = document.querySelector('#items-container');
+            // Creating a Set to store unique filter values
+            const filter1Values = new Set();
+            const filter2Values = new Set();
+            
             data.items.forEach(item => {
                 const card = document.createElement('div');
                 card.classList.add('item-card');
                 
                 // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
-                card.dataset.filter1 = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
-                card.dataset.filter2 = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
+                const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                
+                card.dataset.filter1 = filter1Value;
+                card.dataset.filter2 = filter2Value;
+                
+                // Add filter values to their respective sets
+                if (filter1Value && filter1Value.trim() !== '') {
+                    filter1Values.add(filter1Value);
+                }
+                if (filter2Value && filter2Value.trim() !== '') {
+                    filter2Values.add(filter2Value);
+                }
 
+                // Rest of card creation code remains the same
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
@@ -102,6 +118,26 @@
                 itemsContainer.appendChild(card);
             });
             
+            // Now populate the filter dropdowns with the collected unique values
+            const filter1 = document.querySelector('#filter1');
+            const filter2 = document.querySelector('#filter2');
+            
+            // Sort and populate filter1 dropdown
+            [...filter1Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter1.appendChild(option);
+            });
+            
+            // Sort and populate filter2 dropdown
+            [...filter2Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter2.appendChild(option);
+            });
+            
             // Center the first card
             const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
             if (cardWidth > 0) {
@@ -112,37 +148,6 @@
             applyFilters();
         })
         .catch(error => console.error('Error fetching items:', error));
-
-    fetch("{{ url_for('get_filter') }}")
-        .then(response => response.json())
-        .then(filters => {
-            if (Array.isArray(filters)) {
-                const filter1 = document.querySelector('#filter1');
-                const filter2 = document.querySelector('#filter2');
-                
-                // Duplikate entfernen und sortieren
-                const uniqueFilters = [...new Set(filters)].sort();
-                
-                uniqueFilters.forEach(filterName => {
-                    if (filterName && filterName.trim() !== '') {
-                        // Filter 1 Optionen
-                        const option1 = document.createElement('option');
-                        option1.value = filterName;
-                        option1.textContent = filterName;
-                        filter1.appendChild(option1);
-                        
-                        // Filter 2 Optionen
-                        const option2 = document.createElement('option');
-                        option2.value = filterName;
-                        option2.textContent = filterName;
-                        filter2.appendChild(option2);
-                    }
-                });
-            } else {
-                console.error('Invalid filters data:', filters);
-            }
-        })
-        .catch(error => console.error('Error fetching filters:', error));
 
     // Verbesserte Filter-Anwendungsfunktion
     function applyFilters() {
