@@ -99,7 +99,7 @@ def get_items():
         item['Images'] = item.get('Images', [])
     return {'items': items}
 
-@app.route('/upload_item', methods=['POST'])
+@app.route('/upload_item', methods=['POST']) #TODO: Zwei Filter einbauen
 def upload_item():
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to upload items', 'error')
@@ -157,6 +157,8 @@ def ausleihen(id):
     else:
         flash('Item is not available', 'error')
     
+    if 'username' in session and not us.check_admin(session['username']):
+        return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])
@@ -176,6 +178,8 @@ def zurueckgeben(id):
     else:
         flash('Item is already available', 'error')
     
+    if 'username' in session and not us.check_admin(session['username']):
+        return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
 
 @app.route('/get_filter', methods=['GET'])

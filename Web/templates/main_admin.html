@@ -6,12 +6,21 @@
 <div class="container">
     <div class="content">
         <h1>Inventory Items</h1>
-        <div class="filter">
-            <label for="filter">Filter:</label>
-            <select id="filter" name="filter" onchange="filterItems(event.target.value)">
-                <!-- Filter options will be dynamically loaded here -->
-                <option value="all">All</option>
-            </select>
+        <div class="filter-container">
+            <div class="filter">
+                <label for="filter1">Filter 1:</label>
+                <select id="filter1" name="filter1" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="filter">
+                <label for="filter2">Filter 2:</label>
+                <select id="filter2" name="filter2" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
         </div>
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
@@ -37,8 +46,12 @@
                 <textarea id="beschreibung" name="beschreibung" required></textarea>
             </div>
             <div class="form-group">
-                <label for="filter">Filter:</label>
-                <input type="text" id="filter" name="filter" required>
+                <label for="filter1-upload">Filter 1:</label>
+                <input type="text" id="filter1-upload" name="filter1" required>
+            </div>
+            <div class="form-group">
+                <label for="filter2-upload">Filter 2:</label>
+                <input type="text" id="filter2-upload" name="filter2" required>
             </div>
             <div class="form-group">
                 <label for="images">Bilder:</label>
@@ -47,25 +60,25 @@
             <button type="submit">Upload</button>
         </form>
     </div>
-    <div id="qr-reader" style="width:500px"></div>
-    <div id="qr-reader-results"></div>
 </div>
 <script>
-    // Handle the scanned code as you like, for example:
     function onScanSuccess(decodedText, decodedResult) {
+        // Handle the scanned code as you like, for example:
         console.log(`Code matched = ${decodedText}`, decodedResult);
         window.location.href = `/search_item/${decodedText}`;
     }
-    function onScanFailure(error) {
-    // Handle scan failure, usually better to ignore and keep scanning.
 
+    function onScanFailure(error) {
+        // Handle scan failure, usually better to ignore and keep scanning.
         console.warn(`Code scan error = ${error}`);
     }
 
-    let html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
- 
+    document.addEventListener("DOMContentLoaded", function() {
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "qr-reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    });
+
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -73,7 +86,8 @@
             data.items.forEach(item => {
                 const card = document.createElement('div');
                 card.classList.add('item-card');
-                card.dataset.Filter = item.Filter;
+                card.dataset.Filter1 = item.Filter1 || item.Filter || '';
+                card.dataset.Filter2 = item.Filter2 || '';
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
@@ -109,12 +123,20 @@
         .then(response => response.json())
         .then(filters => {
             if (Array.isArray(filters)) {
-                const filter = document.querySelector('#filter');
+                const filter1 = document.querySelector('#filter1');
+                const filter2 = document.querySelector('#filter2');
                 filters.forEach(filterName => {
-                    const option = document.createElement('option');
-                    option.value = filterName;
-                    option.textContent = filterName;
-                    filter.appendChild(option);
+                    // Add options to filter1
+                    const option1 = document.createElement('option');
+                    option1.value = filterName;
+                    option1.textContent = filterName;
+                    filter1.appendChild(option1);
+                    
+                    // Add options to filter2
+                    const option2 = document.createElement('option');
+                    option2.value = filterName;
+                    option2.textContent = filterName;
+                    filter2.appendChild(option2);
                 });
             } else {
                 console.error('Invalid filters data:', filters);
@@ -122,11 +144,19 @@
         })
         .catch(error => console.error('Error fetching filters:', error));
 
-    function filterItems(filterValue) {
+    function applyFilters() {
+        const filter1Value = document.querySelector('#filter1').value;
+        const filter2Value = document.querySelector('#filter2').value;
+        
         const itemsContainer = document.querySelector('#items-container');
         const items = itemsContainer.querySelectorAll('.item-card');
+        
         items.forEach(item => {
-            if (filterValue === 'all' || item.dataset.Filter === filterValue) {
+            const matchesFilter1 = filter1Value === 'all' || item.dataset.Filter1 === filter1Value;
+            const matchesFilter2 = filter2Value === 'all' || item.dataset.Filter2 === filter2Value;
+            
+            // Both filters must match (AND operation)
+            if (matchesFilter1 && matchesFilter2) {
                 item.style.display = 'block';
             } else {
                 item.style.display = 'none';
@@ -184,6 +214,19 @@ body {
 
 h1, h2 {
     text-align: center;
+}
+
+.filter-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .items-container {
@@ -347,12 +390,21 @@ input[type="file"] {
     background-color: #0056b3;
 }
 
+.qr-scanner {
+    margin-top: 20px;
+    text-align: center;
+}
+
 @media (max-width: 768px) {
     .container {
         width: 95%;
     }
     .item-card {
         min-width: 250px;
+    }
+    .filter-container {
+        flex-direction: column;
+        align-items: center;
     }
 }
 
