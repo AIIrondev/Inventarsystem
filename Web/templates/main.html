@@ -23,22 +23,42 @@
     </div>
 </div>
 <script>
-    // Fetch items from the backend and display them
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
-            const itemsTableBody = document.querySelector('#items-table tbody');
+            const itemsContainer = document.querySelector('#items-container');
             data.items.forEach(item => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${item.Name}</td>
-                    <td>${item.Ort}</td>
-                    <td><div class="description">${item.Beschreibung}</div></td>
-                    <td><img src="{{ url_for('uploaded_file', filename='') }}${item.Image}" alt="${item.Name}" width="100"></td>
-                    <td><a href="{{ url_for('ausleihen', id='') }}${item._id}">Ausleihen</a></td>
+                const card = document.createElement('div');
+                card.classList.add('item-card');
+                card.dataset.Filter = item.Filter;
+                const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                card.innerHTML = `
+                    <h3>${item.Name}</h3>
+                    <p><strong>Ort:</strong> ${item.Ort}</p>
+                    <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
+                    <div class="image-container">
+                        ${imagesHtml}
+                        <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
+                        <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
+                    </div>
+                    <div class="actions">
+                        ${item.Verfuegbar ? `
+                            <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                <button class="ausleihen" type="submit">Ausleihen</button>
+                            </form>
+                        ` : `
+                            <form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                                <button class="ausleihen" type="submit">Zurückgeben</button>
+                            </form>
+                        `}
+                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
+                    </div>
                 `;
-                itemsTableBody.appendChild(row);
+                itemsContainer.appendChild(card);
             });
+            // Center the first card
+            const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
+            itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
         })
         .catch(error => console.error('Error fetching items:', error));
 
@@ -100,7 +120,6 @@
         const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
         itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
     }
-
 </script>
 <style>
 body {

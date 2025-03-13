@@ -33,16 +33,17 @@ def home():
         return render_template('main.html', username=session['username'])
     elif 'username' in session and us.check_admin(session['username']):
         return redirect(url_for('home_admin'))
-    return redirect(url_for('login'))
+    return redirect(url_for('logout'))
 
 @app.route('/home_admin')
 def home_admin():
     if 'username' in session:
         if not us.check_admin(session['username']):
             flash('You are not authorized to view this page', 'error')
-            return redirect(url_for('login'))
+            return redirect(url_for('logout'))
         return render_template('main_admin.html', username=session['username'])
-    return redirect(url_for('login'))
+    
+    return redirect(url_for('logout'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -102,7 +103,7 @@ def get_items():
 def upload_item():
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to upload items', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('home'))
     
     name = request.form['name']
     ort = request.form['ort']
@@ -129,7 +130,7 @@ def upload_item():
 def delete_item(id):
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to delete items', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('home'))
     
     it.remove_item(id)
     flash('Item deleted successfully', 'success')
@@ -144,7 +145,7 @@ def get_ausleihungen():
 def ausleihen(id):
     if 'username' not in session:
         flash('You need to be logged in to borrow items', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('home'))
     
     item = it.get_item(id)
     if item and item['Verfuegbar']:
@@ -160,7 +161,7 @@ def ausleihen(id):
 def zurueckgeben(id):
     if 'username' not in session:
         flash('You need to be logged in to return items', 'error')
-        return redirect(url_for('login'))
+        return redirect(url_for('logout'))
     
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
