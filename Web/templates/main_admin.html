@@ -8,7 +8,7 @@
         <h1>Inventory Items</h1>
         <div class="filter">
             <label for="filter">Filter:</label>
-            <select id="filter" name="filter" onchange="filterItems()">
+            <select id="filter" name="filter" onchange="filterItems(event.target.value)">
                 <!-- Filter options will be dynamically loaded here -->
                 <option value="all">All</option>
             </select>
@@ -52,6 +52,7 @@
             data.items.forEach(item => {
                 const card = document.createElement('div');
                 card.classList.add('item-card');
+                card.dataset.Filter = item.Filter;
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
@@ -99,6 +100,18 @@
             }
         })
         .catch(error => console.error('Error fetching filters:', error));
+
+    function filterItems(filterValue) {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        items.forEach(item => {
+            if (filterValue === 'all' || item.dataset.Filter === filterValue) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
 
     function prevImage(event) {
         const container = event.target.closest('.image-container');
