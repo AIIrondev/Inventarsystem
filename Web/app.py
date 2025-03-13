@@ -175,11 +175,14 @@ def zurueckgeben(id):
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
         it.update_item_status(id, True)
-        ausleihung = au.get_ausleihung_by_item(id)
-        _id, user, start, end = ausleihung
-        au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
-        us.update_active_ausleihung(session['username'], id, False)
-        flash('Item returned successfully', 'success')
+        ausleihung_data = au.get_ausleihung_by_item(id)
+        if ausleihung_data:  # Prüfen, ob eine Ausleihung gefunden wurde
+            _id, user, start, end = ausleihung_data
+            au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
+            us.update_active_ausleihung(session['username'], id, False)
+            flash('Item returned successfully', 'success')
+        else:
+            flash('No borrowing record found for this item', 'error')
     else:
         flash('Item is already available', 'error')
     

@@ -25,7 +25,7 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'}})
+        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'})
         client.close()
     
     def remove_ausleihung(id):
@@ -56,14 +56,13 @@ class ausleihung:
         ausleihungen = db['ausleihungen']
         ausleihung = ausleihungen.find_one({'_id': ObjectId(id)})
         client.close()
-        return ausleihung.get('$set')
+        return ausleihung  # Rückgabe des gesamten Dokuments ohne .get('$set')
 
     def get_ausleihung_by_user(user_id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihung = ausleihungen.find({'$set', {'User': user_id}})
-        ausleihung = ausleihung["$set"]
+        ausleihung = ausleihungen.find_one({'User': user_id})  # Korrekter MongoDB-Abfrageausdruck
         client.close()
         return ausleihung
     
@@ -71,12 +70,12 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihung = ausleihungen.find()
-        for ausleihung in ausleihung:
-            if ausleihung["$set"]["Item"] == item_id:
-                client.close()
-                return f"{ausleihung["_id"]}", f"{ausleihung["$set"]["User"]}", f"{ausleihung["$set"]["Start"]}", f"{ausleihung["$set"]["End"]}"
-
+        ausleihung = ausleihungen.find_one({'Item': item_id})
+        if ausleihung:
+            client.close()
+            return str(ausleihung["_id"]), ausleihung["User"], ausleihung["Start"], ausleihung["End"]
+        client.close()
+        return None
 
 class Inventory:
     def add_item(name, ort, beschreibung, images, filter, filter2):
@@ -200,7 +199,7 @@ class User:
         users = db['users']
         if not User.check_password_strength(password):
             return False
-        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': True, 'active_ausleihung': None})
+        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': False, 'active_ausleihung': None})
         client.close()
         return True
 
