@@ -62,7 +62,6 @@
     </div>
 </div>
 <script>
-    // Verbesserte Funktion zum Laden und Anzeigen der Items
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -74,8 +73,7 @@
                 // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
                 card.dataset.filter1 = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
                 card.dataset.filter2 = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
-                
-                // Rest des Codes bleibt unverändert
+
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
@@ -115,7 +113,6 @@
         })
         .catch(error => console.error('Error fetching items:', error));
 
-    // Verbesserte Funktion zum Laden der Filter
     fetch("{{ url_for('get_filter') }}")
         .then(response => response.json())
         .then(filters => {
