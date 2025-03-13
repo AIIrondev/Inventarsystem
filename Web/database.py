@@ -195,7 +195,7 @@ class User:
         users = db['users']
         if not User.check_password_strength(password):
             return False
-        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': False, 'active_ausleihung': None})
+        users.insert_one({'Username': username, 'Password': User.hashing(password), 'Admin': True, 'active_ausleihung': None})
         client.close()
         return True
 
