@@ -89,20 +89,17 @@ class ausleihung:
             # Debug output
             print(f"Looking for ausleihung with item_id: {item_id}")
             
-            # Try different field names that might contain the item ID
-            ausleihung = ausleihungen.find_one({'Item': item_id})
+            # Look for active borrowings (where End is null)
+            ausleihung = ausleihungen.find_one({'Item': item_id, 'End': None})
+            
+            # If not found, try with the alternate field name
             if not ausleihung:
-                ausleihung = ausleihungen.find_one({'item_id': item_id})
+                ausleihung = ausleihungen.find_one({'item_id': item_id, 'End': None})
             
             print(f"Found ausleihung: {ausleihung}")
             
             client.close()
-            
-            if ausleihung:
-                # Return a dictionary for more flexible handling
-                return ausleihung
-            else:
-                return None
+            return ausleihung
         except Exception as e:
             print(f"Error in get_ausleihung_by_item: {e}")
             return None

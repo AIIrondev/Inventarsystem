@@ -197,63 +197,46 @@ def ausleihen(id):
 def zurueckgeben(id):
     if 'username' not in session:
         flash('You need to be logged in to return items', 'error')
-        return redirect(url_for('logout'))
+        return redirect(url_for('login'))
     
     # Add debug output
     print(f"User {session['username']} attempting to return item {id}")
     
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
+        # First update the item status
         it.update_item_status(id, True)
         
         try:
-            # Get the borrowing record
+            # Get the active borrowing record for this item
             ausleihung_data = au.get_ausleihung_by_item(id)
             print(f"Ausleihung data retrieved: {ausleihung_data}")
             
             # Set the end date to now
             end_date = datetime.datetime.now()
             
-            if ausleihung_data:
-                # Handle different data formats
-                if isinstance(ausleihung_data, tuple) and len(ausleihung_data) == 4:
-                    # Original expected format
-                    _id, user, start, _ = ausleihung_data
-                elif isinstance(ausleihung_data, dict):
-                    # Dictionary format
-                    _id = str(ausleihung_data.get('_id'))
-                    user = ausleihung_data.get('User', session['username'])
-                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
-                else:
-                    # Other format - use what we can
-                    _id = str(id)  # Use the item ID as fallback
-                    user = session['username']
-                    start = datetime.datetime.now() - datetime.timedelta(hours=1)  # Assume borrowed 1 hour ago
+            if ausleihung_data and '_id' in ausleihung_data:
+                # Update the existing record
+                ausleihung_id = str(ausleihung_data['_id'])
+                user = ausleihung_data.get('User', session['username'])
+                start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                 
-                # Update the ausleihung record with end date
-                update_result = au.update_ausleihung(_id, id, user, start, end_date)
+                # Update with end date
+                update_result = au.update_ausleihung(ausleihung_id, id, user, start, end_date)
                 print(f"Update ausleihung result: {update_result}")
-                
-                # No longer need to clear the active borrowing
-                # us.update_active_borrowing(session['username'], None, False)
                 flash('Item returned successfully', 'success')
             else:
-                # Create a new return record if one doesn't exist
-                print("No ausleihung record found, creating a new one")
-                au.add_ausleihung(id, session['username'], 
-                                  datetime.datetime.now() - datetime.timedelta(hours=1),
-                                  end_date)
-                # No longer need to clear the active borrowing
-                # us.update_active_borrowing(session['username'], None, False)
-                flash('Item returned successfully', 'success')
+                # No active borrowing found, create a new return record
+                print("No active ausleihung record found, creating a new one")
+                # Use a default start time 1 hour ago
+                start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
+                au.add_ausleihung(id, session['username'], start_time, end_date)
+                flash('Item returned successfully (new record created)', 'success')
         except Exception as e:
             print(f"Error in zurueckgeben: {e}")
-            # Force the item to be available
-            it.update_item_status(id, True)
-            # No longer needed: us.update_active_borrowing(session['username'], None, False)
             flash('Item returned but encountered an error in record-keeping', 'warning')
     else:
-        flash('Item is already available', 'error')
+        flash('Item is already available or does not exist', 'error')
     
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
