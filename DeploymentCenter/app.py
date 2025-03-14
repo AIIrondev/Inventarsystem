@@ -77,7 +77,21 @@ def register():
 
 @app.route('/user_del', methods=['GET'])
 def user_del():
-    return render_template('user_del.html')
+    if 'username' in session and us.check_admin(session['username']):
+        # Get all users except the current one (to prevent self-deletion)
+        all_users = us.get_all_users()
+        # Format them as needed for the template
+        users_list = []
+        for user in all_users:
+            if user['username'] != session['username']:  # Prevent self-deletion
+                users_list.append({
+                    'username': user['username'],
+                    'admin': user.get('Admin', False)
+                })
+        return render_template('user_del.html', users=users_list)
+    else:
+        flash('You are not authorized to view this page', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/delete_user', methods=['POST'])
 def delete_user():

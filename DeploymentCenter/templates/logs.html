@@ -1,32 +1,292 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Returned Items</title>
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-</head>
-<body>
-    <h1>Returned Items</h1>
-    <table>
-        <thead>
-            <tr>
-                <th>Item ID</th>
-                <th>User</th>
-                <th>Start Time</th>
-                <th>End Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.Item }}</td>
-                <td>{{ item.User }}</td>
-                <td>{{ item.Start }}</td>
-                <td>{{ item.End }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Ausleihungen Logs{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Ausleihungs-Protokoll</h1>
+    
+    <div class="filter-controls">
+        <input type="text" id="searchInput" placeholder="Suchen..." onkeyup="filterTable()">
+        
+        <div class="date-range">
+            <label for="startDate">Von:</label>
+            <input type="date" id="startDate" onchange="filterTable()">
+            
+            <label for="endDate">Bis:</label>
+            <input type="date" id="endDate" onchange="filterTable()">
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <table id="logsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Item Name ↕</th>
+                    <th onclick="sortTable(1)">Benutzer ↕</th>
+                    <th onclick="sortTable(2)">Ausgeliehen am ↕</th>
+                    <th onclick="sortTable(3)">Zurückgegeben am ↕</th>
+                    <th>Dauer</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.Item }}</td>
+                    <td>{{ item.User }}</td>
+                    <td>{{ item.Start }}</td>
+                    <td>{{ item.End }}</td>
+                    <td>{{ item.Duration }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="navigation-buttons">
+        <a href="{{ url_for('home') }}" class="button">Zurück zum Dashboard</a>
+        <button onclick="exportToCSV()" class="export-button">Als CSV exportieren</button>
+    </div>
+</div>
+
+<script>
+    function filterTable() {
+        const input = document.getElementById('searchInput').value.toLowerCase();
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const table = document.getElementById('logsTable');
+        const rows = table.getElementsByTagName('tr');
+        
+        for (let i = 1; i < rows.length; i++) {
+            let show = true;
+            const cells = rows[i].getElementsByTagName('td');
+            
+            // Text search
+            if (input) {
+                let textMatch = false;
+                for (let j = 0; j < cells.length; j++) {
+                    if (cells[j].textContent.toLowerCase().indexOf(input) > -1) {
+                        textMatch = true;
+                        break;
+                    }
+                }
+                show = textMatch;
+            }
+            
+            // Date range filtering
+            if (show && startDate) {
+                const rowDate = new Date(cells[2].textContent);
+                show = rowDate >= new Date(startDate);
+            }
+            
+            if (show && endDate) {
+                const rowDate = new Date(cells[3].textContent);
+                show = rowDate <= new Date(endDate);
+            }
+            
+            rows[i].style.display = show ? '' : 'none';
+        }
+    }
+    
+    function sortTable(n) {
+        const table = document.getElementById('logsTable');
+        let switching = true;
+        let dir = 'asc';
+        let switchcount = 0;
+        
+        while (switching) {
+            switching = false;
+            const rows = table.rows;
+            
+            for (let i = 1; i < rows.length - 1; i++) {
+                let shouldSwitch = false;
+                const x = rows[i].getElementsByTagName('td')[n];
+                const y = rows[i + 1].getElementsByTagName('td')[n];
+                
+                // Check if date column for proper date comparison
+                if (n === 2 || n === 3) {
+                    const dateX = new Date(x.innerHTML);
+                    const dateY = new Date(y.innerHTML);
+                    
+                    if (dir === 'asc') {
+                        if (dateX > dateY) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === 'desc') {
+                        if (dateX < dateY) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                } else {
+                    if (dir === 'asc') {
+                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === 'desc') {
+                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;
+            } else {
+                if (switchcount === 0 && dir === 'asc') {
+                    dir = 'desc';
+                    switching = true;
+                }
+            }
+        }
+    }
+    
+    function exportToCSV() {
+        const table = document.getElementById('logsTable');
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll('td, th');
+            
+            for (let j = 0; j < cols.length; j++) {
+                // Escape double-quotes with double-quotes
+                let data = cols[j].innerText.replace(/"/g, '""');
+                // Add quotes if the content contains comma or newline
+                row.push('"' + data + '"');
+            }
+            csv.push(row.join(','));
+        }
+        
+        // Download CSV file
+        const csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
+        const downloadLink = document.createElement('a');
+        downloadLink.download = 'ausleihungen_' + new Date().toISOString().slice(0,10) + '.csv';
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = 'none';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+    }
+</script>
+
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    h1 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #333;
+    }
+    
+    .filter-controls {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    
+    #searchInput {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 200px;
+    }
+    
+    .date-range {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .date-range input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    th, td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    th {
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+    
+    th:hover {
+        background-color: #0056b3;
+    }
+    
+    tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .navigation-buttons {
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .button, .export-button {
+        padding: 10px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .button:hover, .export-button:hover {
+        background-color: #0056b3;
+    }
+    
+    .export-button {
+        background-color: #28a745;
+    }
+    
+    .export-button:hover {
+        background-color: #218838;
+    }
+    
+    @media (max-width: 768px) {
+        .filter-controls {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        #searchInput {
+            width: 100%;
+        }
+        
+        .date-range {
+            width: 100%;
+            justify-content: space-between;
+        }
+    }
+</style>
+{% endblock %}
