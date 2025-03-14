@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Database Debug{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Database Debug Information</h1>
+    
+    <div class="debug-info">
+        {% for db_name, collections in result.items() %}
+            <h2>Database: {{ db_name }}</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Collection</th>
+                        <th>Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for collection, count in collections.items() %}
+                        {% if collection != 'ausleihungen_sample' %}
+                        <tr>
+                            <td>{{ collection }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            {% if 'ausleihungen_sample' in collections %}
+                <h3>Sample Ausleihung Document:</h3>
+                <pre>{{ collections['ausleihungen_sample'] }}</pre>
+            {% endif %}
+        {% endfor %}
+    </div>
+    
+    <a href="{{ url_for('home') }}" class="btn btn-primary">Back to Home</a>
+</div>
+{% endblock %}
