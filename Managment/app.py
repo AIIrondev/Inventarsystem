@@ -13,6 +13,22 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 '''
+
+"""
+Inventarsystem Management Application
+
+This application provides administrative tools for managing the Inventarsystem:
+- User management (creation, deletion)
+- System logs viewing
+- Borrowing history
+- System administration functions
+- Database debugging
+
+This is a separate application from the main Inventarsystem and is designed for
+administrative use only. It provides tools that should not be accessible to
+regular users of the system.
+"""
+
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages
 from werkzeug.utils import secure_filename
@@ -23,24 +39,47 @@ from bson.objectid import ObjectId
 import hashlib
 import datetime
 
+# Initialize Flask application
 app = Flask(__name__)
-app.secret_key = 'secret'
+app.secret_key = 'secret'  # Should use a secure key in production
 __version__ = '1.0.0'
 
 
 @app.route('/test_connection', methods=['GET'])
 def test_connection():
+    """
+    Test API endpoint to verify the server is running.
+    
+    Returns:
+        dict: Status information including version and status code
+    """
     return {'status': 'success', 'message': 'Connection successful', 'version': __version__, 'status_code': 200}
+
 
 @app.route('/')
 def home():
+    """
+    Main route for the management application homepage.
+    Only accessible to administrators.
+    
+    Returns:
+        flask.Response: Rendered template or redirect to login
+    """
     if 'username' in session and us.check_admin(session['username']):
         return render_template('main.html')
     flash('You are not authorized to view this page', 'error')
     return redirect(url_for('login'))
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    User login route for administrators.
+    Validates credentials and restricts access to admin users only.
+    
+    Returns:
+        flask.Response: Rendered template or redirect based on credentials
+    """
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -64,13 +103,29 @@ def login():
         return redirect(url_for('login'))
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
+    """
+    User logout route.
+    Removes user session data and redirects to login.
+    
+    Returns:
+        flask.Response: Redirect to login page
+    """
     session.pop('username', None)
     return redirect(url_for('login'))
 
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """
+    User registration route.
+    Creates new user accounts (admin access required).
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
     if 'username' in session and us.check_admin(session['username']):
         if request.method == 'POST':
             username = request.form['username']
@@ -90,8 +145,17 @@ def register():
     flash('You are not authorized to view this page', 'error')
     return redirect(url_for('login'))
 
+
 @app.route('/user_del', methods=['GET'])
 def user_del():
+    """
+    User deletion interface.
+    Displays a list of users that can be deleted by an administrator.
+    Prevents self-deletion by hiding the current user from the list.
+    
+    Returns:
+        flask.Response: Rendered template with user list or redirect
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
@@ -118,8 +182,17 @@ def user_del():
     print(f"Found {len(users_list)} users to display for deletion")
     return render_template('user_del.html', users=users_list)
 
+
 @app.route('/delete_user', methods=['POST'])
 def delete_user():
+    """
+    Process user deletion request.
+    Deletes a specified user from the system.
+    Includes safety checks to prevent self-deletion.
+    
+    Returns:
+        flask.Response: Redirect to the user deletion interface with status
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to perform this action', 'error')
         return redirect(url_for('login'))
@@ -143,8 +216,16 @@ def delete_user():
     
     return redirect(url_for('user_del'))
 
+
 @app.route('/logs')
 def logs():
+    """
+    View system logs interface.
+    Displays a history of all item borrowings with detailed information.
+    
+    Returns:
+        flask.Response: Rendered template with logs or redirect
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
@@ -197,23 +278,46 @@ def logs():
     
     return render_template('logs.html', items=formatted_items)
 
+
 @app.route('/get_logs', methods=['GET'])
 def get_logs():
+    """
+    API endpoint to retrieve all borrowing logs.
+    
+    Returns:
+        dict: Dictionary containing all borrowing records or redirect if not authenticated
+    """
     if not session.get('username'):
         return redirect(url_for('login'))
     logs = au.get_ausleihungen()
     return logs
 
+
 @app.route('/restart_website', methods=['POST'])
 def restart_website():
+    """
+    System administration function to restart the web server.
+    Requires administrator privileges.
+    
+    Returns:
+        flask.Response: Redirect to homepage on success or login on failure
+    """
     if 'username' in session and us.check_admin(session['username']):
         os.system('sudo systemctl restart apache2')
         return redirect(url_for('home'))
     flash('You are not authorized to view this page', 'error')
     return redirect(url_for('login'))
 
+
 @app.route('/get_usernames', methods=['GET'])
 def get_usernames():
+    """
+    API endpoint to retrieve all usernames from the system.
+    Requires administrator privileges.
+    
+    Returns:
+        dict: Dictionary containing all users or redirect if not authenticated
+    """
     if 'username' in session and not us.check_admin(session['username']):
         flash('You are not authorised to use this page', 'error')
         return redirect(url_for('logout'))
@@ -222,8 +326,17 @@ def get_usernames():
     else:
         flash('Please login to access this function', 'error')
 
+
 @app.route('/debug_db')
 def debug_db():
+    """
+    Database debugging interface.
+    Shows collection counts and sample documents for troubleshooting.
+    Requires administrator privileges.
+    
+    Returns:
+        flask.Response: Rendered template with database information or redirect
+    """
     if 'username' in session and us.check_admin(session['username']):
         result = {}
         try:
@@ -252,5 +365,10 @@ def debug_db():
     else:
         return redirect(url_for('login'))
 
+
 if __name__ == "__main__":
+    """
+    Development server execution block.
+    This code only runs when the script is executed directly, not when imported.
+    """
     app.run(debug=True, host="0.0.0.0", port=5000)

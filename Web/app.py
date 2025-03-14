@@ -13,6 +13,25 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 '''
+
+"""
+Inventarsystem - Flask Web Application
+
+This application provides an inventory management system with user authentication,
+item tracking, QR code generation, and borrowing/returning functionality.
+
+The system uses MongoDB for data storage and provides separate interfaces for
+regular users and administrators.
+
+Features:
+- User authentication (login/logout)
+- Item management (add, delete, view)
+- Borrowing and returning items
+- QR code generation for items
+- Administrative functions
+- History logging of item usage
+"""
+
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages
 from werkzeug.utils import secure_filename
@@ -23,44 +42,89 @@ from bson.objectid import ObjectId
 import hashlib
 import datetime
 
+# Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Initialize Flask application
 app = Flask(__name__)
-app.secret_key = 'secret'  # Für Produktion einen sicheren Schlüssel verwenden!
-app.debug = False  # Debug in Produktion deaktivieren
+app.secret_key = 'secret'  # For production, use a secure key!
+app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 __version__ = '0.0.1'
 
-# Verzeichnisse beim Start erstellen (außerhalb von if __name__ == '__main__')
+# Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 if not os.path.exists(app.config['QR_CODE_FOLDER']):
     os.makedirs(app.config['QR_CODE_FOLDER'])
 
+
 def allowed_file(filename):
+    """
+    Check if a file has an allowed extension.
+    
+    Args:
+        filename (str): Name of the file to check
+        
+    Returns:
+        bool: True if the file extension is allowed, False otherwise
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
+    """
+    Serve uploaded files from the uploads directory.
+    
+    Args:
+        filename (str): Name of the file to serve
+        
+    Returns:
+        flask.Response: The requested file
+    """
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 @app.route('/test_connection', methods=['GET'])
 def test_connection():
+    """
+    Test API endpoint to verify the server is running.
+    
+    Returns:
+        dict: Status information including version and status code
+    """
     return {'status': 'success', 'message': 'Connection successful', 'version': __version__, 'status_code': 200}
+
 
 @app.route('/')
 def home():
+    """
+    Main route for the application homepage.
+    Redirects to the appropriate view based on user role.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
     if 'username' in session and not us.check_admin(session['username']):
         return render_template('main.html', username=session['username'])
     elif 'username' in session and us.check_admin(session['username']):
         return redirect(url_for('home_admin'))
     return redirect(url_for('logout'))
 
+
 @app.route('/home_admin')
 def home_admin():
+    """
+    Admin homepage route.
+    Only accessible by users with admin privileges.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
     if 'username' in session:
         if not us.check_admin(session['username']):
             flash('You are not authorized to view this page', 'error')
@@ -69,8 +133,16 @@ def home_admin():
     
     return redirect(url_for('logout'))
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    User login route.
+    Authenticates users and redirects to appropriate homepage based on role.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
     if 'username' in session:
         return redirect(url_for('home'))
     if request.method == 'POST':
@@ -93,8 +165,16 @@ def login():
             get_flashed_messages()
     return render_template('login.html')
 
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """
+    User registration route.
+    Creates new user accounts (admin access required).
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         return redirect(url_for('login'))
     elif 'username' in session:
@@ -117,20 +197,43 @@ def register():
         return redirect(url_for('home'))
     return render_template('register.html')
 
+
 @app.route('/logout')
 def logout():
+    """
+    User logout route.
+    Removes user session data and redirects to login.
+    
+    Returns:
+        flask.Response: Redirect to login page
+    """
     session.pop('username', None)
     return redirect(url_for('login'))
 
+
 @app.route('/get_items', methods=['GET'])
 def get_items():
+    """
+    API endpoint to retrieve all inventory items.
+    
+    Returns:
+        dict: Dictionary containing all inventory items
+    """
     items = it.get_items()
     for item in items:
         item['Images'] = item.get('Images', [])
     return {'items': items}
 
+
 @app.route('/upload_item', methods=['POST'])
 def upload_item():
+    """
+    Route for adding new items to the inventory.
+    Handles file uploads and creates QR codes.
+    
+    Returns:
+        flask.Response: Redirect to admin homepage
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to upload items', 'error')
         return redirect(url_for('home'))
@@ -167,8 +270,18 @@ def upload_item():
     # Pass the item ID to download the QR code
     return redirect(url_for('home_admin', new_item_id=item_id))
 
+
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
 def delete_item(id):
+    """
+    Route for deleting inventory items.
+    
+    Args:
+        id (str): ID of the item to delete
+        
+    Returns:
+        flask.Response: Redirect to admin homepage
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to delete items', 'error')
         return redirect(url_for('home'))
@@ -177,13 +290,30 @@ def delete_item(id):
     flash('Item deleted successfully', 'success')
     return redirect(url_for('home_admin'))
 
+
 @app.route('/get_ausleihungen', methods=['GET'])
 def get_ausleihungen():
+    """
+    API endpoint to retrieve all borrowing records.
+    
+    Returns:
+        dict: Dictionary containing all borrowing records
+    """
     ausleihungen = au.get_ausleihungen()
     return {'ausleihungen': ausleihungen}
 
+
 @app.route('/ausleihen/<id>', methods=['POST'])
 def ausleihen(id):
+    """
+    Route for borrowing an item from inventory.
+    
+    Args:
+        id (str): ID of the item to borrow
+        
+    Returns:
+        flask.Response: Redirect to appropriate homepage
+    """
     if 'username' not in session:
         flash('You need to be logged in to borrow items', 'error')
         return redirect(url_for('login'))
@@ -202,8 +332,19 @@ def ausleihen(id):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
 
+
 @app.route('/zurueckgeben/<id>', methods=['POST'])
 def zurueckgeben(id):
+    """
+    Route for returning a borrowed item.
+    Creates or updates a record of the borrowing session.
+    
+    Args:
+        id (str): ID of the item to return
+        
+    Returns:
+        flask.Response: Redirect to appropriate homepage
+    """
     if 'username' not in session:
         flash('You need to be logged in to return items', 'error')
         return redirect(url_for('login'))
@@ -213,11 +354,13 @@ def zurueckgeben(id):
         it.update_item_status(id, True)
         
         try:
+            # Get existing borrowing record
             ausleihung_data = au.get_ausleihung_by_item(id)
             
             end_date = datetime.datetime.now()
             
             if ausleihung_data and '_id' in ausleihung_data:
+                # Update existing record
                 ausleihung_id = str(ausleihung_data['_id'])
                 user = ausleihung_data.get('User', session['username'])
                 start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
@@ -225,7 +368,7 @@ def zurueckgeben(id):
                 update_result = au.update_ausleihung(ausleihung_id, id, user, start, end_date)
                 flash('Item returned successfully', 'success')
             else:
-                # Use a default start time 1 hour ago
+                # Create new record with default values
                 start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
                 au.add_ausleihung(id, session['username'], start_time, end_date)
                 flash('Item returned successfully (new record created)', 'success')
@@ -238,11 +381,29 @@ def zurueckgeben(id):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
 
+
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
+    """
+    API endpoint to retrieve available item filters/categories.
+    
+    Returns:
+        dict: Dictionary of available filters
+    """
     return it.get_filter()
     
+
 def create_qr_code(id):
+    """
+    Generate a QR code for an item.
+    The QR code contains a URL that points to the item details.
+    
+    Args:
+        id (str): ID of the item to generate QR code for
+        
+    Returns:
+        str: Filename of the generated QR code, or None if item not found
+    """
     import qrcode
     if not os.path.exists(app.config['QR_CODE_FOLDER']):
         os.makedirs(app.config['QR_CODE_FOLDER'])
@@ -274,8 +435,19 @@ def create_qr_code(id):
     
     return filename
 
+
 @app.route('/item/<id>')
 def show_item(id):
+    """
+    Route to display a specific item.
+    When accessing via QR code, this highlights the item in the UI.
+    
+    Args:
+        id (str): ID of the item to display
+        
+    Returns:
+        flask.Response: Rendered template with item highlighted
+    """
     if 'username' not in session:
         return redirect(url_for('login'))
         
@@ -291,8 +463,16 @@ def show_item(id):
         return render_template('main_admin.html', highlight_item=str(id))
     return render_template('main.html', highlight_item=str(id))
 
+
 @app.route('/user_status', methods=['GET'])
 def user_status():
+    """
+    API endpoint to retrieve current user status.
+    Used by frontend to adapt UI based on user role.
+    
+    Returns:
+        dict: User status information including login state and admin status
+    """
     if 'username' not in session:
         return {'logged_in': False}
     
@@ -304,8 +484,19 @@ def user_status():
         'has_active_borrowing': has_active
     }
 
+
 @app.route('/admin/reset_item/<id>', methods=['POST'])
 def admin_reset_item(id):
+    """
+    Admin route to reset an item's status.
+    Used to fix stuck or problematic items.
+    
+    Args:
+        id (str): ID of the item to reset
+        
+    Returns:
+        flask.Response: Redirect to admin homepage
+    """
     if 'username' not in session or not us.check_admin(session['username']):
         flash('Unauthorized access', 'error')
         return redirect(url_for('login'))
@@ -322,8 +513,18 @@ def admin_reset_item(id):
     
     return redirect(url_for('home_admin'))
 
+
 @app.route('/qr_code/<id>')
 def get_qr_code(id):
+    """
+    Route to download the QR code for an item.
+    
+    Args:
+        id (str): ID of the item to get QR code for
+        
+    Returns:
+        flask.Response: QR code image file for download
+    """
     item = it.get_item(id)
     if not item:
         flash('Item not found', 'error')
@@ -338,11 +539,24 @@ def get_qr_code(id):
     
     return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
 
+
 @app.route('/license')
 def license():
+    """
+    Route to display license information.
+    
+    Returns:
+        flask.Response: Rendered license template
+    """
     return render_template('license.html')
 
+
 if __name__ == '__main__':
+    """
+    Development server execution.
+    This block only runs when executing app.py directly, not when using Gunicorn.
+    Includes SSL configuration for secure development testing.
+    """
     # SSL configuration
     ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
     app.run("0.0.0.0", 8000, ssl_context=ssl_context)

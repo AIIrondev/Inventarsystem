@@ -22,31 +22,17 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 
 ### Einrichtung
 
-1. Repository klonen:
-   ```sh
-   git clone <repository-url>
-   cd <repository>
-   ```
-2. Abhängigkeiten installieren:
-   ```sh
-   pip install -r requirements.txt
-   ```
-3. Erforderliche Ordner erstellen:
-   ```sh
-   mkdir uploads
-   ```
-4. MongoDB-Dienst starten:
-   ```sh
-   mongod --dbpath <pfad-zum-datenbankordner>
-   ```
-5. Anwendung starten:
-   ```sh
-   python app.py
-   ```
-6. Anwendung im Browser aufrufen:
-   ```
-   http://localhost:5000
-   ```
+1. 
+
+```bash
+wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Linux.sh | sudo bash
+```
+
+OR
+
+```bash
+curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Linux.sh | sudo bash
+```
 
 ## Benutzerhandbuch
 
