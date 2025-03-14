@@ -99,7 +99,7 @@ def get_items():
         item['Images'] = item.get('Images', [])
     return {'items': items}
 
-@app.route('/upload_item', methods=['POST']) #TODO: Zwei Filter einbauen
+@app.route('/upload_item', methods=['POST'])
 def upload_item():
     if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to upload items', 'error')
@@ -212,7 +212,7 @@ def create_qr_code(id):
     )
     
     # Ensure HTTPS URL
-    base_url = request.host_url
+    base_url = "https://192.168.36.3:8000"
     if base_url.startswith('http:'):
         base_url = base_url.replace('http:', 'https:')
     
