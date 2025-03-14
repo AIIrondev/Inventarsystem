@@ -1,3 +1,18 @@
+'''
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+'''
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages
 from werkzeug.utils import secure_filename
@@ -341,6 +356,10 @@ def get_qr_code(id):
         create_qr_code(id)
     
     return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
+
+@app.route('/license')
+def license():
+    return render_template('license.html')
 
 QR_CODE_FOLDER = 'QRCodes'
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
