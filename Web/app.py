@@ -23,13 +23,22 @@ from bson.objectid import ObjectId
 import hashlib
 import datetime
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__)
-app.secret_key = 'secret'
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.secret_key = 'secret'  # Für Produktion einen sicheren Schlüssel verwenden!
+app.debug = False  # Debug in Produktion deaktivieren
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
+app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 __version__ = '0.0.1'
 
+# Verzeichnisse beim Start erstellen (außerhalb von if __name__ == '__main__')
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+if not os.path.exists(app.config['QR_CODE_FOLDER']):
+    os.makedirs(app.config['QR_CODE_FOLDER'])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -179,27 +188,12 @@ def ausleihen(id):
         flash('You need to be logged in to borrow items', 'error')
         return redirect(url_for('login'))
     
-    # Debug output
-    print(f"User {session['username']} attempting to borrow item {id}")
-    
-    # REMOVED: Check for active borrowings - allowing multiple borrows
-    # has_active = us.has_active_borrowing(session['username'])
-    # if has_active:
-    #     flash('You already have an item borrowed. Please return it before borrowing another one.', 'error')
-    #     if us.check_admin(session['username']):
-    #         return redirect(url_for('home_admin'))
-    #     return redirect(url_for('home'))
-    
     item = it.get_item(id)
     if item and item['Verfuegbar']:
         it.update_item_status(id, False)
-        # Add correct start date (now)
         start_date = datetime.datetime.now()
         au.add_ausleihung(id, session['username'], start_date)
-        
-        # No longer need to update active borrowing status
-        # us.update_active_borrowing(session['username'], id, True)
-        
+
         flash('Item borrowed successfully', 'success')
     else:
         flash('Item is not available', 'error')
@@ -214,41 +208,28 @@ def zurueckgeben(id):
         flash('You need to be logged in to return items', 'error')
         return redirect(url_for('login'))
     
-    # Add debug output
-    print(f"User {session['username']} attempting to return item {id}")
-    
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
-        # First update the item status
         it.update_item_status(id, True)
         
         try:
-            # Get the active borrowing record for this item
             ausleihung_data = au.get_ausleihung_by_item(id)
-            print(f"Ausleihung data retrieved: {ausleihung_data}")
             
-            # Set the end date to now
             end_date = datetime.datetime.now()
             
             if ausleihung_data and '_id' in ausleihung_data:
-                # Update the existing record
                 ausleihung_id = str(ausleihung_data['_id'])
                 user = ausleihung_data.get('User', session['username'])
                 start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                 
-                # Update with end date
                 update_result = au.update_ausleihung(ausleihung_id, id, user, start, end_date)
-                print(f"Update ausleihung result: {update_result}")
                 flash('Item returned successfully', 'success')
             else:
-                # No active borrowing found, create a new return record
-                print("No active ausleihung record found, creating a new one")
                 # Use a default start time 1 hour ago
                 start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
                 au.add_ausleihung(id, session['username'], start_time, end_date)
                 flash('Item returned successfully (new record created)', 'success')
         except Exception as e:
-            print(f"Error in zurueckgeben: {e}")
             flash('Item returned but encountered an error in record-keeping', 'warning')
     else:
         flash('Item is already available or does not exist', 'error')
@@ -361,15 +342,7 @@ def get_qr_code(id):
 def license():
     return render_template('license.html')
 
-QR_CODE_FOLDER = 'QRCodes'
-app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
-
 if __name__ == '__main__':
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
-    if not os.path.exists(app.config['QR_CODE_FOLDER']):
-        os.makedirs(app.config['QR_CODE_FOLDER'])
-    
     # SSL configuration
     ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
-    app.run("0.0.0.0", 8000, debug=True, ssl_context=ssl_context)
+    app.run("0.0.0.0", 8000, ssl_context=ssl_context)

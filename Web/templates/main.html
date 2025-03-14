@@ -1,3 +1,18 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
 {% extends "base.html" %}
 
 {% block title %}Inventarsystem{% endblock %}
@@ -137,6 +152,8 @@
                     <h3>${item.Name}</h3>
                     <p><strong>Ort:</strong> ${item.Ort}</p>
                     <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
+                    <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
+                    <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
                     <div class="image-container">
                         ${imagesHtml}
                         <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -155,6 +172,7 @@
                     </div>
                 `;
                 itemsContainer.appendChild(card);
+
             });
             
             // Now populate the filter dropdowns with the collected unique values
@@ -246,6 +264,20 @@
         const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
         itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
     }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Instead, we'll fetch user status just to keep the user info available
+    fetch('/user_status')
+        .then(response => response.json())
+        .then(data => {
+            console.log('User status:', data);
+            // No action needed - users can borrow multiple items
+        })
+        .catch(error => {
+            console.error('Error fetching user status:', error);
+        });
+});
 </script>
 <style>
 body {
@@ -538,6 +570,20 @@ input[type="file"] {
     0% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
     50% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.8); }
     100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+}
+
+.disabled-button {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.borrow-limit-banner {
+    background-color: #ffc107;
+    color: #212529;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
 }
 </style>
 {% endblock %}
