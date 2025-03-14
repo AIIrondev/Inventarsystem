@@ -67,15 +67,31 @@ class ausleihung:
         return ausleihung
     
     def get_ausleihung_by_item(item_id):
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        ausleihungen = db['ausleihungen']
-        ausleihung = ausleihungen.find_one({'Item': item_id})
-        if ausleihung:
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            ausleihungen = db['ausleihungen']
+            
+            # Debug output
+            print(f"Looking for ausleihung with item_id: {item_id}")
+            
+            # Try different field names that might contain the item ID
+            ausleihung = ausleihungen.find_one({'Item': item_id})
+            if not ausleihung:
+                ausleihung = ausleihungen.find_one({'item_id': item_id})
+            
+            print(f"Found ausleihung: {ausleihung}")
+            
             client.close()
-            return str(ausleihung["_id"]), ausleihung["User"], ausleihung["Start"], ausleihung["End"]
-        client.close()
-        return None
+            
+            if ausleihung:
+                # Return a dictionary for more flexible handling
+                return ausleihung
+            else:
+                return None
+        except Exception as e:
+            print(f"Error in get_ausleihung_by_item: {e}")
+            return None
 
 class Inventory:
     def add_item(name, ort, beschreibung, images, filter, filter2):
@@ -163,6 +179,13 @@ class Inventory:
         filters = filters + filters2
         client.close()
         return filters
+    
+    def unstuck_item(id):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        ausleihungen.delete_many({'Item': id})
+        client.close()
 
 
 class User:
@@ -240,23 +263,65 @@ class User:
 
     @staticmethod
     def has_active_borrowing(username):
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        users = db['users']
-        user = users.find_one({'username': username})
-        client.close()
-        return user and user.get('active_borrowing', False)
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']  # Case-sensitive database name
+            users = db['users']
+            
+            # Debug output
+            print(f"Checking active borrowing status for user: {username}")
+            
+            # Try both lowercase and capitalized field names
+            user = users.find_one({'username': username})
+            if not user:
+                user = users.find_one({'Username': username})
+                
+            if not user:
+                print(f"User {username} not found in database")
+                client.close()
+                return False
+                
+            has_active = user.get('active_borrowing', False)
+            print(f"User {username} active_borrowing status: {has_active}")
+            
+            client.close()
+            return has_active
+        except Exception as e:
+            print(f"Error in has_active_borrowing: {e}")
+            return False
 
     @staticmethod
     def update_active_borrowing(username, item_id, status):
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        users = db['users']
-        users.update_one(
-            {'username': username}, 
-            {'$set': {
-                'active_borrowing': status,
-                'borrowed_item': item_id if status else None
-            }}
-        )
-        client.close()
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            users = db['users']
+            
+            # Debug output
+            print(f"Updating borrowing status for {username}: {status} with item {item_id}")
+            
+            # Try both field names to ensure we update the right document
+            result = users.update_one(
+                {'username': username}, 
+                {'$set': {
+                    'active_borrowing': status,
+                    'borrowed_item': item_id if status else None
+                }}
+            )
+            
+            if result.matched_count == 0:
+                # Try with capitalized field name
+                result = users.update_one(
+                    {'Username': username}, 
+                    {'$set': {
+                        'active_borrowing': status,
+                        'borrowed_item': item_id if status else None
+                    }}
+                )
+                
+            print(f"Update result: {result.modified_count} documents modified")
+            client.close()
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error in update_active_borrowing: {e}")
+            return False

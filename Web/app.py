@@ -164,8 +164,14 @@ def ausleihen(id):
         flash('You need to be logged in to borrow items', 'error')
         return redirect(url_for('login'))
     
+    # Debug output
+    print(f"User {session['username']} attempting to borrow item {id}")
+    
     # Check if user already has an active borrowing
-    if us.has_active_borrowing(session['username']):
+    has_active = us.has_active_borrowing(session['username'])
+    print(f"Has active borrowing result: {has_active}")
+    
+    if has_active:
         flash('You already have an item borrowed. Please return it before borrowing another one.', 'error')
         if us.check_admin(session['username']):
             return redirect(url_for('home_admin'))
@@ -191,18 +197,57 @@ def zurueckgeben(id):
         flash('You need to be logged in to return items', 'error')
         return redirect(url_for('logout'))
     
+    # Add debug output
+    print(f"User {session['username']} attempting to return item {id}")
+    
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
         it.update_item_status(id, True)
-        ausleihung_data = au.get_ausleihung_by_item(id)
-        if ausleihung_data:
-            _id, user, start, end = ausleihung_data
-            au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
-            # Clear the user's active borrowing status
+        
+        try:
+            # Get the borrowing record
+            ausleihung_data = au.get_ausleihung_by_item(id)
+            print(f"Ausleihung data retrieved: {ausleihung_data}")
+            
+            if ausleihung_data:
+                # Handle different data formats
+                if isinstance(ausleihung_data, tuple) and len(ausleihung_data) == 4:
+                    # Original expected format
+                    _id, user, start, end = ausleihung_data
+                elif isinstance(ausleihung_data, dict):
+                    # Dictionary format
+                    _id = str(ausleihung_data.get('_id'))
+                    user = ausleihung_data.get('User', session['username'])
+                    start = ausleihung_data.get('Start', datetime.datetime.now())
+                    end = datetime.datetime.now()
+                else:
+                    # Other format - use what we can
+                    _id = str(id)  # Use the item ID as fallback
+                    user = session['username']
+                    start = datetime.datetime.now() - datetime.timedelta(hours=1)  # Assume borrowed 1 hour ago
+                    end = datetime.datetime.now()
+                
+                # Update the ausleihung record
+                update_result = au.update_ausleihung(_id, id, session['username'], start, end)
+                print(f"Update ausleihung result: {update_result}")
+                
+                # Clear the user's active borrowing status
+                us.update_active_borrowing(session['username'], None, False)
+                flash('Item returned successfully', 'success')
+            else:
+                # Create a new return record if one doesn't exist
+                print("No ausleihung record found, creating a new one")
+                au.add_ausleihung(id, session['username'], 
+                                  datetime.datetime.now() - datetime.timedelta(hours=1),
+                                  datetime.datetime.now())
+                us.update_active_borrowing(session['username'], None, False)
+                flash('Item returned successfully', 'success')
+        except Exception as e:
+            print(f"Error in zurueckgeben: {e}")
+            # Force the item to be available and reset user borrowing status
+            it.update_item_status(id, True)
             us.update_active_borrowing(session['username'], None, False)
-            flash('Item returned successfully', 'success')
-        else:
-            flash('No borrowing record found for this item', 'error')
+            flash('Item returned but encountered an error in record-keeping', 'warning')
     else:
         flash('Item is already available', 'error')
     
@@ -226,8 +271,8 @@ def create_qr_code(id):
         border=4,
     )
     
-    # Ensure HTTPS URL
-    base_url = request.base_url
+    # Get base URL from request
+    base_url = request.url_root
     if base_url.startswith('http:'):
         base_url = base_url.replace('http:', 'https:')
     
@@ -235,28 +280,16 @@ def create_qr_code(id):
     qr.add_data(f"{base_url}item/{id}")
     qr.make(fit=True)
 
-    img = qr.make_image(fill_color="black", back_color="white")
-    item = it.get_item(id)
-    name = item['Name']
-    filename = f"{name}_{id}.png"
-    img.save(os.path.join(app.config['QR_CODE_FOLDER'], filename))
-    return filename
-
-@app.route('/qr_code/<id>')
-def get_qr_code(id):
     item = it.get_item(id)
     if not item:
-        flash('Item not found', 'error')
-        return redirect(url_for('home_admin'))
+        return None
     
+    img = qr.make_image(fill_color="black", back_color="white")
     filename = f"{item['Name']}_{id}.png"
     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+    img.save(qr_path)
     
-    # If QR code doesn't exist yet, create it
-    if not os.path.exists(qr_path):
-        filename = create_qr_code(id)
-    
-    return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
+    return filename
 
 @app.route('/item/<id>')
 def show_item(id):
@@ -287,6 +320,40 @@ def user_status():
         'is_admin': us.check_admin(session['username']),
         'has_active_borrowing': has_active
     }
+
+@app.route('/admin/reset_item/<id>', methods=['POST'])
+def admin_reset_item(id):
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('login'))
+    
+    try:
+        # Force the item to be available
+        it.update_item_status(id, True)
+        
+        it.unstuck_item(id)
+        
+        flash('Item status has been reset successfully', 'success')
+    except Exception as e:
+        flash(f'Error resetting item: {e}', 'error')
+    
+    return redirect(url_for('home_admin'))
+
+@app.route('/qr_code/<id>')
+def get_qr_code(id):
+    item = it.get_item(id)
+    if not item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home_admin'))
+    
+    filename = f"{item['Name']}_{id}.png"
+    qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+    
+    # If QR code doesn't exist yet, create it
+    if not os.path.exists(qr_path):
+        create_qr_code(id)
+    
+    return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
 
 QR_CODE_FOLDER = 'QRCodes'
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
