@@ -18,5 +18,14 @@
             <button type="submit" class="btn btn-primary w-100">Register</button>
         </form>
     </div>
+    <div class="navigation-buttons">
+        <a href="{{ url_for('home') }}" class="button">Zurück zum Dashboard</a>
+    </div>
 </div>
+<style>
+    .navigation-buttons {
+        margin-top: 20px;
+        text-align: center;
+    }
+</style>
 {% endblock %}

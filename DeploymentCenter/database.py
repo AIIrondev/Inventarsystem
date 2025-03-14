@@ -176,12 +176,22 @@ class User:
         client.close()
         return True
 
+    @staticmethod
     def delete_user(username):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         users = db['users']
-        users.delete_one({'Username': username})
+        result = users.delete_one({'username': username})
         client.close()
+        if result.deleted_count == 0:
+            # Try with different field name
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            users = db['users']
+            result = users.delete_one({'Username': username})
+            client.close()
+        
+        return result.deleted_count > 0
 
     def get_user(username):
         client = MongoClient('localhost', 27017)
@@ -219,7 +229,14 @@ class User:
 
     @staticmethod
     def get_all_users():
-        client = MongoClient('mongodb://localhost:27017')
-        db = client['inventarsystem']
-        users = db['users']
-        return list(users.find())
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']  # Match your actual database name
+            users = db['users']
+            all_users = list(users.find())
+            client.close()
+            print(f"Retrieved {len(all_users)} users from database")
+            return all_users
+        except Exception as e:
+            print(f"Error in get_all_users: {e}")
+            return []

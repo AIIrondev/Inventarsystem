@@ -77,31 +77,56 @@ def register():
 
 @app.route('/user_del', methods=['GET'])
 def user_del():
-    if 'username' in session and us.check_admin(session['username']):
-        # Get all users except the current one (to prevent self-deletion)
-        all_users = us.get_all_users()
-        # Format them as needed for the template
-        users_list = []
-        for user in all_users:
-            if user['username'] != session['username']:  # Prevent self-deletion
-                users_list.append({
-                    'username': user['username'],
-                    'admin': user.get('Admin', False)
-                })
-        return render_template('user_del.html', users=users_list)
-    else:
+    if 'username' not in session or not us.check_admin(session['username']):
         flash('You are not authorized to view this page', 'error')
         return redirect(url_for('login'))
+    
+    # Get all users except the current one (to prevent self-deletion)
+    all_users = us.get_all_users()
+    # Format them as needed for the template
+    users_list = []
+    for user in all_users:
+        # Check different field names that might contain the username
+        username = None
+        for field in ['username', 'Username', 'name']:
+            if field in user:
+                username = user[field]
+                break
+                
+        # Only add if not the current user and we found a username
+        if username and username != session['username']:
+            users_list.append({
+                'username': username,
+                'admin': user.get('Admin', False)
+            })
+    
+    print(f"Found {len(users_list)} users to display for deletion")
+    return render_template('user_del.html', users=users_list)
 
 @app.route('/delete_user', methods=['POST'])
 def delete_user():
-    username = request.form['username']
-    id = us.get_user(username)
-    if 'username' in session and us.check_admin(session['username']):
-        us.delete_user(id)
-        return redirect(url_for('home'))
-    flash('You are not authorized to view this page', 'error')
-    return redirect(url_for('login'))
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('You are not authorized to perform this action', 'error')
+        return redirect(url_for('login'))
+    
+    username = request.form.get('username')
+    if not username:
+        flash('No user selected', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Prevent self-deletion
+    if username == session['username']:
+        flash('You cannot delete your own account', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Delete the user
+    try:
+        us.delete_user(username)
+        flash(f'User {username} deleted successfully', 'success')
+    except Exception as e:
+        flash(f'Error deleting user: {str(e)}', 'error')
+    
+    return redirect(url_for('user_del'))
 
 @app.route('/logs')
 def logs():
