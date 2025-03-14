@@ -44,7 +44,7 @@ class ausleihung:
     
     def get_ausleihungen():
         client = MongoClient('mongodb://localhost:27017')
-        db = client['inventarsystem']
+        db = client['Inventarsystem']
         collection = db['ausleihungen']
         results = collection.find()
         print(f"Database query returned {results} records")
