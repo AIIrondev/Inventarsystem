@@ -22,6 +22,10 @@
                 </select>
             </div>
         </div>
+        <div class="qr-container">
+            <button id="scanButton" class="scan-button">QR-Code scannen</button>
+            <div id="qr-reader" style="width: 500px; display: none;"></div>
+        </div>
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
         </div>
@@ -31,7 +35,67 @@
         </div>
     </div>
 </div>
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
+    // Initialize QR Code scanner
+    let html5QrcodeScanner = null;
+    
+    document.getElementById('scanButton').addEventListener('click', function() {
+        const qrReader = document.getElementById('qr-reader');
+        
+        if (qrReader.style.display === 'none') {
+            qrReader.style.display = 'block';
+            
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader", { fps: 10, qrbox: 250 }
+            );
+            
+            html5QrcodeScanner.render((decodedText) => {
+                console.log("QR Code detected:", decodedText);
+                html5QrcodeScanner.clear();
+                qrReader.style.display = 'none';
+                
+                // Navigate to the item
+                window.location.href = decodedText;
+            });
+            
+            this.textContent = 'Scanner schließen';
+        } else {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            this.textContent = 'QR-Code scannen';
+        }
+    });
+
+    // Check if a new item was just created to show download link
+    const urlParams = new URLSearchParams(window.location.search);
+    const newItemId = urlParams.get('new_item_id');
+    const highlightItemId = "{{ highlight_item }}" || '';
+    
+    if (newItemId) {
+        const notification = document.createElement('div');
+        notification.className = 'qr-notification';
+        notification.innerHTML = `
+            <p>QR-Code für neues Item:</p>
+            <a href="{{ url_for('get_qr_code', id='') }}${newItemId}" class="qr-download">QR-Code herunterladen</a>
+        `;
+        document.querySelector('.container').prepend(notification);
+        
+        // Auto-remove notification after 10 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 1000);
+        }, 10000);
+    }
+</script>
+
+<script>
+    // Using the urlParams variable already declared above
+    // REMOVE THIS LINE: const urlParams = new URLSearchParams(window.location.search);
+    // REMOVE THIS LINE: const highlightItemId = "{{ highlight_item }}" || '';
+    
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -43,6 +107,14 @@
             data.items.forEach(item => {
                 const card = document.createElement('div');
                 card.classList.add('item-card');
+                
+                // Add highlight class if this is the item we're looking for
+                if (item._id === highlightItemId) {
+                    card.classList.add('highlight-item');
+                    setTimeout(() => {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 500);
+                }
                 
                 // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
                 const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
@@ -65,8 +137,6 @@
                     <h3>${item.Name}</h3>
                     <p><strong>Ort:</strong> ${item.Ort}</p>
                     <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
-                    <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
-                    <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
                     <div class="image-container">
                         ${imagesHtml}
                         <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -399,6 +469,75 @@ input[type="file"] {
     .item-card {
         min-width: 200px;
     }
+}
+
+.qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.scan-button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.scan-button:hover {
+    background-color: #0056b3;
+}
+
+#qr-reader {
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.qr-download-button {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 5px 10px;
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 0.8em;
+}
+
+.qr-notification {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
+    transition: opacity 1s ease;
+}
+
+.qr-download {
+    display: inline-block;
+    padding: 5px 15px;
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 3px;
+    margin-left: 10px;
+}
+
+.highlight-item {
+    border: 3px solid #ffc107;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+    animation: highlight-pulse 2s infinite;
+}
+
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.8); }
+    100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
 }
 </style>
 {% endblock %}

@@ -212,7 +212,7 @@ def create_qr_code(id):
     )
     
     # Ensure HTTPS URL
-    base_url = "https://192.168.36.3:8000"
+    base_url = request.base_url
     if base_url.startswith('http:'):
         base_url = base_url.replace('http:', 'https:')
     
