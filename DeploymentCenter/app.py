@@ -105,50 +105,34 @@ def delete_user():
 
 @app.route('/logs')
 def logs():
-    if 'username' not in session:
-        flash('Please log in to view this page', 'error')
-        return redirect(url_for('login'))
-        
-    if not us.check_admin(session['username']):
-        flash('You do not have permission to view this page', 'error')
-        return redirect(url_for('home'))
-    
-    # Get all ausleihungen (loans) from the database
+    # Get ausleihungen
     all_ausleihungen = au.get_ausleihungen()
+    print(f"Retrieved {len(all_ausleihungen)} ausleihungen")
     
-    # Format the data for display
     formatted_items = []
     for ausleihung in all_ausleihungen:
+        # Check if data is inside $set field or at top level
+        item_data = ausleihung.get('$set', ausleihung)
+        
+        item_id = item_data.get('Item')
+        user_id = item_data.get('User')
+        start_date = item_data.get('Start')
+        end_date = item_data.get('End', 'Not returned')
+        
         # Get item name
-        item = it.get_item(ausleihung['item_id'])
+        item = it.get_item(item_id) if item_id else None
         item_name = item['Name'] if item else 'Unknown Item'
         
         # Get username
-        user = us.get_user(ausleihung['user_id'])
-        username = user['username'] if user else 'Unknown User'
-        
-        # Format dates
-        start_date = ausleihung['start']
-        end_date = ausleihung.get('end', 'Not returned')
-        
-        # Calculate duration
-        duration = 'Active'
-        if isinstance(end_date, str) and end_date != 'Not returned':
-            try:
-                # If dates are stored as strings, convert to datetime objects
-                from datetime import datetime
-                start = datetime.fromisoformat(start_date)
-                end = datetime.fromisoformat(end_date)
-                duration = f"{(end - start).days} days"
-            except:
-                duration = 'Unknown'
+        user = us.get_user(user_id) if user_id else None
+        username = user['Username'] if user and 'Username' in user else 'Unknown User'
         
         formatted_items.append({
             'Item': item_name,
             'User': username,
             'Start': start_date,
             'End': end_date,
-            'Duration': duration,
+            'Duration': 'Active' if end_date == 'None' else 'Completed',
             'id': str(ausleihung['_id'])
         })
     
