@@ -291,6 +291,29 @@
         itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
     }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if the user has active borrowing
+    fetch('/user_status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.has_active_borrowing) {
+                // Disable all borrow buttons
+                document.querySelectorAll('.ausleihen').forEach(button => {
+                    button.disabled = true;
+                    button.title = "You already have an item borrowed";
+                    button.classList.add('disabled-button');
+                });
+                
+                // Show notification banner
+                const banner = document.createElement('div');
+                banner.className = 'borrow-limit-banner';
+                banner.textContent = 'You can only borrow one item at a time. Please return your current item first.';
+                document.querySelector('.container').prepend(banner);
+            }
+        });
+});
+</script>
 <style>
 body {
     font-family: Arial, sans-serif;
@@ -582,6 +605,20 @@ input[type="file"] {
     0% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
     50% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.8); }
     100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+}
+
+.disabled-button {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.borrow-limit-banner {
+    background-color: #ffc107;
+    color: #212529;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
 }
 </style>
 {% endblock %}

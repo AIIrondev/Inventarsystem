@@ -237,3 +237,26 @@ class User:
         users = db['users']
         user = users.find_one({'Username': username})
         return user['active_ausleihung']
+
+    @staticmethod
+    def has_active_borrowing(username):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        user = users.find_one({'username': username})
+        client.close()
+        return user and user.get('active_borrowing', False)
+
+    @staticmethod
+    def update_active_borrowing(username, item_id, status):
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users.update_one(
+            {'username': username}, 
+            {'$set': {
+                'active_borrowing': status,
+                'borrowed_item': item_id if status else None
+            }}
+        )
+        client.close()

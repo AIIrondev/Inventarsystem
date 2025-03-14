@@ -162,12 +162,21 @@ def get_ausleihungen():
 def ausleihen(id):
     if 'username' not in session:
         flash('You need to be logged in to borrow items', 'error')
+        return redirect(url_for('login'))
+    
+    # Check if user already has an active borrowing
+    if us.has_active_borrowing(session['username']):
+        flash('You already have an item borrowed. Please return it before borrowing another one.', 'error')
+        if us.check_admin(session['username']):
+            return redirect(url_for('home_admin'))
         return redirect(url_for('home'))
     
     item = it.get_item(id)
     if item and item['Verfuegbar']:
         it.update_item_status(id, False)
         au.add_ausleihung(id, session['username'], datetime.datetime.now())
+        # Mark user as having an active borrowing
+        us.update_active_borrowing(session['username'], id, True)
         flash('Item borrowed successfully', 'success')
     else:
         flash('Item is not available', 'error')
@@ -186,10 +195,11 @@ def zurueckgeben(id):
     if item and not item['Verfuegbar']:
         it.update_item_status(id, True)
         ausleihung_data = au.get_ausleihung_by_item(id)
-        if ausleihung_data:  # Prüfen, ob eine Ausleihung gefunden wurde
+        if ausleihung_data:
             _id, user, start, end = ausleihung_data
             au.update_ausleihung(_id, id, session['username'], start, datetime.datetime.now())
-            us.update_active_ausleihung(session['username'], id, False)
+            # Clear the user's active borrowing status
+            us.update_active_borrowing(session['username'], None, False)
             flash('Item returned successfully', 'success')
         else:
             flash('No borrowing record found for this item', 'error')
@@ -264,6 +274,19 @@ def show_item(id):
     if us.check_admin(session['username']):
         return render_template('main_admin.html', highlight_item=str(id))
     return render_template('main.html', highlight_item=str(id))
+
+@app.route('/user_status', methods=['GET'])
+def user_status():
+    if 'username' not in session:
+        return {'logged_in': False}
+    
+    has_active = us.has_active_borrowing(session['username'])
+    return {
+        'logged_in': True,
+        'username': session['username'],
+        'is_admin': us.check_admin(session['username']),
+        'has_active_borrowing': has_active
+    }
 
 QR_CODE_FOLDER = 'QRCodes'
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
