@@ -18,4 +18,4 @@ cd /home/max/Dokumente/repos/Inventarsystem
 # Start application with Gunicorn
 echo "Starting Inventarsystem with Gunicorn..."
 cd Web
-gunicorn --bind 0.0.0.0:5000 wsgi:app --workers 3 --access-logfile ../logs/access.log --error-logfile ../logs/error.log
+gunicorn app:app --workers 4 --access-logfile ../logs/access.log --error-logfile ../logs/error.log

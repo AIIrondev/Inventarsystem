@@ -108,11 +108,10 @@ class ausleihung:
         Returns:
             list: List of all borrowing records
         """
-        client = MongoClient('localhost', 27017)  # Use consistent connection format
-        db = client['Inventarsystem']  # Capitalized to match your actual database
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
         collection = db['ausleihungen']  
-        results = list(collection.find())  # Convert cursor to list before returning
-        print(f"Database query returned {len(results)} records")
+        results = list(collection.find())
         client.close()
         return results
 
@@ -521,8 +520,6 @@ class User:
             users = db['users']
             all_users = list(users.find())
             client.close()
-            print(f"Retrieved {len(all_users)} users from database")
             return all_users
         except Exception as e:
-            print(f"Error in get_all_users: {e}")
             return []

@@ -179,7 +179,6 @@ def user_del():
                 'admin': user.get('Admin', False)
             })
     
-    print(f"Found {len(users_list)} users to display for deletion")
     return render_template('user_del.html', users=users_list)
 
 
@@ -232,7 +231,6 @@ def logs():
         
     # Get ausleihungen
     all_ausleihungen = au.get_ausleihungen()
-    print(f"Retrieved {len(all_ausleihungen)} ausleihungen")
     
     formatted_items = []
     for ausleihung in all_ausleihungen:
@@ -273,7 +271,6 @@ def logs():
                 'id': str(ausleihung['_id'])
             })
         except Exception as e:
-            print(f"Error processing ausleihung {ausleihung.get('_id')}: {e}")
             continue
     
     return render_template('logs.html', items=formatted_items)
