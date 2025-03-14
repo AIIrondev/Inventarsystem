@@ -215,3 +215,15 @@ class User:
         users = db['users']
         user = users.find_one({'Username': username})
         return user['active_ausleihung']
+    
+    def get_users():
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users_all = ""
+        users = users.find()
+        for user in users:
+            user = user['username']
+            users_all.append(user)
+        client.close()
+        return users_all

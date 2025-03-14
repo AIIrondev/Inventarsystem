@@ -47,6 +47,8 @@ def home_admin():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'username' in session:
+        return redirect(url_for('home'))
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -69,6 +71,10 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if 'username' not in session or not us.check_admin(session['username']):
+        return redirect(url_for('login'))
+    elif 'username' in session:
+        return redirect(url_for('home'))
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -197,7 +203,6 @@ def zurueckgeben(id):
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
     return it.get_filter()
-
     
 def create_qr_code(id):
     import qrcode

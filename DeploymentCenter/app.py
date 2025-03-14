@@ -108,5 +108,15 @@ def start_website():
         return redirect(url_for('login'))
     return redirect(url_for('home'))
 
+@app.route('/get_usernames', methods=['GET'])
+def get_usernames():
+    if 'username' in session and not us.check_admin(session['username']):
+        flash('You are not authorised to use this page', 'error')
+        return redirect(url_for('logout'))
+    elif 'username' in session and us.check_admin(session['username']):
+        return us.get_users()
+    else:
+        flash('Please login to access this function', 'error')
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
