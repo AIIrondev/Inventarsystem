@@ -103,11 +103,56 @@ def delete_user():
     flash('You are not authorized to view this page', 'error')
     return redirect(url_for('login'))
 
-@app.route('/logs', methods=['GET'])
+@app.route('/logs')
 def logs():
-    if not session.get('username'):
+    if 'username' not in session:
+        flash('Please log in to view this page', 'error')
         return redirect(url_for('login'))
-    return render_template('logs.html')
+        
+    if not us.check_admin(session['username']):
+        flash('You do not have permission to view this page', 'error')
+        return redirect(url_for('home'))
+    
+    # Get all ausleihungen (loans) from the database
+    all_ausleihungen = au.get_ausleihungen()
+    
+    # Format the data for display
+    formatted_items = []
+    for ausleihung in all_ausleihungen:
+        # Get item name
+        item = it.get_item(ausleihung['item_id'])
+        item_name = item['Name'] if item else 'Unknown Item'
+        
+        # Get username
+        user = us.get_user(ausleihung['user_id'])
+        username = user['username'] if user else 'Unknown User'
+        
+        # Format dates
+        start_date = ausleihung['start']
+        end_date = ausleihung.get('end', 'Not returned')
+        
+        # Calculate duration
+        duration = 'Active'
+        if isinstance(end_date, str) and end_date != 'Not returned':
+            try:
+                # If dates are stored as strings, convert to datetime objects
+                from datetime import datetime
+                start = datetime.fromisoformat(start_date)
+                end = datetime.fromisoformat(end_date)
+                duration = f"{(end - start).days} days"
+            except:
+                duration = 'Unknown'
+        
+        formatted_items.append({
+            'Item': item_name,
+            'User': username,
+            'Start': start_date,
+            'End': end_date,
+            'Duration': duration,
+            'id': str(ausleihung['_id'])
+        })
+    
+    return render_template('logs.html', items=formatted_items)
 
 @app.route('/get_logs', methods=['GET'])
 def get_logs():

@@ -43,12 +43,12 @@ class ausleihung:
         client.close()
     
     def get_ausleihungen():
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        ausleihungen = db['ausleihungen']
-        ausleihungen_return = ausleihungen.find()
-        client.close()
-        return ausleihungen_return
+        client = MongoClient('mongodb://localhost:27017')
+        db = client['inventarsystem']
+        collection = db['ausleihungen']
+        results = collection.find()
+        print(f"Database query returned {results} records")
+        return list(results)
 
     def get_ausleihung(id):
         client = MongoClient('localhost', 27017)
