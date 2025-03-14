@@ -292,24 +292,15 @@
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if the user has active borrowing
+    // Instead, we'll fetch user status just to keep the user info available
     fetch('/user_status')
         .then(response => response.json())
         .then(data => {
-            if (data.has_active_borrowing) {
-                // Disable all borrow buttons
-                document.querySelectorAll('.ausleihen').forEach(button => {
-                    button.disabled = true;
-                    button.title = "You already have an item borrowed";
-                    button.classList.add('disabled-button');
-                });
-                
-                // Show notification banner
-                const banner = document.createElement('div');
-                banner.className = 'borrow-limit-banner';
-                banner.textContent = 'You can only borrow one item at a time. Please return your current item first.';
-                document.querySelector('.container').prepend(banner);
-            }
+            console.log('User status:', data);
+            // No action needed - users can borrow multiple items
+        })
+        .catch(error => {
+            console.error('Error fetching user status:', error);
         });
 });
 </script>

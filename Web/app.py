@@ -167,22 +167,24 @@ def ausleihen(id):
     # Debug output
     print(f"User {session['username']} attempting to borrow item {id}")
     
-    # Check if user already has an active borrowing
-    has_active = us.has_active_borrowing(session['username'])
-    print(f"Has active borrowing result: {has_active}")
-    
-    if has_active:
-        flash('You already have an item borrowed. Please return it before borrowing another one.', 'error')
-        if us.check_admin(session['username']):
-            return redirect(url_for('home_admin'))
-        return redirect(url_for('home'))
+    # REMOVED: Check for active borrowings - allowing multiple borrows
+    # has_active = us.has_active_borrowing(session['username'])
+    # if has_active:
+    #     flash('You already have an item borrowed. Please return it before borrowing another one.', 'error')
+    #     if us.check_admin(session['username']):
+    #         return redirect(url_for('home_admin'))
+    #     return redirect(url_for('home'))
     
     item = it.get_item(id)
     if item and item['Verfuegbar']:
         it.update_item_status(id, False)
-        au.add_ausleihung(id, session['username'], datetime.datetime.now())
-        # Mark user as having an active borrowing
-        us.update_active_borrowing(session['username'], id, True)
+        # Add correct start date (now)
+        start_date = datetime.datetime.now()
+        au.add_ausleihung(id, session['username'], start_date)
+        
+        # No longer need to update active borrowing status
+        # us.update_active_borrowing(session['username'], id, True)
+        
         flash('Item borrowed successfully', 'success')
     else:
         flash('Item is not available', 'error')
@@ -209,44 +211,46 @@ def zurueckgeben(id):
             ausleihung_data = au.get_ausleihung_by_item(id)
             print(f"Ausleihung data retrieved: {ausleihung_data}")
             
+            # Set the end date to now
+            end_date = datetime.datetime.now()
+            
             if ausleihung_data:
                 # Handle different data formats
                 if isinstance(ausleihung_data, tuple) and len(ausleihung_data) == 4:
                     # Original expected format
-                    _id, user, start, end = ausleihung_data
+                    _id, user, start, _ = ausleihung_data
                 elif isinstance(ausleihung_data, dict):
                     # Dictionary format
                     _id = str(ausleihung_data.get('_id'))
                     user = ausleihung_data.get('User', session['username'])
-                    start = ausleihung_data.get('Start', datetime.datetime.now())
-                    end = datetime.datetime.now()
+                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                 else:
                     # Other format - use what we can
                     _id = str(id)  # Use the item ID as fallback
                     user = session['username']
                     start = datetime.datetime.now() - datetime.timedelta(hours=1)  # Assume borrowed 1 hour ago
-                    end = datetime.datetime.now()
                 
-                # Update the ausleihung record
-                update_result = au.update_ausleihung(_id, id, session['username'], start, end)
+                # Update the ausleihung record with end date
+                update_result = au.update_ausleihung(_id, id, user, start, end_date)
                 print(f"Update ausleihung result: {update_result}")
                 
-                # Clear the user's active borrowing status
-                us.update_active_borrowing(session['username'], None, False)
+                # No longer need to clear the active borrowing
+                # us.update_active_borrowing(session['username'], None, False)
                 flash('Item returned successfully', 'success')
             else:
                 # Create a new return record if one doesn't exist
                 print("No ausleihung record found, creating a new one")
                 au.add_ausleihung(id, session['username'], 
                                   datetime.datetime.now() - datetime.timedelta(hours=1),
-                                  datetime.datetime.now())
-                us.update_active_borrowing(session['username'], None, False)
+                                  end_date)
+                # No longer need to clear the active borrowing
+                # us.update_active_borrowing(session['username'], None, False)
                 flash('Item returned successfully', 'success')
         except Exception as e:
             print(f"Error in zurueckgeben: {e}")
-            # Force the item to be available and reset user borrowing status
+            # Force the item to be available
             it.update_item_status(id, True)
-            us.update_active_borrowing(session['username'], None, False)
+            # No longer needed: us.update_active_borrowing(session['username'], None, False)
             flash('Item returned but encountered an error in record-keeping', 'warning')
     else:
         flash('Item is already available', 'error')

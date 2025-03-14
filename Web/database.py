@@ -21,11 +21,16 @@ from tkinter import messagebox
 
 
 class ausleihung:
-    def add_ausleihung(item_id, user_id, start):
+    def add_ausleihung(item_id, user_id, start, end=None):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({'Item': item_id, 'User': user_id, 'Start': start, 'End': 'None'})
+        ausleihungen.insert_one({
+            'Item': item_id, 
+            'User': user_id, 
+            'Start': start, 
+            'End': end if end else None
+        })
         client.close()
     
     def remove_ausleihung(id):
@@ -39,8 +44,17 @@ class ausleihung:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        ausleihungen.update_one({'_id': ObjectId(id)}, {'$set': {'Item': item_id, 'User': user_id, 'Start': start, 'End': end}})
+        ausleihungen.update_one(
+            {'_id': ObjectId(id)}, 
+            {'$set': {
+                'Item': item_id, 
+                'User': user_id, 
+                'Start': start, 
+                'End': end
+            }}
+        )
         client.close()
+        return True
     
     def get_ausleihungen():
         client = MongoClient('localhost', 27017)
