@@ -144,3 +144,10 @@
 [2025-03-15 08:54:46 +0100] [15117] [INFO] Worker exiting (pid: 15117)
 [2025-03-15 08:54:46 +0100] [15130] [INFO] Worker exiting (pid: 15130)
 [2025-03-15 08:54:46 +0100] [15116] [INFO] Shutting down: Master
+[2025-03-15 17:32:13 +0100] [37244] [INFO] Starting gunicorn 23.0.0
+[2025-03-15 17:32:13 +0100] [37244] [INFO] Listening at: http://0.0.0.0:8000 (37244)
+[2025-03-15 17:32:13 +0100] [37244] [INFO] Using worker: sync
+[2025-03-15 17:32:13 +0100] [37245] [INFO] Booting worker with pid: 37245
+[2025-03-15 17:32:13 +0100] [37248] [INFO] Booting worker with pid: 37248
+[2025-03-15 17:32:14 +0100] [37263] [INFO] Booting worker with pid: 37263
+[2025-03-15 17:32:14 +0100] [37264] [INFO] Booting worker with pid: 37264
