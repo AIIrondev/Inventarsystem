@@ -12,3 +12,7 @@
 [2025-03-15 17:32:13 +0100] [37243] [INFO] Using worker: sync
 [2025-03-15 17:32:13 +0100] [37246] [INFO] Booting worker with pid: 37246
 [2025-03-15 17:32:13 +0100] [37247] [INFO] Booting worker with pid: 37247
+[2025-03-15 17:33:51 +0100] [37243] [INFO] Handling signal: term
+[2025-03-15 17:33:51 +0100] [37247] [INFO] Worker exiting (pid: 37247)
+[2025-03-15 17:33:51 +0100] [37246] [INFO] Worker exiting (pid: 37246)
+[2025-03-15 17:33:51 +0100] [37243] [INFO] Shutting down: Master
