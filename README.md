@@ -22,7 +22,7 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 
 ### Einrichtung
 
-1. 
+1. Installation des Systems mit dem Installations-Script:
 
 ```bash
 wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Linux.sh | sudo bash

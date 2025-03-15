@@ -1,0 +1,9 @@
+[2025-03-15 08:52:38 +0100] [15115] [INFO] Starting gunicorn 23.0.0
+[2025-03-15 08:52:38 +0100] [15115] [INFO] Listening at: http://0.0.0.0:8001 (15115)
+[2025-03-15 08:52:38 +0100] [15115] [INFO] Using worker: sync
+[2025-03-15 08:52:38 +0100] [15119] [INFO] Booting worker with pid: 15119
+[2025-03-15 08:52:38 +0100] [15127] [INFO] Booting worker with pid: 15127
+[2025-03-15 08:54:46 +0100] [15115] [INFO] Handling signal: term
+[2025-03-15 08:54:46 +0100] [15127] [INFO] Worker exiting (pid: 15127)
+[2025-03-15 08:54:46 +0100] [15119] [INFO] Worker exiting (pid: 15119)
+[2025-03-15 08:54:46 +0100] [15115] [INFO] Shutting down: Master

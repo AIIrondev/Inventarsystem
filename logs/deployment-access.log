@@ -1,0 +1,6 @@
+127.0.0.1 - - [15/Mar/2025:08:53:17 +0100] "GET /login HTTP/1.1" 200 2878 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+127.0.0.1 - - [15/Mar/2025:08:53:17 +0100] "GET /static/favicon.ico HTTP/1.1" 404 207 "http://127.0.0.1:8001/login" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+127.0.0.1 - - [15/Mar/2025:08:53:26 +0100] "POST /login HTTP/1.1" 302 189 "http://127.0.0.1:8001/login" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+127.0.0.1 - - [15/Mar/2025:08:53:26 +0100] "GET / HTTP/1.1" 200 7031 "http://127.0.0.1:8001/login" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+127.0.0.1 - - [15/Mar/2025:08:54:44 +0100] "GET /logout HTTP/1.1" 302 199 "http://127.0.0.1:8001/" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+127.0.0.1 - - [15/Mar/2025:08:54:44 +0100] "GET /login HTTP/1.1" 200 2878 "http://127.0.0.1:8001/" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
