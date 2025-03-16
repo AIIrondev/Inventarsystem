@@ -30,3 +30,12 @@
 [2025-03-16 12:34:14 +0100] [47537] [INFO] Using worker: sync
 [2025-03-16 12:34:14 +0100] [47540] [INFO] Booting worker with pid: 47540
 [2025-03-16 12:34:14 +0100] [47541] [INFO] Booting worker with pid: 47541
+[2025-03-16 12:45:09 +0100] [47537] [INFO] Handling signal: term
+[2025-03-16 12:45:09 +0100] [47540] [INFO] Worker exiting (pid: 47540)
+[2025-03-16 12:45:09 +0100] [47541] [INFO] Worker exiting (pid: 47541)
+[2025-03-16 12:45:09 +0100] [47537] [INFO] Shutting down: Master
+[2025-03-16 12:58:11 +0100] [55554] [INFO] Starting gunicorn 23.0.0
+[2025-03-16 12:58:11 +0100] [55554] [INFO] Listening at: http://0.0.0.0:8001 (55554)
+[2025-03-16 12:58:11 +0100] [55554] [INFO] Using worker: sync
+[2025-03-16 12:58:11 +0100] [55557] [INFO] Booting worker with pid: 55557
+[2025-03-16 12:58:11 +0100] [55569] [INFO] Booting worker with pid: 55569

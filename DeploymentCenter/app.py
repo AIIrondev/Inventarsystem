@@ -22,7 +22,6 @@ This application provides administrative tools for managing the Inventarsystem:
 - System logs viewing
 - Borrowing history
 - System administration functions
-- Database debugging
 
 This is a separate application from the main Inventarsystem and is designed for
 administrative use only. It provides tools that should not be accessible to
@@ -324,48 +323,9 @@ def get_usernames():
         flash('Please login to access this function', 'error')
 
 
-@app.route('/debug_db')
-def debug_db():
-    """
-    Database debugging interface.
-    Shows collection counts and sample documents for troubleshooting.
-    Requires administrator privileges.
-    
-    Returns:
-        flask.Response: Rendered template with database information or redirect
-    """
-    if 'username' in session and us.check_admin(session['username']):
-        result = {}
-        try:
-            from pymongo import MongoClient
-            client = MongoClient('localhost', 27017)
-            
-            # Check both potential database names
-            dbs = ['Inventarsystem', 'inventarsystem']
-            for db_name in dbs:
-                db = client[db_name]
-                collections = db.list_collection_names()
-                result[db_name] = {}
-                for collection in collections:
-                    count = db[collection].count_documents({})
-                    result[db_name][collection] = count
-                    
-                    # If this is ausleihungen, show a sample document
-                    if collection == 'ausleihungen' and count > 0:
-                        sample = db[collection].find_one()
-                        result[db_name]['ausleihungen_sample'] = str(sample)
-            
-            client.close()
-            return render_template('debug.html', result=result)
-        except Exception as e:
-            return f"Error: {str(e)}"
-    else:
-        return redirect(url_for('login'))
-
-
 if __name__ == "__main__":
     """
     Development server execution block.
     This code only runs when the script is executed directly, not when imported.
     """
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000)
