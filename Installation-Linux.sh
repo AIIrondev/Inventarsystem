@@ -18,9 +18,18 @@ echo "Server IP: $SERVER_IP"
 echo "=== Updating system packages ==="
 sudo apt update && sudo apt upgrade -y || { echo "Failed to update and upgrade system packages"; exit 1; }
 
+# Add MongoDB repository
+echo "=== Adding MongoDB repository ==="
+wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add - || { echo "Failed to add MongoDB GPG key"; exit 1; }
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list || { echo "Failed to add MongoDB repository"; exit 1; }
+
+# Update package list again
+echo "=== Updating package list ==="
+sudo apt update || { echo "Failed to update package list"; exit 1; }
+
 # Install necessary packages
 echo "=== Installing required packages ==="
-sudo apt install -y python3 python3-venv python3-pip nginx mongodb git ufw || { echo "Failed to install required packages"; exit 1; }
+sudo apt install -y python3 python3-venv python3-pip nginx mongodb-org git ufw || { echo "Failed to install required packages"; exit 1; }
 
 # Enable UFW and configure firewall
 echo "=== Configuring firewall ==="
@@ -68,8 +77,8 @@ fi
 
 # Configure MongoDB
 echo "=== Configuring MongoDB for autostart ==="
-sudo systemctl enable mongodb || { echo "Failed to enable MongoDB"; exit 1; }
-sudo systemctl start mongodb || { echo "Failed to start MongoDB"; exit 1; }
+sudo systemctl enable mongod || { echo "Failed to enable MongoDB"; exit 1; }
+sudo systemctl start mongod || { echo "Failed to start MongoDB"; exit 1; }
 echo "MongoDB configured and started"
 
 # Create system user for running the service
@@ -88,8 +97,8 @@ echo "=== Creating systemd service for Gunicorn with autostart ==="
 sudo tee /etc/systemd/system/inventarsystem.service > /dev/null << EOF
 [Unit]
 Description=Gunicorn instance to serve Inventarsystem
-After=network.target mongodb.service
-Requires=mongodb.service
+After=network.target mongod.service
+Requires=mongod.service
 StartLimitIntervalSec=0
 
 [Service]
@@ -161,7 +170,7 @@ sudo systemctl enable nginx || { echo "Failed to enable Nginx"; exit 1; }
 
 # Verify autostart settings
 echo "=== Verifying autostart configuration ==="
-mongodb_autostart=$(systemctl is-enabled mongodb)
+mongodb_autostart=$(systemctl is-enabled mongod)
 inventarsystem_autostart=$(systemctl is-enabled inventarsystem)
 nginx_autostart=$(systemctl is-enabled nginx)
 
@@ -172,7 +181,7 @@ echo "Nginx autostart: $nginx_autostart"
 # Final status checks
 echo "=== Checking service status ==="
 echo "MongoDB status:"
-sudo systemctl status mongodb --no-pager || { echo "Failed to get MongoDB status"; exit 1; }
+sudo systemctl status mongod --no-pager || { echo "Failed to get MongoDB status"; exit 1; }
 echo "Inventarsystem status:"
 sudo systemctl status inventarsystem --no-pager || { echo "Failed to get Inventarsystem status"; exit 1; }
 echo "Nginx status:"
