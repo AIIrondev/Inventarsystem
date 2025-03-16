@@ -104,7 +104,7 @@ sudo chown $USER:$USER $PROJECT_DIR || { echo "Failed to set ownership for proje
 echo "=== Setting up project files ==="
 if [ ! -d "$PROJECT_DIR/.git" ] || ! git -C $PROJECT_DIR rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     # Not a git repo, try to clone
-    if git clone $GITHUB_REPO $PROJECT_DIR.tmp; then
+    if sudo git clone $GITHUB_REPO $PROJECT_DIR.tmp; then
         # Clone succeeded to temp dir
         if [ -d "$PROJECT_DIR" ]; then
             # Move contents without .git
