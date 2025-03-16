@@ -119,7 +119,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "$INSTALL_SOURCE" = "2" ]; then
     # Copy from local directory
     echo "Copying files from: $SCRIPT_DIR"
-    cp -rv "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
+    cp -r "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
         echo "Error: Failed to copy files from local directory";
         exit 1;
     }
@@ -127,24 +127,29 @@ if [ "$INSTALL_SOURCE" = "2" ]; then
 else
     # Clone from GitHub repository
     echo "Cloning from GitHub repository: $GITHUB_REPO"
-    rm -rf "$PROJECT_DIR"/* "$PROJECT_DIR"/.[!.]* 2>/dev/null || true
     
-    # Try direct clone
-    if git clone --verbose "$GITHUB_REPO" "$PROJECT_DIR.tmp"; then
+    # Create system temporary directory
+    TEMP_DIR=$(mktemp -d)
+    
+    # Setup cleanup to run on script exit, interrupt, or termination
+    trap 'echo "Cleaning up temporary files..."; rm -rf "$TEMP_DIR"; echo "Cleanup complete."' EXIT
+    
+    echo "Using temporary directory: $TEMP_DIR"
+    
+    # Clone repository to temp directory
+    if git clone --verbose "$GITHUB_REPO" "$TEMP_DIR"; then
         echo "Repository cloned successfully to temporary directory."
         
-        # Copy contents
-        cp -rv "$PROJECT_DIR.tmp"/* "$PROJECT_DIR" || {
-            echo "Error: Failed to copy files from cloned repository";
-            rm -rf "$PROJECT_DIR.tmp";
-            exit 1;
-        }
+        # Make sure project directory exists and is empty
+        mkdir -p "$PROJECT_DIR"
+        rm -rf "$PROJECT_DIR"/* "$PROJECT_DIR"/.[!.]* 2>/dev/null || true
         
-        # Copy hidden files too (like .gitignore)
-        cp -rv "$PROJECT_DIR.tmp"/.[!.]* "$PROJECT_DIR" 2>/dev/null || true
+        # Copy all files from temp directory to project directory
+        echo "Copying files to installation directory..."
+        cp -r "$TEMP_DIR"/* "$PROJECT_DIR/" 2>/dev/null || echo "Note: No regular files to copy"
+        cp -r "$TEMP_DIR"/.[!.]* "$PROJECT_DIR/" 2>/dev/null || echo "Note: No hidden files to copy"
         
-        # Clean up
-        rm -rf "$PROJECT_DIR.tmp"
+        echo "Files copied successfully from repository."
     else
         echo "Failed to clone repository from GitHub."
         echo "Would you like to:"
@@ -155,7 +160,7 @@ else
         
         if [ "$CLONE_FAIL_ACTION" = "1" ]; then
             echo "Copying files from: $SCRIPT_DIR"
-            cp -rv "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
+            cp -r "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
                 echo "Error: Failed to copy files from local directory";
                 exit 1;
             }
