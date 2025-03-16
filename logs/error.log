@@ -157,3 +157,23 @@
 [2025-03-15 17:33:51 +0100] [37248] [INFO] Worker exiting (pid: 37248)
 [2025-03-15 17:33:51 +0100] [37264] [INFO] Worker exiting (pid: 37264)
 [2025-03-15 17:33:51 +0100] [37244] [INFO] Shutting down: Master
+[2025-03-16 12:32:03 +0100] [46421] [INFO] Starting gunicorn 23.0.0
+[2025-03-16 12:32:03 +0100] [46421] [INFO] Listening at: http://0.0.0.0:8000 (46421)
+[2025-03-16 12:32:03 +0100] [46421] [INFO] Using worker: sync
+[2025-03-16 12:32:03 +0100] [46422] [INFO] Booting worker with pid: 46422
+[2025-03-16 12:32:03 +0100] [46425] [INFO] Booting worker with pid: 46425
+[2025-03-16 12:32:04 +0100] [46426] [INFO] Booting worker with pid: 46426
+[2025-03-16 12:32:04 +0100] [46427] [INFO] Booting worker with pid: 46427
+[2025-03-16 12:34:02 +0100] [46421] [INFO] Handling signal: int
+[2025-03-16 12:34:03 +0100] [46426] [INFO] Worker exiting (pid: 46426)
+[2025-03-16 12:34:03 +0100] [46427] [INFO] Worker exiting (pid: 46427)
+[2025-03-16 12:34:03 +0100] [46425] [INFO] Worker exiting (pid: 46425)
+[2025-03-16 12:34:03 +0100] [46422] [INFO] Worker exiting (pid: 46422)
+[2025-03-16 12:34:03 +0100] [46421] [INFO] Shutting down: Master
+[2025-03-16 12:34:14 +0100] [47538] [INFO] Starting gunicorn 23.0.0
+[2025-03-16 12:34:14 +0100] [47538] [INFO] Listening at: http://0.0.0.0:8000 (47538)
+[2025-03-16 12:34:14 +0100] [47538] [INFO] Using worker: sync
+[2025-03-16 12:34:14 +0100] [47539] [INFO] Booting worker with pid: 47539
+[2025-03-16 12:34:14 +0100] [47546] [INFO] Booting worker with pid: 47546
+[2025-03-16 12:34:14 +0100] [47547] [INFO] Booting worker with pid: 47547
+[2025-03-16 12:34:14 +0100] [47555] [INFO] Booting worker with pid: 47555
