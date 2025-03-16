@@ -398,7 +398,36 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 EOF
 
-# Create DeploymentCenter service with improved socket handling
+# Replace the Web service definition with:
+sudo tee /etc/systemd/system/inventarsystem-web.service > /dev/null << EOF
+[Unit]
+Description=Inventarsystem Web Interface
+After=network.target $MONGO_SERVICE.service
+Requires=$MONGO_SERVICE.service
+Documentation=https://github.com/aiirondev/Inventarsystem
+
+[Service]
+User=inventarsystem
+Group=www-data
+WorkingDirectory=$PROJECT_DIR/Web
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=$PROJECT_DIR/.venv/bin:\$PATH"
+# Remove any existing socket file before starting
+ExecStartPre=/bin/rm -f $PROJECT_DIR/Web/inventarsystem.sock
+ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock --access-logfile $PROJECT_DIR/logs/access.log --error-logfile $PROJECT_DIR/logs/error.log --log-level debug wsgi:app
+# Fix socket permissions after starting with full paths
+ExecStartPost=/bin/chmod 660 $PROJECT_DIR/Web/inventarsystem.sock
+ExecStartPost=/bin/chown inventarsystem:www-data $PROJECT_DIR/Web/inventarsystem.sock
+Restart=always
+RestartSec=10
+SyslogIdentifier=inventarsystem-web
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Replace the DeploymentCenter service definition with:
 sudo tee /etc/systemd/system/inventarsystem-dc.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem DeploymentCenter
@@ -410,12 +439,14 @@ Documentation=https://github.com/aiirondev/Inventarsystem
 User=inventarsystem
 Group=www-data
 WorkingDirectory=$PROJECT_DIR/DeploymentCenter
-Environment="PATH=$PROJECT_DIR/.venv/bin"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=$PROJECT_DIR/.venv/bin:\$PATH"
 # Remove any existing socket file before starting
 ExecStartPre=/bin/rm -f $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock
 ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 2 --bind unix:$PROJECT_DIR/DeploymentCenter/deploymentcenter.sock --access-logfile $PROJECT_DIR/logs/deployment-access.log --error-logfile $PROJECT_DIR/logs/deployment-error.log --log-level debug wsgi:app
-# Fix socket permissions after starting
-ExecStartPost=/bin/sh -c "chmod 660 $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock && chown inventarsystem:www-data $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock"
+# Fix socket permissions after starting with full paths
+ExecStartPost=/bin/chmod 660 $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock
+ExecStartPost=/bin/chown inventarsystem:www-data $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock
 Restart=always
 RestartSec=10
 SyslogIdentifier=inventarsystem-dc
