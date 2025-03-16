@@ -249,17 +249,42 @@ echo "=== Setting up Python virtual environment ==="
 python3 -m venv $PROJECT_DIR/.venv || { echo "Failed to create virtual environment"; exit 1; }
 source $PROJECT_DIR/.venv/bin/activate || { echo "Failed to activate virtual environment"; exit 1; }
 
-# Install Python dependencies
+# Install Python dependencies with fix for BSON/PyMongo issue
 echo "=== Installing Python dependencies ==="
 pip install --upgrade pip || { echo "Failed to upgrade pip"; exit 1; }
 
-# Try to install from requirements file, otherwise install core dependencies
+# Fix for BSON/PyMongo compatibility issue - THIS IS THE KEY FIX
+echo "=== Fixing Python dependencies for PyMongo/BSON ==="
+# Remove standalone bson if it exists (it conflicts with pymongo's built-in bson)
+pip uninstall -y bson || true
+
+# Install pymongo explicitly first with compatible version
+pip install pymongo==4.5.0 || { 
+    echo "Failed to install pymongo, trying alternative version"; 
+    pip install pymongo==3.12.3 || { echo "Failed to install pymongo"; exit 1; }
+}
+
+# Now install other dependencies
 if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-    pip install -r $PROJECT_DIR/requirements.txt || echo "Warning: Error with requirements.txt, installing core dependencies directly"
+    # Fix the requirements file if needed
+    if grep -q "^bson" "$PROJECT_DIR/requirements.txt"; then
+        echo "Removing standalone bson from requirements.txt"
+        sed -i '/^bson/d' "$PROJECT_DIR/requirements.txt"
+    fi
+    
+    # Install requirements without dependencies to avoid overwriting pymongo
+    pip install -r "$PROJECT_DIR/requirements.txt" || echo "Warning: Some requirements failed, continuing with core dependencies"
 fi
 
 # Always install core dependencies to be safe
-pip install flask pymongo pillow qrcode gunicorn
+pip install flask pillow qrcode gunicorn
+
+# Verify pymongo installation is working
+echo "=== Verifying PyMongo installation ==="
+python3 -c "import pymongo; print('PyMongo version:', pymongo.__version__); from pymongo.bson import SON; print('BSON SON imported successfully')" || {
+    echo "WARNING: PyMongo verification failed. This might cause issues with the application.";
+    echo "Continuing with installation anyway...";
+}
 
 # Create WSGI file for Web interface if it doesn't exist
 echo "=== Creating Web WSGI file ==="
@@ -308,10 +333,10 @@ sudo chown -R inventarsystem:www-data $PROJECT_DIR || echo "Warning: Failed to c
 sudo chmod -R 755 $PROJECT_DIR || echo "Warning: Failed to set permissions to 755"
 sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QRCodes || echo "Warning: Failed to set permissions to 775"
 
-# Create systemd service files for both applications
+# Create systemd service files with improved socket handling
 echo "=== Creating systemd services for Inventarsystem components ==="
 
-# Create Web service
+# Create Web service with improved socket handling
 sudo tee /etc/systemd/system/inventarsystem-web.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem Web Interface
@@ -324,7 +349,11 @@ User=inventarsystem
 Group=www-data
 WorkingDirectory=$PROJECT_DIR/Web
 Environment="PATH=$PROJECT_DIR/.venv/bin"
-ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock --access-logfile $PROJECT_DIR/logs/access.log --error-logfile $PROJECT_DIR/logs/error.log wsgi:app
+# Remove any existing socket file before starting
+ExecStartPre=/bin/rm -f $PROJECT_DIR/Web/inventarsystem.sock
+ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock --access-logfile $PROJECT_DIR/logs/access.log --error-logfile $PROJECT_DIR/logs/error.log --log-level debug wsgi:app
+# Fix socket permissions after starting
+ExecStartPost=/bin/sh -c "chmod 660 $PROJECT_DIR/Web/inventarsystem.sock && chown inventarsystem:www-data $PROJECT_DIR/Web/inventarsystem.sock"
 Restart=always
 RestartSec=10
 SyslogIdentifier=inventarsystem-web
@@ -334,7 +363,7 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 EOF
 
-# Create DeploymentCenter service
+# Create DeploymentCenter service with improved socket handling
 sudo tee /etc/systemd/system/inventarsystem-dc.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem DeploymentCenter
@@ -347,7 +376,11 @@ User=inventarsystem
 Group=www-data
 WorkingDirectory=$PROJECT_DIR/DeploymentCenter
 Environment="PATH=$PROJECT_DIR/.venv/bin"
-ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 2 --bind unix:$PROJECT_DIR/DeploymentCenter/deploymentcenter.sock --access-logfile $PROJECT_DIR/logs/deployment-access.log --error-logfile $PROJECT_DIR/logs/deployment-error.log wsgi:app
+# Remove any existing socket file before starting
+ExecStartPre=/bin/rm -f $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock
+ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 2 --bind unix:$PROJECT_DIR/DeploymentCenter/deploymentcenter.sock --access-logfile $PROJECT_DIR/logs/deployment-access.log --error-logfile $PROJECT_DIR/logs/deployment-error.log --log-level debug wsgi:app
+# Fix socket permissions after starting
+ExecStartPost=/bin/sh -c "chmod 660 $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock && chown inventarsystem:www-data $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock"
 Restart=always
 RestartSec=10
 SyslogIdentifier=inventarsystem-dc
@@ -434,6 +467,7 @@ function display_help {
     echo "  web-stop    Stop only Web service"
     echo "  dc-stop     Stop only DeploymentCenter service"
     echo "  uninstall   Completely remove Inventarsystem"
+    echo "  diagnose    Run diagnostic checks on the system"
 }
 
 case "\$1" in
@@ -494,6 +528,24 @@ case "\$1" in
         echo "Stopping DeploymentCenter service..."
         sudo systemctl stop inventarsystem-dc.service
         ;;
+    diagnose)
+        echo "=== Running Inventarsystem Diagnostics ==="
+        echo "Checking Python installation..."
+        source $PROJECT_DIR/.venv/bin/activate
+        python3 -c "import sys; print('Python version:', sys.version)"
+        python3 -c "import pymongo; print('PyMongo version:', pymongo.__version__)"
+        
+        echo "Checking socket files..."
+        ls -la $PROJECT_DIR/Web/inventarsystem.sock || echo "ERROR: Web socket file not found!"
+        ls -la $PROJECT_DIR/DeploymentCenter/deploymentcenter.sock || echo "ERROR: DeploymentCenter socket file not found!"
+        
+        echo "Checking services..."
+        sudo systemctl status inventarsystem-web.service | grep "Active:"
+        sudo systemctl status inventarsystem-dc.service | grep "Active:"
+        sudo systemctl status nginx | grep "Active:"
+        
+        echo "Finished diagnostics."
+        ;;
     uninstall)
         echo "WARNING: This will completely remove Inventarsystem."
         read -p "Are you sure you want to continue? (y/n): " confirm
@@ -541,17 +593,40 @@ sudo systemctl daemon-reload
 sudo systemctl enable inventarsystem-web.service
 sudo systemctl enable inventarsystem-dc.service
 
+# Start services with thorough error checking
+echo "=== Starting services with detailed error checking ==="
+sudo systemctl restart inventarsystem-web.service
+echo "Starting Web service..."
+sleep 2
+
+# Detailed error checking for Web service
+if ! sudo systemctl is-active --quiet inventarsystem-web.service; then
+    echo "WARNING: Web service failed to start. Checking logs:"
+    sudo journalctl -u inventarsystem-web.service --no-pager -n 30 || echo "No logs available"
+    echo ""
+else
+    echo "Web service started successfully."
+fi
+
+echo "Starting DeploymentCenter service..."
+sudo systemctl restart inventarsystem-dc.service
+sleep 2
+
+# Detailed error checking for DeploymentCenter service
+if ! sudo systemctl is-active --quiet inventarsystem-dc.service; then
+    echo "WARNING: DeploymentCenter service failed to start. Checking logs:"
+    sudo journalctl -u inventarsystem-dc.service --no-pager -n 30 || echo "No logs available"
+    echo ""
+else
+    echo "DeploymentCenter service started successfully."
+fi
+
 # Test Nginx configuration and restart
 sudo nginx -t && sudo systemctl restart nginx || {
     echo "Warning: Nginx configuration error, checking...";
     sudo nginx -t -c /etc/nginx/nginx.conf;
     echo "Continuing despite Nginx configuration issues...";
 }
-
-# Start the services
-echo "Starting Inventarsystem services..."
-sudo systemctl start inventarsystem-web.service || echo "Warning: Failed to start Web service"
-sudo systemctl start inventarsystem-dc.service || echo "Warning: Failed to start DeploymentCenter service"
 
 # Allow Nginx ports in firewall
 sudo ufw allow 80 || echo "Warning: Could not open port 80"
@@ -584,6 +659,7 @@ echo "==================================================="
 echo "MANAGEMENT:"
 echo "- To manage services: sudo $PROJECT_DIR/manage-inventarsystem.sh [command]"
 echo "- For help, run:      sudo $PROJECT_DIR/manage-inventarsystem.sh"
+echo "- To diagnose issues: sudo $PROJECT_DIR/manage-inventarsystem.sh diagnose"
 echo "- To uninstall:       sudo $PROJECT_DIR/manage-inventarsystem.sh uninstall"
 echo "==================================================="
 echo "AUTOSTART CONFIGURATION:"
