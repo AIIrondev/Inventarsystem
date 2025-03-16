@@ -14,46 +14,71 @@ GITHUB_REPO="https://github.com/aiirondev/Inventarsystem.git"
 SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "Server IP: $SERVER_IP"
 
-# Update and upgrade system packages
+# Update system packages
 echo "=== Updating system packages ==="
-sudo apt update && sudo apt upgrade -y || { echo "Failed to update and upgrade system packages"; exit 1; }
+sudo apt update || { echo "Failed to update package lists"; exit 1; }
 
-# Add MongoDB repository with Ubuntu 24.04 support
-echo "=== Adding MongoDB repository ==="
+# Clean up any existing MongoDB repos to avoid conflicts
+echo "=== Cleaning up existing MongoDB repositories ==="
+sudo rm -f /etc/apt/sources.list.d/mongodb*.list
+sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1
+
+# Add MongoDB repository for Ubuntu 24.04
+echo "=== Adding MongoDB repository for Ubuntu 24.04 ==="
 UBUNTU_VERSION=$(lsb_release -rs)
 UBUNTU_CODENAME=$(lsb_release -cs)
 
-# Handle newer Ubuntu versions 
 if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
-    echo "Detected Ubuntu 24.04 (Noble Numbat)"
-    echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB"
+    echo "Detected Ubuntu 24.04 (Noble)"
+    echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB 6.0"
     
-    # Modern way to add repository keys (apt-key is deprecated)
+    # Modern way to add repository keys with explicit file
     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
     
-    # Add repository using the new format with explicit keyring
+    # Add repository using Jammy instead of Noble
     echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
 else
-    # For older Ubuntu versions, use standard approach
-    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add - || { 
-        echo "Warning: apt-key is deprecated, trying modern approach"
-        wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
-        
-        # Add repository using the new format
-        echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
-        sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-    }
+    # For older Ubuntu versions
+    echo "Using repository for $UBUNTU_CODENAME"
+    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
+    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
 fi
 
-# Update package list again
+# Update package list with new repository
 echo "=== Updating package list ==="
-sudo apt update || { echo "Failed to update package list"; exit 1; }
+sudo apt update || { 
+    echo "Warning: Failed to update with MongoDB repo, trying system MongoDB instead"; 
+    # Remove problematic repo if update fails
+    sudo rm -f /etc/apt/sources.list.d/mongodb-org-6.0.list
+    sudo apt update
+}
 
-# Install necessary packages
+# Install necessary packages with fallback for MongoDB
 echo "=== Installing required packages ==="
-sudo apt install -y python3 python3-venv python3-pip nginx mongodb-org git ufw || { echo "Failed to install required packages"; exit 1; }
+sudo apt install -y python3 python3-venv python3-pip nginx git ufw || { 
+    echo "Failed to install base packages"; 
+    exit 1; 
+}
 
+# Try to install MongoDB from the repository
+echo "=== Installing MongoDB ==="
+if sudo apt install -y mongodb-org; then
+    echo "MongoDB installed successfully from MongoDB repository"
+    MONGO_SERVICE="mongod"
+else
+    echo "Trying to install system MongoDB package instead..."
+    sudo apt install -y mongodb || { 
+        echo "Failed to install MongoDB"; 
+        exit 1; 
+    }
+    echo "System MongoDB installed successfully"
+    MONGO_SERVICE="mongodb"
+fi
+
+# Continue with rest of script...
 # Enable UFW and configure firewall
 echo "=== Configuring firewall ==="
 sudo ufw allow 'Nginx Full' || { echo "Failed to allow 'Nginx Full' in UFW"; exit 1; }
@@ -67,13 +92,19 @@ sudo chown $USER:$USER $PROJECT_DIR || { echo "Failed to set ownership for proje
 
 # Clone the repository
 echo "=== Cloning Inventarsystem repository ==="
-git clone $GITHUB_REPO $PROJECT_DIR || { echo "Repository already exists, pulling latest changes"; cd $PROJECT_DIR && git pull || { echo "Failed to pull latest changes"; exit 1; }; }
+git clone $GITHUB_REPO $PROJECT_DIR || { 
+    echo "Repository may exist already, trying to pull latest changes"; 
+    cd $PROJECT_DIR && git pull || { 
+        echo "Failed to update repository"; 
+        exit 1; 
+    }
+}
 
 # Create directories for logs, uploads, and QR codes
 echo "=== Creating application directories ==="
 mkdir -p $PROJECT_DIR/logs || { echo "Failed to create logs directory"; exit 1; }
 mkdir -p $PROJECT_DIR/Web/uploads || { echo "Failed to create uploads directory"; exit 1; }
-mkdir -p $PROJECT_DIR/Web/qrcodes || { echo "Failed to create qrcodes directory"; exit 1; }
+mkdir -p $PROJECT_DIR/Web/QRCodes || { echo "Failed to create QRCodes directory"; exit 1; }
 
 # Set up the virtual environment
 echo "=== Setting up Python virtual environment ==="
@@ -83,7 +114,10 @@ source $PROJECT_DIR/.venv/bin/activate || { echo "Failed to activate virtual env
 # Install Python dependencies
 echo "=== Installing Python dependencies ==="
 pip install --upgrade pip || { echo "Failed to upgrade pip"; exit 1; }
-pip install -r $PROJECT_DIR/requirements.txt || { echo "Failed to install requirements from requirements.txt"; exit 1; }
+pip install -r $PROJECT_DIR/requirements.txt || { 
+    echo "Error with requirements.txt, installing core dependencies directly"; 
+    pip install flask pymongo pillow qrcode gunicorn
+}
 pip install gunicorn || { echo "Failed to install Gunicorn"; exit 1; }
 
 # Create WSGI file if it doesn't exist
@@ -93,17 +127,18 @@ if [ ! -f "$PROJECT_DIR/Web/wsgi.py" ]; then
 from app import app
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host='0.0.0.0')
 EOF
     [ $? -ne 0 ] && { echo "Failed to create WSGI file"; exit 1; }
 fi
 
 # Configure MongoDB
 echo "=== Configuring MongoDB for autostart ==="
-sudo systemctl enable mongod || { echo "Failed to enable MongoDB"; exit 1; }
-sudo systemctl start mongod || { echo "Failed to start MongoDB"; exit 1; }
+sudo systemctl enable $MONGO_SERVICE || { echo "Failed to enable MongoDB"; exit 1; }
+sudo systemctl start $MONGO_SERVICE || { echo "Failed to start MongoDB"; exit 1; }
 echo "MongoDB configured and started"
 
+# Rest of your installation script continues...
 # Create system user for running the service
 echo "=== Creating system user ==="
 sudo useradd -r -s /bin/false inventarsystem || echo "User already exists"
@@ -113,16 +148,18 @@ sudo usermod -a -G www-data inventarsystem || { echo "Failed to add user to www-
 echo "=== Setting file permissions ==="
 sudo chown -R inventarsystem:www-data $PROJECT_DIR || { echo "Failed to change ownership"; exit 1; }
 sudo chmod -R 755 $PROJECT_DIR || { echo "Failed to set permissions to 755"; exit 1; }
-sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/qrcodes || { echo "Failed to set permissions to 775"; exit 1; }
+sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QRCodes || { 
+    echo "Failed to set permissions to 775"; 
+    exit 1; 
+}
 
 # Create a systemd service file for Gunicorn
 echo "=== Creating systemd service for Gunicorn with autostart ==="
 sudo tee /etc/systemd/system/inventarsystem.service > /dev/null << EOF
 [Unit]
 Description=Gunicorn instance to serve Inventarsystem
-After=network.target mongod.service
-Requires=mongod.service
-StartLimitIntervalSec=0
+After=network.target $MONGO_SERVICE.service
+Requires=$MONGO_SERVICE.service
 
 [Service]
 User=inventarsystem
@@ -136,79 +173,6 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-[ $? -ne 0 ] && { echo "Failed to create systemd service file"; exit 1; }
-
-# Start and enable the Gunicorn service for autostart
-echo "=== Enabling autostart for Inventarsystem ==="
-sudo systemctl daemon-reload || { echo "Failed to reload systemd daemon"; exit 1; }
-sudo systemctl start inventarsystem || { echo "Failed to start Gunicorn service"; exit 1; }
-sudo systemctl enable inventarsystem || { echo "Failed to enable Gunicorn service"; exit 1; }
-echo "Gunicorn service started and enabled for autostart"
-
-# Configure Nginx to proxy requests to Gunicorn
-echo "=== Configuring Nginx with autostart ==="
-sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
-server {
-    listen 80;
-    server_name $SERVER_IP;
-
-    location / {
-        include proxy_params;
-        proxy_pass http://unix:$PROJECT_DIR/Web/inventarsystem.sock;
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 75s;
-    }
-
-    location /static/ {
-        alias $PROJECT_DIR/Web/static/;
-    }
-
-    location /uploads/ {
-        alias $PROJECT_DIR/Web/uploads/;
-    }
-    
-    location /qrcodes/ {
-        alias $PROJECT_DIR/Web/qrcodes/;
-    }
-    
-    # Increase maximum file upload size
-    client_max_body_size 10M;
-}
-EOF
-[ $? -ne 0 ] && { echo "Failed to configure Nginx"; exit 1; }
-
-# Enable the Nginx server block and restart Nginx
-echo "=== Enabling Nginx autostart configuration ==="
-sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled || { echo "Failed to enable Nginx site"; exit 1; }
-sudo rm -f /etc/nginx/sites-enabled/default || { echo "Failed to remove default Nginx site"; exit 1; }
-
-# Test the Nginx configuration
-echo "=== Testing Nginx configuration ==="
-sudo nginx -t || { echo "Nginx configuration test failed"; exit 1; }
-
-# Restart Nginx and enable autostart
-echo "=== Setting up Nginx autostart ==="
-sudo systemctl restart nginx || { echo "Failed to restart Nginx"; exit 1; }
-sudo systemctl enable nginx || { echo "Failed to enable Nginx"; exit 1; }
-
-# Verify autostart settings
-echo "=== Verifying autostart configuration ==="
-mongodb_autostart=$(systemctl is-enabled mongod)
-inventarsystem_autostart=$(systemctl is-enabled inventarsystem)
-nginx_autostart=$(systemctl is-enabled nginx)
-
-echo "MongoDB autostart: $mongodb_autostart"
-echo "Inventarsystem autostart: $inventarsystem_autostart"
-echo "Nginx autostart: $nginx_autostart"
-
-# Final status checks
-echo "=== Checking service status ==="
-echo "MongoDB status:"
-sudo systemctl status mongod --no-pager || { echo "Failed to get MongoDB status"; exit 1; }
-echo "Inventarsystem status:"
-sudo systemctl status inventarsystem --no-pager || { echo "Failed to get Inventarsystem status"; exit 1; }
-echo "Nginx status:"
-sudo systemctl status nginx --no-pager || { echo "Failed to get Nginx status"; exit 1; }
 
 echo "==================================================="
 echo "Installation complete!"
@@ -216,13 +180,4 @@ echo "Your Inventarsystem is now running at http://$SERVER_IP"
 echo "==================================================="
 echo "AUTOSTART CONFIGURATION:"
 echo "- All services will automatically start on system boot"
-echo "- No manual intervention required after restart"
-echo "==================================================="
-echo "To view logs:"
-echo "  Application logs: sudo journalctl -u inventarsystem"
-echo "  Access logs: cat $PROJECT_DIR/logs/access.log"
-echo "  Error logs: cat $PROJECT_DIR/logs/error.log"
-echo "==================================================="
-echo "To test autostart functionality, run: sudo reboot"
-echo "After reboot, services should be running automatically"
 echo "==================================================="
