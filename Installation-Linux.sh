@@ -24,7 +24,7 @@ echo "=== Updating system packages ==="
 sudo apt update || { echo "Failed to update package lists"; exit 1; }
 
 # Add MongoDB repository for Ubuntu 24.04
-echo "=== Adding MongoDB repository for Ubuntu 24.04 ==="
+echo "=== Adding MongoDB repository ==="
 UBUNTU_VERSION=$(lsb_release -rs)
 UBUNTU_CODENAME=$(lsb_release -cs)
 
@@ -78,7 +78,6 @@ else
     MONGO_SERVICE="mongodb"
 fi
 
-# Continue with rest of script...
 # Enable UFW and configure firewall
 echo "=== Configuring firewall ==="
 sudo ufw allow 'Nginx Full' || { echo "Failed to allow 'Nginx Full' in UFW"; exit 1; }
@@ -105,6 +104,7 @@ echo "=== Creating application directories ==="
 mkdir -p $PROJECT_DIR/logs || { echo "Failed to create logs directory"; exit 1; }
 mkdir -p $PROJECT_DIR/Web/uploads || { echo "Failed to create uploads directory"; exit 1; }
 mkdir -p $PROJECT_DIR/Web/QRCodes || { echo "Failed to create QRCodes directory"; exit 1; }
+mkdir -p $PROJECT_DIR/DeploymentCenter/static || { echo "Failed to create DeploymentCenter static directory"; exit 1; }
 
 # Set up the virtual environment
 echo "=== Setting up Python virtual environment ==="
@@ -120,8 +120,8 @@ pip install -r $PROJECT_DIR/requirements.txt || {
 }
 pip install gunicorn || { echo "Failed to install Gunicorn"; exit 1; }
 
-# Create WSGI file if it doesn't exist
-echo "=== Creating WSGI file ==="
+# Create WSGI file for Web interface if it doesn't exist
+echo "=== Creating Web WSGI file ==="
 if [ ! -f "$PROJECT_DIR/Web/wsgi.py" ]; then
     cat > $PROJECT_DIR/Web/wsgi.py << EOF
 from app import app
@@ -129,7 +129,19 @@ from app import app
 if __name__ == "__main__":
     app.run(host='0.0.0.0')
 EOF
-    [ $? -ne 0 ] && { echo "Failed to create WSGI file"; exit 1; }
+    [ $? -ne 0 ] && { echo "Failed to create Web WSGI file"; exit 1; }
+fi
+
+# Create WSGI file for DeploymentCenter if it doesn't exist
+echo "=== Creating DeploymentCenter WSGI file ==="
+if [ ! -f "$PROJECT_DIR/DeploymentCenter/wsgi.py" ]; then
+    cat > $PROJECT_DIR/DeploymentCenter/wsgi.py << EOF
+from app import app
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0')
+EOF
+    [ $? -ne 0 ] && { echo "Failed to create DeploymentCenter WSGI file"; exit 1; }
 fi
 
 # Configure MongoDB
@@ -138,7 +150,6 @@ sudo systemctl enable $MONGO_SERVICE || { echo "Failed to enable MongoDB"; exit 
 sudo systemctl start $MONGO_SERVICE || { echo "Failed to start MongoDB"; exit 1; }
 echo "MongoDB configured and started"
 
-# Rest of your installation script continues...
 # Create system user for running the service
 echo "=== Creating system user ==="
 sudo useradd -r -s /bin/false inventarsystem || echo "User already exists"
@@ -153,13 +164,16 @@ sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QR
     exit 1; 
 }
 
-# Create a systemd service file for Gunicorn
-echo "=== Creating systemd service for Gunicorn with autostart ==="
-sudo tee /etc/systemd/system/inventarsystem.service > /dev/null << EOF
+# Create systemd service files for both applications
+echo "=== Creating systemd services for Inventarsystem components ==="
+
+# Create Web service
+sudo tee /etc/systemd/system/inventarsystem-web.service > /dev/null << EOF
 [Unit]
-Description=Gunicorn instance to serve Inventarsystem
+Description=Inventarsystem Web Interface
 After=network.target $MONGO_SERVICE.service
 Requires=$MONGO_SERVICE.service
+Documentation=https://github.com/aiirondev/Inventarsystem
 
 [Service]
 User=inventarsystem
@@ -169,14 +183,229 @@ Environment="PATH=$PROJECT_DIR/.venv/bin"
 ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock --access-logfile $PROJECT_DIR/logs/access.log --error-logfile $PROJECT_DIR/logs/error.log wsgi:app
 Restart=always
 RestartSec=10
+SyslogIdentifier=inventarsystem-web
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Create DeploymentCenter service
+sudo tee /etc/systemd/system/inventarsystem-dc.service > /dev/null << EOF
+[Unit]
+Description=Inventarsystem DeploymentCenter
+After=network.target $MONGO_SERVICE.service inventarsystem-web.service
+Requires=$MONGO_SERVICE.service
+Documentation=https://github.com/aiirondev/Inventarsystem
+
+[Service]
+User=inventarsystem
+Group=www-data
+WorkingDirectory=$PROJECT_DIR/DeploymentCenter
+Environment="PATH=$PROJECT_DIR/.venv/bin"
+ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 2 --bind unix:$PROJECT_DIR/DeploymentCenter/deploymentcenter.sock --access-logfile $PROJECT_DIR/logs/deployment-access.log --error-logfile $PROJECT_DIR/logs/deployment-error.log wsgi:app
+Restart=always
+RestartSec=10
+SyslogIdentifier=inventarsystem-dc
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Configure Nginx for both services
+echo "=== Configuring Nginx ==="
+sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
+server {
+    listen 80;
+    server_name _;
+    
+    # Main Web Interface
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:$PROJECT_DIR/Web/inventarsystem.sock;
+        client_max_body_size 10M;
+    }
+    
+    # Static files for Web Interface
+    location /static {
+        alias $PROJECT_DIR/Web/static;
+    }
+
+    # Uploads folder
+    location /uploads {
+        alias $PROJECT_DIR/Web/uploads;
+    }
+}
+
+server {
+    listen 81;
+    server_name _;
+    
+    # DeploymentCenter Interface
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:$PROJECT_DIR/DeploymentCenter/deploymentcenter.sock;
+        client_max_body_size 10M;
+    }
+    
+    # Static files for DeploymentCenter
+    location /static {
+        alias $PROJECT_DIR/DeploymentCenter/static;
+    }
+}
+EOF
+
+# Create proxy_params if not exists
+if [ ! -f "/etc/nginx/proxy_params" ]; then
+    sudo tee /etc/nginx/proxy_params > /dev/null << EOF
+proxy_set_header Host \$http_host;
+proxy_set_header X-Real-IP \$remote_addr;
+proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto \$scheme;
+EOF
+fi
+
+# Enable the site in Nginx
+sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Create convenient start/stop script
+echo "=== Creating convenience script for management ==="
+sudo tee $PROJECT_DIR/manage-inventarsystem.sh > /dev/null << EOF
+#!/bin/bash
+
+function display_help {
+    echo "Inventarsystem Management Script"
+    echo "Usage: \$0 [command]"
+    echo ""
+    echo "Commands:"
+    echo "  start       Start both Web and DeploymentCenter services"
+    echo "  stop        Stop both services"
+    echo "  restart     Restart both services"
+    echo "  status      Show service status"
+    echo "  logs        Show recent logs"
+    echo "  web-start   Start only Web service"
+    echo "  dc-start    Start only DeploymentCenter service"
+    echo "  web-stop    Stop only Web service"
+    echo "  dc-stop     Stop only DeploymentCenter service"
+}
+
+case "\$1" in
+    start)
+        echo "Starting Inventarsystem services..."
+        sudo systemctl start inventarsystem-web.service
+        sudo systemctl start inventarsystem-dc.service
+        sudo systemctl restart nginx
+        ;;
+    stop)
+        echo "Stopping Inventarsystem services..."
+        sudo systemctl stop inventarsystem-web.service
+        sudo systemctl stop inventarsystem-dc.service
+        ;;
+    restart)
+        echo "Restarting Inventarsystem services..."
+        sudo systemctl restart inventarsystem-web.service
+        sudo systemctl restart inventarsystem-dc.service
+        sudo systemctl restart nginx
+        ;;
+    status)
+        echo "=== Web Interface Status ==="
+        sudo systemctl status inventarsystem-web.service
+        echo ""
+        echo "=== DeploymentCenter Status ==="
+        sudo systemctl status inventarsystem-dc.service
+        echo ""
+        echo "=== Nginx Status ==="
+        sudo systemctl status nginx
+        ;;
+    logs)
+        echo "Showing recent logs..."
+        echo "=== Web Access Log ==="
+        tail -n 20 $PROJECT_DIR/logs/access.log
+        echo ""
+        echo "=== Web Error Log ==="
+        tail -n 20 $PROJECT_DIR/logs/error.log
+        echo ""
+        echo "=== DeploymentCenter Access Log ==="
+        tail -n 20 $PROJECT_DIR/logs/deployment-access.log
+        echo ""
+        echo "=== DeploymentCenter Error Log ==="
+        tail -n 20 $PROJECT_DIR/logs/deployment-error.log
+        ;;
+    web-start)
+        echo "Starting Web service..."
+        sudo systemctl start inventarsystem-web.service
+        ;;
+    dc-start)
+        echo "Starting DeploymentCenter service..."
+        sudo systemctl start inventarsystem-dc.service
+        ;;
+    web-stop)
+        echo "Stopping Web service..."
+        sudo systemctl stop inventarsystem-web.service
+        ;;
+    dc-stop)
+        echo "Stopping DeploymentCenter service..."
+        sudo systemctl stop inventarsystem-dc.service
+        ;;
+    *)
+        display_help
+        ;;
+esac
+EOF
+
+# Make the script executable
+sudo chmod +x $PROJECT_DIR/manage-inventarsystem.sh
+
+# Reload systemd, enable and start the services
+echo "=== Enabling and starting services ==="
+sudo systemctl daemon-reload
+sudo systemctl enable inventarsystem-web.service
+sudo systemctl enable inventarsystem-dc.service
+
+# Test Nginx configuration and restart
+sudo nginx -t && sudo systemctl restart nginx || {
+    echo "Nginx configuration error, checking...";
+    sudo nginx -t -c /etc/nginx/nginx.conf;
+    exit 1;
+}
+
+# Start the services
+sudo systemctl start inventarsystem-web.service
+sudo systemctl start inventarsystem-dc.service
+
+# Allow Nginx ports in firewall
+sudo ufw allow 80 || echo "Warning: Could not open port 80"
+sudo ufw allow 81 || echo "Warning: Could not open port 81"
+
+# Create a log rotation configuration
+sudo tee /etc/logrotate.d/inventarsystem > /dev/null << EOF
+$PROJECT_DIR/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 inventarsystem www-data
+    sharedscripts
+    postrotate
+        systemctl reload inventarsystem-web.service > /dev/null 2>/dev/null || true
+        systemctl reload inventarsystem-dc.service > /dev/null 2>/dev/null || true
+    endscript
+}
+EOF
+
 echo "==================================================="
 echo "Installation complete!"
-echo "Your Inventarsystem is now running at http://$SERVER_IP"
+echo "Your Inventarsystem is now available at:"
+echo "- Web Interface:     http://$SERVER_IP"
+echo "- DeploymentCenter:  http://$SERVER_IP:81"
+echo "==================================================="
+echo "MANAGEMENT:"
+echo "- To manage services: sudo $PROJECT_DIR/manage-inventarsystem.sh [command]"
+echo "- For help, run:      sudo $PROJECT_DIR/manage-inventarsystem.sh"
 echo "==================================================="
 echo "AUTOSTART CONFIGURATION:"
 echo "- All services will automatically start on system boot"
