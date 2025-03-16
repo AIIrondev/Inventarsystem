@@ -191,3 +191,9 @@
 [2025-03-16 12:58:11 +0100] [55559] [INFO] Booting worker with pid: 55559
 [2025-03-16 12:58:11 +0100] [55570] [INFO] Booting worker with pid: 55570
 [2025-03-16 12:58:11 +0100] [55571] [INFO] Booting worker with pid: 55571
+[2025-03-16 13:06:48 +0100] [55555] [INFO] Handling signal: int
+[2025-03-16 13:06:48 +0100] [55559] [INFO] Worker exiting (pid: 55559)
+[2025-03-16 13:06:48 +0100] [55571] [INFO] Worker exiting (pid: 55571)
+[2025-03-16 13:06:48 +0100] [55570] [INFO] Worker exiting (pid: 55570)
+[2025-03-16 13:06:48 +0100] [55556] [INFO] Worker exiting (pid: 55556)
+[2025-03-16 13:06:49 +0100] [55555] [INFO] Shutting down: Master

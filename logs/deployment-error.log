@@ -39,3 +39,7 @@
 [2025-03-16 12:58:11 +0100] [55554] [INFO] Using worker: sync
 [2025-03-16 12:58:11 +0100] [55557] [INFO] Booting worker with pid: 55557
 [2025-03-16 12:58:11 +0100] [55569] [INFO] Booting worker with pid: 55569
+[2025-03-16 13:06:49 +0100] [55554] [INFO] Handling signal: term
+[2025-03-16 13:06:49 +0100] [55569] [INFO] Worker exiting (pid: 55569)
+[2025-03-16 13:06:49 +0100] [55557] [INFO] Worker exiting (pid: 55557)
+[2025-03-16 13:06:49 +0100] [55554] [INFO] Shutting down: Master
