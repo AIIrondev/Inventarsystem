@@ -60,7 +60,7 @@ start /b conhost.exe --icon="%APP_DIR%web.ico" cmd /k "echo Web server log: %WEB
 
 echo Starting DeploymentCenter server (Waitress)...
 cd "%DC_DIR%"
-start /b conhost.exe --icon="%APP_DIR%deployment.ico" cmd /k "echo DeploymentCenter server log: %DC_LOG_FILE% && python run_server.py"
+start /b conhost.exe --icon="%APP_DIR%web.ico" cmd /k "echo DeploymentCenter server log: %DC_LOG_FILE% && python run_server.py"
 
 timeout /t 2 >nul
 echo.
