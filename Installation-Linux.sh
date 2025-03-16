@@ -2,6 +2,41 @@
 # filepath: /home/max/Dokumente/repos/Inventarsystem/Installation-Linux.sh
 set -e  # Exit immediately if a command exits with non-zero status
 
+# Add this section right after the initial set -e line:
+
+# Setup logging
+LOG_FILE="/tmp/inventarsystem_install_$(date +%Y%m%d_%H%M%S).log"
+FINAL_LOG_FILE="/var/log/inventarsystem_installation.log"
+
+# Log function - writes to both console and log file
+log() {
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo -e "[$timestamp] $1"
+    echo -e "[$timestamp] $1" >> "$LOG_FILE"
+}
+
+log_cmd() {
+    local cmd="$1"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo -e "[$timestamp] COMMAND: $cmd"
+    echo -e "[$timestamp] COMMAND: $cmd" >> "$LOG_FILE"
+    # Run the command, capture output and exit code
+    OUTPUT=$(eval "$cmd" 2>&1) || {
+        local exit_code=$?
+        echo -e "[$timestamp] EXIT CODE: $exit_code\n$OUTPUT" | tee -a "$LOG_FILE"
+        return $exit_code
+    }
+    echo -e "[$timestamp] SUCCESS: $cmd\n$OUTPUT" >> "$LOG_FILE"
+    echo "$OUTPUT"
+}
+
+# Start the log file
+log "=== Inventarsystem Installation Log ==="
+log "Starting installation on $(date)"
+log "System information: $(uname -a)"
+log "User: $(whoami)"
+log "Working directory: $(pwd)"
+
 echo "=== Inventarsystem Installation Script for Ubuntu Server ==="
 echo "This script will install Inventarsystem with Gunicorn and MongoDB on Ubuntu"
 echo "The system will be configured to automatically start on boot"
