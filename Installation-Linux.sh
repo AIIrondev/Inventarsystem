@@ -10,6 +10,16 @@ echo "The system will be configured to automatically start on boot"
 PROJECT_DIR="/opt/inventarsystem"
 GITHUB_REPO="https://github.com/aiirondev/Inventarsystem.git"
 
+# Ask for installation source
+echo ""
+echo "How would you like to install Inventarsystem?"
+echo "1) Download from GitHub repository (default)"
+echo "2) Copy from this local directory"
+read -p "Enter your choice [1-2]: " INSTALL_SOURCE
+if [ -z "$INSTALL_SOURCE" ]; then
+    INSTALL_SOURCE="1"
+fi
+
 # Check if project directory already exists
 if [ -d "$PROJECT_DIR" ]; then
     echo "Directory $PROJECT_DIR already exists."
@@ -100,29 +110,63 @@ echo "=== Creating project directory ==="
 sudo mkdir -p $PROJECT_DIR || { echo "Failed to create project directory"; exit 1; }
 sudo chown $USER:$USER $PROJECT_DIR || { echo "Failed to set ownership for project directory"; exit 1; }
 
-# Clone the repository or create project structure manually
+# Install the Inventarsystem files
 echo "=== Setting up project files ==="
-if [ ! -d "$PROJECT_DIR/.git" ] || ! git -C $PROJECT_DIR rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    # Not a git repo, try to clone
-    if sudo git clone $GITHUB_REPO $PROJECT_DIR.tmp; then
-        # Clone succeeded to temp dir
-        if [ -d "$PROJECT_DIR" ]; then
-            # Move contents without .git
-            cp -r $PROJECT_DIR.tmp/* $PROJECT_DIR/
-            rm -rf $PROJECT_DIR.tmp
-        else
-            # Move the whole temp dir
-            mv $PROJECT_DIR.tmp $PROJECT_DIR
-        fi
-        echo "Repository cloned successfully."
-    else
-        echo "Failed to clone repository, creating basic structure manually."
-        # Create basic structure
-        mkdir -p $PROJECT_DIR/Web/static $PROJECT_DIR/Web/templates
-        mkdir -p $PROJECT_DIR/DeploymentCenter/static $PROJECT_DIR/DeploymentCenter/templates
+
+# Get the current script directory for local installation
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "$INSTALL_SOURCE" = "2" ]; then
+    # Copy from local directory
+    echo "Copying files from: $SCRIPT_DIR"
+    cp -rv "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
+        echo "Error: Failed to copy files from local directory";
+        exit 1;
+    }
+    echo "Files copied successfully from local directory."
+else
+    # Clone from GitHub repository
+    echo "Cloning from GitHub repository: $GITHUB_REPO"
+    rm -rf "$PROJECT_DIR"/* "$PROJECT_DIR"/.[!.]* 2>/dev/null || true
+    
+    # Try direct clone
+    if git clone --verbose "$GITHUB_REPO" "$PROJECT_DIR.tmp"; then
+        echo "Repository cloned successfully to temporary directory."
         
-        # Create basic app.py files
-        cat > $PROJECT_DIR/Web/app.py << EOF
+        # Copy contents
+        cp -rv "$PROJECT_DIR.tmp"/* "$PROJECT_DIR" || {
+            echo "Error: Failed to copy files from cloned repository";
+            rm -rf "$PROJECT_DIR.tmp";
+            exit 1;
+        }
+        
+        # Copy hidden files too (like .gitignore)
+        cp -rv "$PROJECT_DIR.tmp"/.[!.]* "$PROJECT_DIR" 2>/dev/null || true
+        
+        # Clean up
+        rm -rf "$PROJECT_DIR.tmp"
+    else
+        echo "Failed to clone repository from GitHub."
+        echo "Would you like to:"
+        echo "1) Copy from the local directory instead"
+        echo "2) Create a basic structure"
+        echo "3) Abort installation"
+        read -p "Choose an option [1-3]: " CLONE_FAIL_ACTION
+        
+        if [ "$CLONE_FAIL_ACTION" = "1" ]; then
+            echo "Copying files from: $SCRIPT_DIR"
+            cp -rv "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
+                echo "Error: Failed to copy files from local directory";
+                exit 1;
+            }
+            echo "Files copied successfully from local directory."
+        elif [ "$CLONE_FAIL_ACTION" = "2" ]; then
+            echo "Creating basic application structure..."
+            mkdir -p $PROJECT_DIR/Web/static $PROJECT_DIR/Web/templates
+            mkdir -p $PROJECT_DIR/DeploymentCenter/static $PROJECT_DIR/DeploymentCenter/templates
+            
+            # Create basic app.py files
+            cat > $PROJECT_DIR/Web/app.py << EOF
 from flask import Flask, render_template, redirect, url_for
 app = Flask(__name__)
 
@@ -133,8 +177,8 @@ def home():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 EOF
-        
-        cat > $PROJECT_DIR/DeploymentCenter/app.py << EOF
+            
+            cat > $PROJECT_DIR/DeploymentCenter/app.py << EOF
 from flask import Flask, render_template
 app = Flask(__name__)
 
@@ -146,8 +190,8 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
 EOF
 
-        # Create basic templates
-        cat > $PROJECT_DIR/Web/templates/index.html << EOF
+            # Create basic templates
+            cat > $PROJECT_DIR/Web/templates/index.html << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -160,7 +204,7 @@ EOF
 </html>
 EOF
 
-        cat > $PROJECT_DIR/DeploymentCenter/templates/admin.html << EOF
+            cat > $PROJECT_DIR/DeploymentCenter/templates/admin.html << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -172,11 +216,19 @@ EOF
 </body>
 </html>
 EOF
+        else
+            echo "Installation aborted."
+            exit 1
+        fi
     fi
-else
-    # It's a git repo, try to update
-    echo "Updating existing repository..."
-    cd $PROJECT_DIR && git pull || echo "Warning: Failed to update repository, continuing with existing files."
+fi
+
+# Check for alternate directory names
+if [ -d "$PROJECT_DIR/Managment" ] && [ ! -d "$PROJECT_DIR/DeploymentCenter" ]; then
+    echo "Found 'Managment' directory instead of 'DeploymentCenter', creating symlink..."
+    ln -sf "$PROJECT_DIR/Managment" "$PROJECT_DIR/DeploymentCenter" || {
+        echo "Created symbolic link from Managment to DeploymentCenter";
+    }
 fi
 
 # Create directories for logs, uploads, and QR codes
