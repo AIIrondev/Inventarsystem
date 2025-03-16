@@ -2,8 +2,6 @@
 # filepath: /home/max/Dokumente/repos/Inventarsystem/Installation-Linux.sh
 set -e  # Exit immediately if a command exits with non-zero status
 
-# Add this section right after the initial set -e line:
-
 # Setup logging
 LOG_FILE="/tmp/inventarsystem_install_$(date +%Y%m%d_%H%M%S).log"
 FINAL_LOG_FILE="/var/log/inventarsystem_installation.log"
@@ -46,6 +44,7 @@ PROJECT_DIR="/opt/inventarsystem"
 GITHUB_REPO="https://github.com/aiirondev/Inventarsystem.git"
 
 # Ask for installation source
+log "Asking for installation source"
 echo ""
 echo "How would you like to install Inventarsystem?"
 echo "1) Download from GitHub repository (default)"
@@ -54,351 +53,155 @@ read -p "Enter your choice [1-2]: " INSTALL_SOURCE
 if [ -z "$INSTALL_SOURCE" ]; then
     INSTALL_SOURCE="1"
 fi
+log "User chose installation source: $INSTALL_SOURCE"
 
 # Check if project directory already exists
 if [ -d "$PROJECT_DIR" ]; then
+    log "Project directory already exists: $PROJECT_DIR"
     echo "Directory $PROJECT_DIR already exists."
     read -p "Do you want to remove it and perform a clean install? (y/n): " CLEAN_INSTALL
     if [ "$CLEAN_INSTALL" = "y" ] || [ "$CLEAN_INSTALL" = "Y" ]; then
+        log "User chose to remove existing installation"
         echo "Removing existing installation..."
         # Stop any running services first
-        sudo systemctl stop inventarsystem-web.service 2>/dev/null || true
-        sudo systemctl stop inventarsystem-dc.service 2>/dev/null || true
+        log_cmd "sudo systemctl stop inventarsystem-web.service 2>/dev/null || true"
+        log_cmd "sudo systemctl stop inventarsystem-dc.service 2>/dev/null || true"
         # Remove the directory
-        sudo rm -rf $PROJECT_DIR
+        log_cmd "sudo rm -rf $PROJECT_DIR"
         echo "Existing installation removed."
     else
+        log "User chose to keep existing installation"
         echo "Will attempt to work with existing installation."
     fi
 fi
 
 # Get the server IP address
 SERVER_IP=$(hostname -I | awk '{print $1}')
+log "Server IP: $SERVER_IP"
 echo "Server IP: $SERVER_IP"
 
 # Clean up any existing MongoDB repos to avoid conflicts
+log "Cleaning up existing MongoDB repositories"
 echo "=== Cleaning up existing MongoDB repositories ==="
-sudo rm -f /etc/apt/sources.list.d/mongodb*.list
-sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1 || true
+log_cmd "sudo rm -f /etc/apt/sources.list.d/mongodb*.list"
+log_cmd "sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1 || true"
 
 # Update system packages
+log "Updating system packages"
 echo "=== Updating system packages ==="
-sudo apt update || { echo "Failed to update package lists"; exit 1; }
+log_cmd "sudo apt update" || { log "Failed to update package lists"; exit 1; }
 
 # Add MongoDB repository for Ubuntu 24.04
+log "Adding MongoDB repository"
 echo "=== Adding MongoDB repository ==="
 UBUNTU_VERSION=$(lsb_release -rs)
 UBUNTU_CODENAME=$(lsb_release -cs)
+log "Ubuntu version: $UBUNTU_VERSION (codename: $UBUNTU_CODENAME)"
 
 if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
+    log "Detected Ubuntu 24.04 (Noble), using Jammy repository for MongoDB"
     echo "Detected Ubuntu 24.04 (Noble)"
     echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB 6.0"
     
     # Modern way to add repository keys with explicit file
-    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    log_cmd "wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg"
     
     # Add repository using Jammy instead of Noble
-    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
-    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+    log_cmd "echo \"deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse\" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list"
 else
     # For older Ubuntu versions
+    log "Using repository for $UBUNTU_CODENAME"
     echo "Using repository for $UBUNTU_CODENAME"
-    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    log_cmd "wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg"
     
-    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
-    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+    log_cmd "echo \"deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse\" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list"
 fi
 
 # Update package list with new repository
+log "Updating package list with new repository"
 echo "=== Updating package list ==="
-sudo apt update || { 
+log_cmd "sudo apt update" || { 
+    log "Warning: Failed to update with MongoDB repo, trying system MongoDB instead"
     echo "Warning: Failed to update with MongoDB repo, trying system MongoDB instead"; 
     # Remove problematic repo if update fails
-    sudo rm -f /etc/apt/sources.list.d/mongodb-org-6.0.list
-    sudo apt update || true
+    log_cmd "sudo rm -f /etc/apt/sources.list.d/mongodb-org-6.0.list"
+    log_cmd "sudo apt update" || true
 }
 
 # Install necessary packages with fallback for MongoDB
+log "Installing required packages"
 echo "=== Installing required packages ==="
-sudo apt install -y python3 python3-venv python3-pip nginx git ufw || { 
+log_cmd "sudo apt install -y python3 python3-venv python3-pip nginx git ufw" || { 
+    log "Failed to install base packages"
     echo "Failed to install base packages"; 
     exit 1; 
 }
 
 # Try to install MongoDB from the repository
+log "Installing MongoDB"
 echo "=== Installing MongoDB ==="
-if sudo apt install -y mongodb-org; then
+if log_cmd "sudo apt install -y mongodb-org"; then
+    log "MongoDB installed successfully from MongoDB repository"
     echo "MongoDB installed successfully from MongoDB repository"
     MONGO_SERVICE="mongod"
 else
+    log "Trying to install system MongoDB package instead"
     echo "Trying to install system MongoDB package instead..."
-    sudo apt install -y mongodb || { 
+    if log_cmd "sudo apt install -y mongodb"; then
+        log "System MongoDB installed successfully"
+        echo "System MongoDB installed successfully"
+        MONGO_SERVICE="mongodb"
+    else
+        log "Failed to install MongoDB"
         echo "Failed to install MongoDB"; 
-        exit 1; 
+        exit 1;
     }
-    echo "System MongoDB installed successfully"
-    MONGO_SERVICE="mongodb"
 fi
 
 # Create project directory and set ownership
+log "Creating project directory"
 echo "=== Creating project directory ==="
-sudo mkdir -p $PROJECT_DIR || { echo "Failed to create project directory"; exit 1; }
-sudo chown $USER:$USER $PROJECT_DIR || { echo "Failed to set ownership for project directory"; exit 1; }
+log_cmd "sudo mkdir -p $PROJECT_DIR" || { log "Failed to create project directory"; exit 1; }
+log_cmd "sudo chown $USER:$USER $PROJECT_DIR" || { log "Failed to set ownership for project directory"; exit 1; }
 
 # Install the Inventarsystem files
+log "Setting up project files"
 echo "=== Setting up project files ==="
 
 # Get the current script directory for local installation
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+log "Current script directory: $SCRIPT_DIR"
 
 if [ "$INSTALL_SOURCE" = "2" ]; then
     # Copy from local directory
+    log "Copying files from local directory: $SCRIPT_DIR"
     echo "Copying files from: $SCRIPT_DIR"
-    cp -r "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
+    log_cmd "cp -r \"$SCRIPT_DIR\"/* \"$PROJECT_DIR/\"" || {
+        log "Error: Failed to copy files from local directory"
         echo "Error: Failed to copy files from local directory";
         exit 1;
     }
+    log "Files copied successfully from local directory"
     echo "Files copied successfully from local directory."
 else
     # Clone from GitHub repository
+    log "Cloning from GitHub repository: $GITHUB_REPO"
     echo "Cloning from GitHub repository: $GITHUB_REPO"
     
     # Create system temporary directory
     TEMP_DIR=$(mktemp -d)
+    log "Using temporary directory: $TEMP_DIR"
     
     # Setup cleanup to run on script exit, interrupt, or termination
-    trap 'echo "Cleaning up temporary files..."; rm -rf "$TEMP_DIR"; echo "Cleanup complete."' EXIT
+    trap 'log "Cleaning up temporary files"; rm -rf "$TEMP_DIR"; log "Cleanup complete"' EXIT
     
     echo "Using temporary directory: $TEMP_DIR"
-    
-    # Clone repository to temp directory
-    if git clone --verbose "$GITHUB_REPO" "$TEMP_DIR"; then
-        echo "Repository cloned successfully to temporary directory."
-        
-        # Make sure project directory exists and is empty
-        mkdir -p "$PROJECT_DIR"
-        rm -rf "$PROJECT_DIR"/* "$PROJECT_DIR"/.[!.]* 2>/dev/null || true
-        
-        # Copy all files from temp directory to project directory
-        echo "Copying files to installation directory..."
-        cp -r "$TEMP_DIR"/* "$PROJECT_DIR/" 2>/dev/null || echo "Note: No regular files to copy"
-        cp -r "$TEMP_DIR"/.[!.]* "$PROJECT_DIR/" 2>/dev/null || echo "Note: No hidden files to copy"
-        
-        echo "Files copied successfully from repository."
-    else
-        echo "Failed to clone repository from GitHub."
-        echo "Would you like to:"
-        echo "1) Copy from the local directory instead"
-        echo "2) Create a basic structure"
-        echo "3) Abort installation"
-        read -p "Choose an option [1-3]: " CLONE_FAIL_ACTION
-        
-        if [ "$CLONE_FAIL_ACTION" = "1" ]; then
-            echo "Copying files from: $SCRIPT_DIR"
-            cp -r "$SCRIPT_DIR"/* "$PROJECT_DIR/" || {
-                echo "Error: Failed to copy files from local directory";
-                exit 1;
-            }
-            echo "Files copied successfully from local directory."
-        elif [ "$CLONE_FAIL_ACTION" = "2" ]; then
-            echo "Creating basic application structure..."
-            mkdir -p $PROJECT_DIR/Web/static $PROJECT_DIR/Web/templates
-            mkdir -p $PROJECT_DIR/DeploymentCenter/static $PROJECT_DIR/DeploymentCenter/templates
-            
-            # Create basic app.py files
-            cat > $PROJECT_DIR/Web/app.py << EOF
-from flask import Flask, render_template, redirect, url_for
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-EOF
-            
-            cat > $PROJECT_DIR/DeploymentCenter/app.py << EOF
-from flask import Flask, render_template
-app = Flask(__name__)
-
-@app.route('/')
-def admin():
-    return render_template('admin.html')
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
-EOF
-
-            # Create basic templates
-            cat > $PROJECT_DIR/Web/templates/index.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Inventarsystem</title>
-</head>
-<body>
-    <h1>Inventarsystem</h1>
-    <p>Web Interface</p>
-</body>
-</html>
-EOF
-
-            cat > $PROJECT_DIR/DeploymentCenter/templates/admin.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Deployment Center</title>
-</head>
-<body>
-    <h1>Deployment Center</h1>
-    <p>Admin Interface</p>
-</body>
-</html>
-EOF
-        else
-            echo "Installation aborted."
-            exit 1
-        fi
-    fi
-fi
-
-# Check for alternate directory names
-if [ -d "$PROJECT_DIR/Managment" ] && [ ! -d "$PROJECT_DIR/DeploymentCenter" ]; then
-    echo "Found 'Managment' directory instead of 'DeploymentCenter', creating symlink..."
-    ln -sf "$PROJECT_DIR/Managment" "$PROJECT_DIR/DeploymentCenter" || {
-        echo "Created symbolic link from Managment to DeploymentCenter";
-    }
-fi
-
-# Create directories for logs, uploads, and QR codes
-echo "=== Creating application directories ==="
-mkdir -p $PROJECT_DIR/logs || { echo "Failed to create logs directory"; exit 1; }
-mkdir -p $PROJECT_DIR/Web/uploads || { echo "Failed to create uploads directory"; exit 1; }
-mkdir -p $PROJECT_DIR/Web/QRCodes || { echo "Failed to create QRCodes directory"; exit 1; }
-mkdir -p $PROJECT_DIR/Web/static || { echo "Failed to create Web static directory"; exit 1; }
-mkdir -p $PROJECT_DIR/DeploymentCenter/static || { echo "Failed to create DeploymentCenter static directory"; exit 1; }
-
-# Set up the virtual environment
-echo "=== Setting up Python virtual environment ==="
-python3 -m venv $PROJECT_DIR/.venv || { echo "Failed to create virtual environment"; exit 1; }
-source $PROJECT_DIR/.venv/bin/activate || { echo "Failed to activate virtual environment"; exit 1; }
-
-# Install Python dependencies with fix for BSON/PyMongo issue
-echo "=== Installing Python dependencies ==="
-pip install --upgrade pip || { echo "Failed to upgrade pip"; exit 1; }
-
-# Fix for BSON/PyMongo compatibility issue - THIS IS THE KEY FIX
-echo "=== Fixing Python dependencies for PyMongo/BSON ==="
-# Remove standalone bson if it exists (it conflicts with pymongo's built-in bson)
-pip uninstall -y bson || true
-
-# Install pymongo explicitly first with compatible version
-pip install pymongo==4.5.0 || { 
-    echo "Failed to install pymongo, trying alternative version"; 
-    pip install pymongo==3.12.3 || { echo "Failed to install pymongo"; exit 1; }
-}
-
-# Now install other dependencies
-if [ -f "$PROJECT_DIR/requirements.txt" ]; then
-    # Fix the requirements file if needed
-    if grep -q "^bson" "$PROJECT_DIR/requirements.txt"; then
-        echo "Removing standalone bson from requirements.txt"
-        sed -i '/^bson/d' "$PROJECT_DIR/requirements.txt"
-    fi
-    
-    # Install requirements without dependencies to avoid overwriting pymongo
-    pip install -r "$PROJECT_DIR/requirements.txt" || echo "Warning: Some requirements failed, continuing with core dependencies"
-fi
-
-# Always install core dependencies to be safe
-pip install flask pillow qrcode gunicorn
-
-# Verify pymongo installation is working
-echo "=== Verifying PyMongo installation ==="
-python3 -c "import pymongo; print('PyMongo version:', pymongo.__version__); from pymongo.bson import SON; print('BSON SON imported successfully')" || {
-    echo "WARNING: PyMongo verification failed. This might cause issues with the application.";
-    echo "Continuing with installation anyway...";
-}
-
-# Create WSGI file for Web interface if it doesn't exist
-echo "=== Creating Web WSGI file ==="
-if [ ! -f "$PROJECT_DIR/Web/wsgi.py" ]; then
-    cat > $PROJECT_DIR/Web/wsgi.py << EOF
-from app import app
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0')
-EOF
-    [ $? -ne 0 ] && { echo "Failed to create Web WSGI file"; exit 1; }
-fi
-
-# Create WSGI file for DeploymentCenter if it doesn't exist
-echo "=== Creating DeploymentCenter WSGI file ==="
-if [ ! -f "$PROJECT_DIR/DeploymentCenter/wsgi.py" ]; then
-    cat > $PROJECT_DIR/DeploymentCenter/wsgi.py << EOF
-from app import app
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0')
-EOF
-    [ $? -ne 0 ] && { echo "Failed to create DeploymentCenter WSGI file"; exit 1; }
-fi
-
-# Enable UFW and configure firewall
-echo "=== Configuring firewall ==="
-sudo ufw allow 'Nginx Full' || echo "Warning: Failed to allow 'Nginx Full' in UFW"
-sudo ufw allow ssh || echo "Warning: Failed to allow SSH in UFW"
-sudo ufw --force enable || echo "Warning: Failed to enable UFW"
-
-# Configure MongoDB
-echo "=== Configuring MongoDB for autostart ==="
-sudo systemctl enable $MONGO_SERVICE || echo "Warning: Failed to enable MongoDB"
-sudo systemctl start $MONGO_SERVICE || echo "Warning: Failed to start MongoDB"
-echo "MongoDB configured and started"
-
-# Create system user for running the service
-echo "=== Creating system user ==="
-sudo useradd -r -s /bin/false inventarsystem 2>/dev/null || echo "User already exists"
-sudo usermod -a -G www-data inventarsystem || echo "Warning: Failed to add user to www-data group"
-
-# Set appropriate permissions
-echo "=== Setting file permissions ==="
-sudo chown -R inventarsystem:www-data $PROJECT_DIR || echo "Warning: Failed to change ownership"
-sudo chmod -R 755 $PROJECT_DIR || echo "Warning: Failed to set permissions to 755"
-sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QRCodes || echo "Warning: Failed to set permissions to 775"
-
-# Create systemd service files with improved socket handling
+    # Create systemd service files with improved socket handling
+log "Creating systemd services with improved socket handling"
 echo "=== Creating systemd services for Inventarsystem components ==="
 
-# Create Web service with improved socket handling
-sudo tee /etc/systemd/system/inventarsystem-web.service > /dev/null << EOF
-[Unit]
-Description=Inventarsystem Web Interface
-After=network.target $MONGO_SERVICE.service
-Requires=$MONGO_SERVICE.service
-Documentation=https://github.com/aiirondev/Inventarsystem
-
-[Service]
-User=inventarsystem
-Group=www-data
-WorkingDirectory=$PROJECT_DIR/Web
-Environment="PATH=$PROJECT_DIR/.venv/bin"
-# Remove any existing socket file before starting
-ExecStartPre=/bin/rm -f $PROJECT_DIR/Web/inventarsystem.sock
-ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --workers 3 --bind unix:$PROJECT_DIR/Web/inventarsystem.sock --access-logfile $PROJECT_DIR/logs/access.log --error-logfile $PROJECT_DIR/logs/error.log --log-level debug wsgi:app
-# Fix socket permissions after starting
-ExecStartPost=/bin/sh -c "chmod 660 $PROJECT_DIR/Web/inventarsystem.sock && chown inventarsystem:www-data $PROJECT_DIR/Web/inventarsystem.sock"
-Restart=always
-RestartSec=10
-SyslogIdentifier=inventarsystem-web
-TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Replace the Web service definition with:
+# Create Web service with fixed PATH and explicit binary paths
+log "Creating Web service configuration"
 sudo tee /etc/systemd/system/inventarsystem-web.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem Web Interface
@@ -427,7 +230,8 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 EOF
 
-# Replace the DeploymentCenter service definition with:
+# Create DeploymentCenter service with fixed PATH and explicit binary paths
+log "Creating DeploymentCenter service configuration"
 sudo tee /etc/systemd/system/inventarsystem-dc.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem DeploymentCenter
@@ -457,6 +261,7 @@ WantedBy=multi-user.target
 EOF
 
 # Configure Nginx for both services
+log "Configuring Nginx"
 echo "=== Configuring Nginx ==="
 sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
 server {
@@ -500,6 +305,7 @@ server {
 EOF
 
 # Create proxy_params if not exists
+log "Setting up proxy_params for Nginx"
 if [ ! -f "/etc/nginx/proxy_params" ]; then
     sudo tee /etc/nginx/proxy_params > /dev/null << EOF
 proxy_set_header Host \$http_host;
@@ -510,10 +316,12 @@ EOF
 fi
 
 # Enable the site in Nginx
-sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/ || echo "Warning: Failed to enable site in Nginx"
-sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+log "Enabling Nginx site configuration"
+log_cmd "sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/" || log "Warning: Failed to enable site in Nginx"
+log_cmd "sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true"
 
 # Create convenient start/stop script
+log "Creating management script"
 echo "=== Creating convenience script for management ==="
 sudo tee $PROJECT_DIR/manage-inventarsystem.sh > /dev/null << EOF
 #!/bin/bash
@@ -610,6 +418,20 @@ case "\$1" in
         sudo systemctl status inventarsystem-dc.service | grep "Active:"
         sudo systemctl status nginx | grep "Active:"
         
+        echo "Checking permissions..."
+        echo "Web directory:"
+        ls -la $PROJECT_DIR/Web
+        echo "DeploymentCenter directory:"
+        ls -la $PROJECT_DIR/DeploymentCenter
+        
+        echo "Checking logs..."
+        tail -n 5 $PROJECT_DIR/logs/error.log || echo "No error log found"
+        tail -n 5 $PROJECT_DIR/logs/deployment-error.log || echo "No deployment error log found"
+        
+        echo "Checking system binary paths..."
+        which chmod || echo "ERROR: chmod not found!"
+        which chown || echo "ERROR: chown not found!"
+        
         echo "Finished diagnostics."
         ;;
     uninstall)
@@ -651,54 +473,74 @@ esac
 EOF
 
 # Make the script executable
-sudo chmod +x $PROJECT_DIR/manage-inventarsystem.sh
+log "Making management script executable"
+log_cmd "sudo chmod +x $PROJECT_DIR/manage-inventarsystem.sh"
 
 # Reload systemd, enable and start the services
+log "Reloading systemd and enabling services"
 echo "=== Enabling and starting services ==="
-sudo systemctl daemon-reload
-sudo systemctl enable inventarsystem-web.service
-sudo systemctl enable inventarsystem-dc.service
+log_cmd "sudo systemctl daemon-reload"
+log_cmd "sudo systemctl enable inventarsystem-web.service"
+log_cmd "sudo systemctl enable inventarsystem-dc.service"
 
 # Start services with thorough error checking
+log "Starting services with detailed error checking"
 echo "=== Starting services with detailed error checking ==="
-sudo systemctl restart inventarsystem-web.service
+log_cmd "sudo systemctl restart inventarsystem-web.service"
 echo "Starting Web service..."
 sleep 2
 
 # Detailed error checking for Web service
 if ! sudo systemctl is-active --quiet inventarsystem-web.service; then
+    log "ERROR: Web service failed to start, checking logs"
     echo "WARNING: Web service failed to start. Checking logs:"
-    sudo journalctl -u inventarsystem-web.service --no-pager -n 30 || echo "No logs available"
+    journal_logs=$(sudo journalctl -u inventarsystem-web.service --no-pager -n 30)
+    log "Web service journal logs: $journal_logs"
+    echo "$journal_logs"
     echo ""
 else
+    log "Web service started successfully"
     echo "Web service started successfully."
 fi
 
+log "Starting DeploymentCenter service"
 echo "Starting DeploymentCenter service..."
-sudo systemctl restart inventarsystem-dc.service
+log_cmd "sudo systemctl restart inventarsystem-dc.service"
 sleep 2
 
 # Detailed error checking for DeploymentCenter service
 if ! sudo systemctl is-active --quiet inventarsystem-dc.service; then
+    log "ERROR: DeploymentCenter service failed to start, checking logs"
     echo "WARNING: DeploymentCenter service failed to start. Checking logs:"
-    sudo journalctl -u inventarsystem-dc.service --no-pager -n 30 || echo "No logs available"
+    journal_logs=$(sudo journalctl -u inventarsystem-dc.service --no-pager -n 30)
+    log "DeploymentCenter service journal logs: $journal_logs"
+    echo "$journal_logs"
     echo ""
 else
+    log "DeploymentCenter service started successfully"
     echo "DeploymentCenter service started successfully."
 fi
 
 # Test Nginx configuration and restart
-sudo nginx -t && sudo systemctl restart nginx || {
-    echo "Warning: Nginx configuration error, checking...";
-    sudo nginx -t -c /etc/nginx/nginx.conf;
-    echo "Continuing despite Nginx configuration issues...";
-}
+log "Testing and restarting Nginx"
+if sudo nginx -t; then
+    log "Nginx configuration test passed, restarting"
+    log_cmd "sudo systemctl restart nginx"
+else
+    log "WARNING: Nginx configuration has errors, checking details"
+    echo "Warning: Nginx configuration error, checking..."
+    log_cmd "sudo nginx -t -c /etc/nginx/nginx.conf"
+    echo "Continuing despite Nginx configuration issues..."
+fi
 
 # Allow Nginx ports in firewall
-sudo ufw allow 80 || echo "Warning: Could not open port 80"
-sudo ufw allow 81 || echo "Warning: Could not open port 81"
+log "Configuring firewall for Nginx"
+log_cmd "sudo ufw allow 80" || log "Warning: Could not open port 80"
+log_cmd "sudo ufw allow 81" || log "Warning: Could not open port 81"
 
 # Create a log rotation configuration
+log "Setting up log rotation"
+echo "=== Setting up log rotation ==="
 sudo tee /etc/logrotate.d/inventarsystem > /dev/null << EOF
 $PROJECT_DIR/logs/*.log {
     daily
@@ -716,6 +558,14 @@ $PROJECT_DIR/logs/*.log {
 }
 EOF
 
+# Copy log file to final location for permanent storage
+log "Saving installation log to permanent location"
+sudo cp "$LOG_FILE" "$FINAL_LOG_FILE" || log "Warning: Failed to copy log to permanent location"
+sudo chown inventarsystem:www-data "$FINAL_LOG_FILE" 2>/dev/null || log "Warning: Failed to set log file ownership"
+sudo chmod 644 "$FINAL_LOG_FILE" 2>/dev/null || log "Warning: Failed to set log file permissions"
+
+log "Installation process completed. Log saved to $FINAL_LOG_FILE"
+
 echo "==================================================="
 echo "Installation complete!"
 echo "Your Inventarsystem is now available at:"
@@ -727,6 +577,10 @@ echo "- To manage services: sudo $PROJECT_DIR/manage-inventarsystem.sh [command]
 echo "- For help, run:      sudo $PROJECT_DIR/manage-inventarsystem.sh"
 echo "- To diagnose issues: sudo $PROJECT_DIR/manage-inventarsystem.sh diagnose"
 echo "- To uninstall:       sudo $PROJECT_DIR/manage-inventarsystem.sh uninstall"
+echo "==================================================="
+echo "LOG FILES:"
+echo "- Installation log:  $FINAL_LOG_FILE"
+echo "- Current temp log:  $LOG_FILE"
 echo "==================================================="
 echo "AUTOSTART CONFIGURATION:"
 echo "- All services will automatically start on system boot"
