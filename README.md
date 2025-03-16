@@ -39,7 +39,7 @@ curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installa
 2. Installation des Systems mit dem Installations-Script (für Windows):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Windows.ps1 | iex"
+powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Windows.cmd | iex"
 ```
 
 This command:
