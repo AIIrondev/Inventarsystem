@@ -706,7 +706,6 @@ echo "- All services will automatically start on system boot"
 sudo cp "$LOG_FILE" "$FINAL_LOG_FILE" 2>/dev/null || echo "Warning: Failed to copy log to permanent location"
 sudo chown inventarsystem:www-data "$FINAL_LOG_FILE" 2>/dev/null || echo "Warning: Failed to set log file ownership"
 sudo chmod 644 "$FINAL_LOG_FILE" 2>/dev/null || echo "Warning: Failed to set log file permissions"
-
 echo "==================================================="
 echo "LOG FILES:"
 echo "- Installation log:  $FINAL_LOG_FILE"
