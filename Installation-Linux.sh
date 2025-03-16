@@ -14,14 +14,14 @@ GITHUB_REPO="https://github.com/aiirondev/Inventarsystem.git"
 SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "Server IP: $SERVER_IP"
 
-# Update system packages
-echo "=== Updating system packages ==="
-sudo apt update || { echo "Failed to update package lists"; exit 1; }
-
 # Clean up any existing MongoDB repos to avoid conflicts
 echo "=== Cleaning up existing MongoDB repositories ==="
 sudo rm -f /etc/apt/sources.list.d/mongodb*.list
 sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1
+
+# Update system packages
+echo "=== Updating system packages ==="
+sudo apt update || { echo "Failed to update package lists"; exit 1; }
 
 # Add MongoDB repository for Ubuntu 24.04
 echo "=== Adding MongoDB repository for Ubuntu 24.04 ==="
