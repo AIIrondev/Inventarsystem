@@ -56,11 +56,11 @@ echo serve(app.app, host='0.0.0.0', port=5001) >> "%DC_DIR%\run_server.py"
 
 echo Starting Web server (Waitress)...
 cd "%WEB_DIR%"
-start cmd /k "echo Web server log: %WEB_LOG_FILE% && python run_server.py"
+start /b conhost.exe --icon="%APP_DIR%web.ico" cmd /k "echo Web server log: %WEB_LOG_FILE% && python run_server.py"
 
 echo Starting DeploymentCenter server (Waitress)...
 cd "%DC_DIR%"
-start cmd /k "echo DeploymentCenter server log: %DC_LOG_FILE% && python run_server.py"
+start /b conhost.exe --icon="%APP_DIR%deployment.ico" cmd /k "echo DeploymentCenter server log: %DC_LOG_FILE% && python run_server.py"
 
 timeout /t 2 >nul
 echo.
@@ -84,6 +84,16 @@ for /f "tokens=2" %%p in ('tasklist /fi "imagename eq python.exe" ^| find "pytho
 REM Clean up temporary scripts
 del "%WEB_DIR%\run_server.py" >nul 2>nul
 del "%DC_DIR%\run_server.py" >nul 2>nul
+
+REM Erstelle Verknüpfungen mit Icons
+echo Creating shortcuts with icons...
+set ICON_WEB=%APP_DIR%Web\static\favicon.ico
+set ICON_DC=%APP_DIR%DeploymentCenter\static\favicon.ico
+
+REM PowerShell-Befehl für Verknüpfungserstellung
+powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%USERPROFILE%\Desktop\Inventarsystem Web.lnk'); $Shortcut.TargetPath = 'http://localhost:5000'; $Shortcut.IconLocation = '%ICON_WEB%'; $Shortcut.Save()"
+
+powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%USERPROFILE%\Desktop\Inventarsystem DeploymentCenter.lnk'); $Shortcut.TargetPath = 'http://localhost:5001'; $Shortcut.IconLocation = '%ICON_DC%'; $Shortcut.Save()"
 
 echo Servers stopped.
 goto :end
