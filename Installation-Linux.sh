@@ -10,6 +10,23 @@ echo "The system will be configured to automatically start on boot"
 PROJECT_DIR="/opt/inventarsystem"
 GITHUB_REPO="https://github.com/aiirondev/Inventarsystem.git"
 
+# Check if project directory already exists
+if [ -d "$PROJECT_DIR" ]; then
+    echo "Directory $PROJECT_DIR already exists."
+    read -p "Do you want to remove it and perform a clean install? (y/n): " CLEAN_INSTALL
+    if [ "$CLEAN_INSTALL" = "y" ] || [ "$CLEAN_INSTALL" = "Y" ]; then
+        echo "Removing existing installation..."
+        # Stop any running services first
+        sudo systemctl stop inventarsystem-web.service 2>/dev/null || true
+        sudo systemctl stop inventarsystem-dc.service 2>/dev/null || true
+        # Remove the directory
+        sudo rm -rf $PROJECT_DIR
+        echo "Existing installation removed."
+    else
+        echo "Will attempt to work with existing installation."
+    fi
+fi
+
 # Get the server IP address
 SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "Server IP: $SERVER_IP"
@@ -17,7 +34,7 @@ echo "Server IP: $SERVER_IP"
 # Clean up any existing MongoDB repos to avoid conflicts
 echo "=== Cleaning up existing MongoDB repositories ==="
 sudo rm -f /etc/apt/sources.list.d/mongodb*.list
-sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1
+sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1 || true
 
 # Update system packages
 echo "=== Updating system packages ==="
@@ -53,7 +70,7 @@ sudo apt update || {
     echo "Warning: Failed to update with MongoDB repo, trying system MongoDB instead"; 
     # Remove problematic repo if update fails
     sudo rm -f /etc/apt/sources.list.d/mongodb-org-6.0.list
-    sudo apt update
+    sudo apt update || true
 }
 
 # Install necessary packages with fallback for MongoDB
@@ -78,32 +95,96 @@ else
     MONGO_SERVICE="mongodb"
 fi
 
-# Enable UFW and configure firewall
-echo "=== Configuring firewall ==="
-sudo ufw allow 'Nginx Full' || { echo "Failed to allow 'Nginx Full' in UFW"; exit 1; }
-sudo ufw allow ssh || { echo "Failed to allow SSH in UFW"; exit 1; }
-sudo ufw --force enable || { echo "Failed to enable UFW"; exit 1; }
-
 # Create project directory and set ownership
 echo "=== Creating project directory ==="
 sudo mkdir -p $PROJECT_DIR || { echo "Failed to create project directory"; exit 1; }
 sudo chown $USER:$USER $PROJECT_DIR || { echo "Failed to set ownership for project directory"; exit 1; }
 
-# Clone the repository
-echo "=== Cloning Inventarsystem repository ==="
-git clone $GITHUB_REPO $PROJECT_DIR || { 
-    echo "Repository may exist already, trying to pull latest changes"; 
-    cd $PROJECT_DIR && git pull || { 
-        echo "Failed to update repository"; 
-        exit 1; 
-    }
-}
+# Clone the repository or create project structure manually
+echo "=== Setting up project files ==="
+if [ ! -d "$PROJECT_DIR/.git" ] || ! git -C $PROJECT_DIR rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    # Not a git repo, try to clone
+    if git clone $GITHUB_REPO $PROJECT_DIR.tmp; then
+        # Clone succeeded to temp dir
+        if [ -d "$PROJECT_DIR" ]; then
+            # Move contents without .git
+            cp -r $PROJECT_DIR.tmp/* $PROJECT_DIR/
+            rm -rf $PROJECT_DIR.tmp
+        else
+            # Move the whole temp dir
+            mv $PROJECT_DIR.tmp $PROJECT_DIR
+        fi
+        echo "Repository cloned successfully."
+    else
+        echo "Failed to clone repository, creating basic structure manually."
+        # Create basic structure
+        mkdir -p $PROJECT_DIR/Web/static $PROJECT_DIR/Web/templates
+        mkdir -p $PROJECT_DIR/DeploymentCenter/static $PROJECT_DIR/DeploymentCenter/templates
+        
+        # Create basic app.py files
+        cat > $PROJECT_DIR/Web/app.py << EOF
+from flask import Flask, render_template, redirect, url_for
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+EOF
+        
+        cat > $PROJECT_DIR/DeploymentCenter/app.py << EOF
+from flask import Flask, render_template
+app = Flask(__name__)
+
+@app.route('/')
+def admin():
+    return render_template('admin.html')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)
+EOF
+
+        # Create basic templates
+        cat > $PROJECT_DIR/Web/templates/index.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventarsystem</title>
+</head>
+<body>
+    <h1>Inventarsystem</h1>
+    <p>Web Interface</p>
+</body>
+</html>
+EOF
+
+        cat > $PROJECT_DIR/DeploymentCenter/templates/admin.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deployment Center</title>
+</head>
+<body>
+    <h1>Deployment Center</h1>
+    <p>Admin Interface</p>
+</body>
+</html>
+EOF
+    fi
+else
+    # It's a git repo, try to update
+    echo "Updating existing repository..."
+    cd $PROJECT_DIR && git pull || echo "Warning: Failed to update repository, continuing with existing files."
+fi
 
 # Create directories for logs, uploads, and QR codes
 echo "=== Creating application directories ==="
 mkdir -p $PROJECT_DIR/logs || { echo "Failed to create logs directory"; exit 1; }
 mkdir -p $PROJECT_DIR/Web/uploads || { echo "Failed to create uploads directory"; exit 1; }
 mkdir -p $PROJECT_DIR/Web/QRCodes || { echo "Failed to create QRCodes directory"; exit 1; }
+mkdir -p $PROJECT_DIR/Web/static || { echo "Failed to create Web static directory"; exit 1; }
 mkdir -p $PROJECT_DIR/DeploymentCenter/static || { echo "Failed to create DeploymentCenter static directory"; exit 1; }
 
 # Set up the virtual environment
@@ -114,11 +195,14 @@ source $PROJECT_DIR/.venv/bin/activate || { echo "Failed to activate virtual env
 # Install Python dependencies
 echo "=== Installing Python dependencies ==="
 pip install --upgrade pip || { echo "Failed to upgrade pip"; exit 1; }
-pip install -r $PROJECT_DIR/requirements.txt || { 
-    echo "Error with requirements.txt, installing core dependencies directly"; 
-    pip install flask pymongo pillow qrcode gunicorn
-}
-pip install gunicorn || { echo "Failed to install Gunicorn"; exit 1; }
+
+# Try to install from requirements file, otherwise install core dependencies
+if [ -f "$PROJECT_DIR/requirements.txt" ]; then
+    pip install -r $PROJECT_DIR/requirements.txt || echo "Warning: Error with requirements.txt, installing core dependencies directly"
+fi
+
+# Always install core dependencies to be safe
+pip install flask pymongo pillow qrcode gunicorn
 
 # Create WSGI file for Web interface if it doesn't exist
 echo "=== Creating Web WSGI file ==="
@@ -144,25 +228,28 @@ EOF
     [ $? -ne 0 ] && { echo "Failed to create DeploymentCenter WSGI file"; exit 1; }
 fi
 
+# Enable UFW and configure firewall
+echo "=== Configuring firewall ==="
+sudo ufw allow 'Nginx Full' || echo "Warning: Failed to allow 'Nginx Full' in UFW"
+sudo ufw allow ssh || echo "Warning: Failed to allow SSH in UFW"
+sudo ufw --force enable || echo "Warning: Failed to enable UFW"
+
 # Configure MongoDB
 echo "=== Configuring MongoDB for autostart ==="
-sudo systemctl enable $MONGO_SERVICE || { echo "Failed to enable MongoDB"; exit 1; }
-sudo systemctl start $MONGO_SERVICE || { echo "Failed to start MongoDB"; exit 1; }
+sudo systemctl enable $MONGO_SERVICE || echo "Warning: Failed to enable MongoDB"
+sudo systemctl start $MONGO_SERVICE || echo "Warning: Failed to start MongoDB"
 echo "MongoDB configured and started"
 
 # Create system user for running the service
 echo "=== Creating system user ==="
-sudo useradd -r -s /bin/false inventarsystem || echo "User already exists"
-sudo usermod -a -G www-data inventarsystem || { echo "Failed to add user to www-data group"; exit 1; }
+sudo useradd -r -s /bin/false inventarsystem 2>/dev/null || echo "User already exists"
+sudo usermod -a -G www-data inventarsystem || echo "Warning: Failed to add user to www-data group"
 
 # Set appropriate permissions
 echo "=== Setting file permissions ==="
-sudo chown -R inventarsystem:www-data $PROJECT_DIR || { echo "Failed to change ownership"; exit 1; }
-sudo chmod -R 755 $PROJECT_DIR || { echo "Failed to set permissions to 755"; exit 1; }
-sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QRCodes || { 
-    echo "Failed to set permissions to 775"; 
-    exit 1; 
-}
+sudo chown -R inventarsystem:www-data $PROJECT_DIR || echo "Warning: Failed to change ownership"
+sudo chmod -R 755 $PROJECT_DIR || echo "Warning: Failed to set permissions to 755"
+sudo chmod -R 775 $PROJECT_DIR/logs $PROJECT_DIR/Web/uploads $PROJECT_DIR/Web/QRCodes || echo "Warning: Failed to set permissions to 775"
 
 # Create systemd service files for both applications
 echo "=== Creating systemd services for Inventarsystem components ==="
@@ -194,7 +281,7 @@ EOF
 sudo tee /etc/systemd/system/inventarsystem-dc.service > /dev/null << EOF
 [Unit]
 Description=Inventarsystem DeploymentCenter
-After=network.target $MONGO_SERVICE.service inventarsystem-web.service
+After=network.target $MONGO_SERVICE.service
 Requires=$MONGO_SERVICE.service
 Documentation=https://github.com/aiirondev/Inventarsystem
 
@@ -267,8 +354,8 @@ EOF
 fi
 
 # Enable the site in Nginx
-sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/ || echo "Warning: Failed to enable site in Nginx"
+sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 
 # Create convenient start/stop script
 echo "=== Creating convenience script for management ==="
@@ -289,6 +376,7 @@ function display_help {
     echo "  dc-start    Start only DeploymentCenter service"
     echo "  web-stop    Stop only Web service"
     echo "  dc-stop     Stop only DeploymentCenter service"
+    echo "  uninstall   Completely remove Inventarsystem"
 }
 
 case "\$1" in
@@ -349,6 +437,38 @@ case "\$1" in
         echo "Stopping DeploymentCenter service..."
         sudo systemctl stop inventarsystem-dc.service
         ;;
+    uninstall)
+        echo "WARNING: This will completely remove Inventarsystem."
+        read -p "Are you sure you want to continue? (y/n): " confirm
+        if [ "\$confirm" = "y" ] || [ "\$confirm" = "Y" ]; then
+            echo "Stopping services..."
+            sudo systemctl stop inventarsystem-web.service
+            sudo systemctl stop inventarsystem-dc.service
+            
+            echo "Disabling services..."
+            sudo systemctl disable inventarsystem-web.service
+            sudo systemctl disable inventarsystem-dc.service
+            
+            echo "Removing service files..."
+            sudo rm -f /etc/systemd/system/inventarsystem-web.service
+            sudo rm -f /etc/systemd/system/inventarsystem-dc.service
+            
+            echo "Removing Nginx configuration..."
+            sudo rm -f /etc/nginx/sites-available/inventarsystem
+            sudo rm -f /etc/nginx/sites-enabled/inventarsystem
+            
+            echo "Reloading systemd and Nginx..."
+            sudo systemctl daemon-reload
+            sudo systemctl restart nginx
+            
+            echo "Removing application directory..."
+            sudo rm -rf $PROJECT_DIR
+            
+            echo "Uninstallation complete."
+        else
+            echo "Uninstallation cancelled."
+        fi
+        ;;
     *)
         display_help
         ;;
@@ -366,14 +486,15 @@ sudo systemctl enable inventarsystem-dc.service
 
 # Test Nginx configuration and restart
 sudo nginx -t && sudo systemctl restart nginx || {
-    echo "Nginx configuration error, checking...";
+    echo "Warning: Nginx configuration error, checking...";
     sudo nginx -t -c /etc/nginx/nginx.conf;
-    exit 1;
+    echo "Continuing despite Nginx configuration issues...";
 }
 
 # Start the services
-sudo systemctl start inventarsystem-web.service
-sudo systemctl start inventarsystem-dc.service
+echo "Starting Inventarsystem services..."
+sudo systemctl start inventarsystem-web.service || echo "Warning: Failed to start Web service"
+sudo systemctl start inventarsystem-dc.service || echo "Warning: Failed to start DeploymentCenter service"
 
 # Allow Nginx ports in firewall
 sudo ufw allow 80 || echo "Warning: Could not open port 80"
@@ -406,6 +527,7 @@ echo "==================================================="
 echo "MANAGEMENT:"
 echo "- To manage services: sudo $PROJECT_DIR/manage-inventarsystem.sh [command]"
 echo "- For help, run:      sudo $PROJECT_DIR/manage-inventarsystem.sh"
+echo "- To uninstall:       sudo $PROJECT_DIR/manage-inventarsystem.sh uninstall"
 echo "==================================================="
 echo "AUTOSTART CONFIGURATION:"
 echo "- All services will automatically start on system boot"
