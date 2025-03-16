@@ -18,10 +18,33 @@ echo "Server IP: $SERVER_IP"
 echo "=== Updating system packages ==="
 sudo apt update && sudo apt upgrade -y || { echo "Failed to update and upgrade system packages"; exit 1; }
 
-# Add MongoDB repository for the latest version
+# Add MongoDB repository with Ubuntu 24.04 support
 echo "=== Adding MongoDB repository ==="
-wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add - || { echo "Failed to add MongoDB GPG key"; exit 1; }
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list || { echo "Failed to add MongoDB repository"; exit 1; }
+UBUNTU_VERSION=$(lsb_release -rs)
+UBUNTU_CODENAME=$(lsb_release -cs)
+
+# Handle newer Ubuntu versions 
+if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
+    echo "Detected Ubuntu 24.04 (Noble Numbat)"
+    echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB"
+    
+    # Modern way to add repository keys (apt-key is deprecated)
+    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    
+    # Add repository using the new format with explicit keyring
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
+    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+else
+    # For older Ubuntu versions, use standard approach
+    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add - || { 
+        echo "Warning: apt-key is deprecated, trying modern approach"
+        wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+        
+        # Add repository using the new format
+        echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
+        sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+    }
+fi
 
 # Update package list again
 echo "=== Updating package list ==="
