@@ -18,10 +18,10 @@ echo "Server IP: $SERVER_IP"
 echo "=== Updating system packages ==="
 sudo apt update && sudo apt upgrade -y || { echo "Failed to update and upgrade system packages"; exit 1; }
 
-# Add MongoDB repository
+# Add MongoDB repository for the latest version
 echo "=== Adding MongoDB repository ==="
-wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add - || { echo "Failed to add MongoDB GPG key"; exit 1; }
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list || { echo "Failed to add MongoDB repository"; exit 1; }
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add - || { echo "Failed to add MongoDB GPG key"; exit 1; }
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list || { echo "Failed to add MongoDB repository"; exit 1; }
 
 # Update package list again
 echo "=== Updating package list ==="
