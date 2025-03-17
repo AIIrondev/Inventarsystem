@@ -1,18 +1,22 @@
 #!/bin/bash
 
-# Create logs directory if it doesn't exist
-mkdir -p /logs
-
-# Create certificates directory if it doesn't exist
-CERT_DIR="/certs"
-mkdir -p $CERT_DIR
-
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-PROJECT_ROOT="/"
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
+    echo "Failed to determine project root directory. Exiting."
+    exit 1
+}
 VENV_DIR="$PROJECT_ROOT/.venv"
+
+# Create logs directory if it doesn't exist
+sudo mkdir -p "$PROJECT_ROOT/logs"
+
+# Create certificates directory if it doesn't exist
+CERT_DIR="$PROJECT_ROOT/certs"
+sudo mkdir -p $CERT_DIR
+
 
 echo "========================================================"
 echo "           CHECKING/CREATING VIRTUAL ENVIRONMENT        "
