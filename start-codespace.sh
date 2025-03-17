@@ -274,8 +274,89 @@ else
     DEPLOYMENT_BINDING="unix:/tmp/deployment.sock"
 fi
 
-# Keep the rest of your script until the CONFIGURING NGINX section
-# Then replace the Nginx config section with:
+
+if [ "$IS_CODESPACE" = true ]; then
+    echo "========================================================"
+    echo "           CONFIGURING MONGODB FOR CODESPACE            "
+    echo "========================================================"
+    
+    # Check if MongoDB is installed
+    if ! command -v mongod &> /dev/null; then
+        echo "Installing MongoDB in Codespace environment..."
+        # Add MongoDB apt repository
+        curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
+            sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
+            --dearmor
+        
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+            sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+        
+        sudo apt-get update
+        sudo apt-get install -y mongodb-org
+    fi
+    
+    # Create data directory if it doesn't exist
+    echo "Setting up MongoDB data directory..."
+    sudo mkdir -p /data/db
+    sudo chmod 777 /data/db
+    
+    # Check if MongoDB is already running
+    if pgrep mongod > /dev/null; then
+        echo "MongoDB is already running."
+    else
+        echo "Starting MongoDB in the background..."
+        mongod --fork --logpath "$PROJECT_ROOT/logs/mongodb.log" --bind_ip 127.0.0.1
+        
+        # Wait for MongoDB to start
+        echo "Waiting for MongoDB to start..."
+        sleep 5
+        
+        if pgrep mongod > /dev/null; then
+            echo "✓ MongoDB started successfully"
+        else
+            echo "WARNING: MongoDB failed to start. Check logs at $PROJECT_ROOT/logs/mongodb.log"
+        fi
+    fi
+    
+    # Test MongoDB connection
+    echo "Testing MongoDB connection..."
+    if mongo --eval "db.version()" 127.0.0.1:27017 &>/dev/null; then
+        echo "✓ MongoDB connection successful"
+    else
+        echo "WARNING: Could not connect to MongoDB. Your application might not work correctly."
+        echo "You may need to manually run: mongod --fork --logpath $PROJECT_ROOT/logs/mongodb.log"
+    fi
+else
+    # Standard MongoDB setup for non-Codespace environments
+    # Verify MongoDB service using systemctl
+    if ! systemctl is-active --quiet mongodb && ! systemctl is-active --quiet mongod; then
+        echo "Starting MongoDB service..."
+        # Try different service names
+        MONGODB_STARTED=false
+        for SERVICE in mongodb mongod; do
+            if systemctl list-unit-files | grep -q $SERVICE; then
+                sudo systemctl start $SERVICE
+                if [ $? -eq 0 ]; then
+                    echo "Started $SERVICE service"
+                    MONGODB_STARTED=true
+                    break
+                fi
+            fi
+        done
+        
+        if [ "$MONGODB_STARTED" = false ]; then
+            echo "Warning: Could not start MongoDB service"
+            read -p "Continue without MongoDB? (y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Exiting."
+                exit 1
+            fi
+        fi
+    else
+        echo "✓ MongoDB is running"
+    fi
+fi
 
 echo "========================================================"
 echo "           CONFIGURING NGINX                            "
