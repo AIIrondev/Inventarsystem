@@ -1,17 +1,17 @@
 #!/bin/bash
 
 # Create logs directory if it doesn't exist
-mkdir -p /home/max/Dokumente/repos/Inventarsystem/logs
+mkdir -p /logs
 
 # Create certificates directory if it doesn't exist
-CERT_DIR="/home/max/Dokumente/repos/Inventarsystem/certs"
+CERT_DIR="/certs"
 mkdir -p $CERT_DIR
 
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-PROJECT_ROOT="/home/max/Dokumente/repos/Inventarsystem"
+PROJECT_ROOT="/"
 VENV_DIR="$PROJECT_ROOT/.venv"
 
 echo "========================================================"
