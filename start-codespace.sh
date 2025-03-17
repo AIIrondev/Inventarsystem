@@ -305,6 +305,42 @@ sudo systemctl restart nginx || {
 echo "✓ Nginx configured and started"
 
 echo "========================================================"
+echo "           CONFIGURING PORT FORWARDING                  "
+echo "========================================================"
+
+# Check if running in GitHub Codespace
+if [ -n "$CODESPACES" ] && [ "$CODESPACES" = "true" ]; then
+    echo "Detected GitHub Codespace environment"
+    
+    # Make sure GitHub CLI is installed
+    if ! command -v gh &> /dev/null; then
+        echo "Installing GitHub CLI..."
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+    fi
+    
+    # Forward the ports
+    echo "Forwarding ports 8443 and 8444..."
+    gh codespace ports visibility 8443:public 8444:public
+    
+    # Get the codespace name for URLs
+    CODESPACE_NAME=$(gh codespace list | grep "^\*" | awk '{print $2}')
+    CODESPACE_DOMAIN="${GITHUB_CODESPACE_PORT_FORWARDING_DOMAIN}"
+    
+    if [ -n "$CODESPACE_NAME" ] && [ -n "$CODESPACE_DOMAIN" ]; then
+        echo "========================================================"
+        echo "Codespace Access URLs:"
+        echo "Web Interface: https://${CODESPACE_NAME}-8443.${CODESPACE_DOMAIN}"
+        echo "DeploymentCenter: https://${CODESPACE_NAME}-8444.${CODESPACE_DOMAIN}"
+        echo "========================================================"
+    fi
+else
+    echo "Not running in a GitHub Codespace environment"
+fi
+
+echo "========================================================"
 echo "           STARTING APPLICATIONS                        "
 echo "========================================================"
 
