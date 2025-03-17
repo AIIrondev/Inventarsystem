@@ -231,13 +231,100 @@ fi
 export FLASK_ENV=production
 export FLASK_APP=Web/app.py
 
+# Add this after creating CERT_DIR and before checking virtual environment
+
+# Check if running in a GitHub Codespace
+if [ -n "$CODESPACES" ] && [ "$CODESPACES" = "true" ]; then
+    echo "========================================================"
+    echo "       DETECTED GITHUB CODESPACE ENVIRONMENT            "
+    echo "========================================================"
+    IS_CODESPACE=true
+    
+    # Use service instead of systemctl in Codespaces
+    NGINX_START_CMD="sudo service nginx start"
+    NGINX_STOP_CMD="sudo service nginx stop"
+    
+    # Use direct port binding instead of Unix sockets
+    USE_DIRECT_PORTS=true
+    WEB_BINDING="0.0.0.0:8443"
+    DEPLOYMENT_BINDING="0.0.0.0:8444"
+    
+    echo "Configured for direct port binding in Codespace environment"
+    echo "Ports 8443 and 8444 will be used directly"
+    
+    # Make sure GitHub CLI is available
+    if ! command -v gh &> /dev/null; then
+        echo "Installing GitHub CLI..."
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install -y gh
+    fi
+else
+    IS_CODESPACE=false
+    
+    # Use systemctl for standard environments
+    NGINX_START_CMD="sudo systemctl restart nginx"
+    NGINX_STOP_CMD="sudo systemctl stop nginx"
+    
+    # Use Unix sockets for standard environments
+    USE_DIRECT_PORTS=false
+    WEB_BINDING="unix:/tmp/inventarsystem.sock"
+    DEPLOYMENT_BINDING="unix:/tmp/deployment.sock"
+fi
+
+# Keep the rest of your script until the CONFIGURING NGINX section
+# Then replace the Nginx config section with:
+
 echo "========================================================"
 echo "           CONFIGURING NGINX                            "
 echo "========================================================"
 
-# Create Nginx config file
+# Create Nginx config file based on environment
 echo "Creating Nginx configuration..."
-sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
+if [ "$IS_CODESPACE" = true ]; then
+    # Codespace-specific Nginx configuration
+    sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
+# Main app configuration - Codespace-specific
+server {
+    listen 80;
+    server_name _;
+    
+    location / {
+        proxy_pass http://localhost:8443;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    location /static {
+        alias $PROJECT_ROOT/Web/static;
+    }
+}
+
+# Deployment app configuration - Codespace-specific
+server {
+    listen 8080;
+    server_name _;
+    
+    location / {
+        proxy_pass http://localhost:8444;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /static {
+        alias $PROJECT_ROOT/DeploymentCenter/static;
+    }
+}
+EOF
+else
+    # Standard Nginx configuration with SSL
+    sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
 # HTTPS for main app
 server {
     listen 8443 ssl;
@@ -282,6 +369,7 @@ server {
     }
 }
 EOF
+fi
 
 # Create symbolic link to enable the site
 if [ ! -f /etc/nginx/sites-enabled/inventarsystem.conf ]; then
@@ -297,47 +385,26 @@ sudo nginx -t || {
 # Ensure socket files are not present from previous runs
 rm -f /tmp/inventarsystem.sock /tmp/deployment.sock
 
-# Restart Nginx to apply configuration
-sudo systemctl restart nginx || {
-    echo "ERROR: Failed to restart Nginx."
-    exit 1
+# Start Nginx using the appropriate command
+$NGINX_START_CMD || {
+    echo "ERROR: Failed to start Nginx. Continuing anyway..."
 }
 echo "✓ Nginx configured and started"
 
-echo "========================================================"
-echo "           CONFIGURING PORT FORWARDING                  "
-echo "========================================================"
-
-# Check if running in GitHub Codespace
-if [ -n "$CODESPACES" ] && [ "$CODESPACES" = "true" ]; then
-    echo "Detected GitHub Codespace environment"
+# Expose ports in Codespace if needed
+if [ "$IS_CODESPACE" = true ]; then
+    echo "========================================================"
+    echo "           CONFIGURING PORT FORWARDING                  "
+    echo "========================================================"
     
-    # Make sure GitHub CLI is installed
-    if ! command -v gh &> /dev/null; then
-        echo "Installing GitHub CLI..."
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-        sudo apt update
-        sudo apt install gh
-    fi
+    # Try to make ports public
+    echo "Making ports 8443 and 8444 public..."
+    for PORT in 8443 8444; do
+        echo "Setting port $PORT to public..."
+        gh codespace ports visibility $PORT:public 2>/dev/null || echo "Failed to make port $PORT public via CLI"
+    done
     
-    # Forward the ports
-    echo "Forwarding ports 8443 and 8444..."
-    gh codespace ports visibility 8443:public 8444:public
-    
-    # Get the codespace name for URLs
-    CODESPACE_NAME=$(gh codespace list | grep "^\*" | awk '{print $2}')
-    CODESPACE_DOMAIN="${GITHUB_CODESPACE_PORT_FORWARDING_DOMAIN}"
-    
-    if [ -n "$CODESPACE_NAME" ] && [ -n "$CODESPACE_DOMAIN" ]; then
-        echo "========================================================"
-        echo "Codespace Access URLs:"
-        echo "Web Interface: https://${CODESPACE_NAME}-8443.${CODESPACE_DOMAIN}"
-        echo "DeploymentCenter: https://${CODESPACE_NAME}-8444.${CODESPACE_DOMAIN}"
-        echo "========================================================"
-    fi
-else
-    echo "Not running in a GitHub Codespace environment"
+    echo "IMPORTANT: If ports are not public, please make them manually public in the PORTS tab."
 fi
 
 echo "========================================================"
@@ -347,8 +414,20 @@ echo "========================================================"
 # Show access information
 echo "========================================================"
 echo "Access Information:"
-echo "Web Interface: https://$NETWORK_IP:8443"
-echo "DeploymentCenter: https://$NETWORK_IP:8444"
+
+if [ "$IS_CODESPACE" = true ]; then
+    CODESPACE_NAME=$(gh codespace list --json name -q '.[0].name' 2>/dev/null)
+    GITHUB_CODESPACE_DOMAIN=$(echo "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" | sed 's/^\(.*\)$/\1/')
+    
+    echo "Codespace Web Interface: https://$CODESPACE_NAME-8443.$GITHUB_CODESPACE_DOMAIN"
+    echo "Codespace DeploymentCenter: https://$CODESPACE_NAME-8444.$GITHUB_CODESPACE_DOMAIN"
+    echo "Local Web Interface: http://localhost:8443"
+    echo "Local DeploymentCenter: http://localhost:8444"
+else
+    echo "Web Interface: https://$NETWORK_IP:8443"
+    echo "DeploymentCenter: https://$NETWORK_IP:8444"
+fi
+
 echo "========================================================"
 echo "NOTE: Your browser may show a security warning because"
 echo "      we're using a self-signed certificate."
@@ -358,13 +437,13 @@ echo "========================================================"
 # Start DeploymentCenter in background
 echo "Starting DeploymentCenter with Gunicorn..."
 cd $PROJECT_ROOT/DeploymentCenter
-gunicorn app:app --bind unix:/tmp/deployment.sock --workers 1 --access-logfile ../logs/deployment-access.log --error-logfile ../logs/deployment-error.log &
+gunicorn app:app --bind $DEPLOYMENT_BINDING --workers 1 --access-logfile ../logs/deployment-access.log --error-logfile ../logs/deployment-error.log &
 DEPLOYMENT_PID=$!
 echo "DeploymentCenter started with PID: $DEPLOYMENT_PID"
 sleep 2
 
-# Check if the deployment socket was created
-if [ ! -S "/tmp/deployment.sock" ]; then
+# Check if the deployment socket was created (if using sockets)
+if [ "$USE_DIRECT_PORTS" = false ] && [ ! -S "/tmp/deployment.sock" ]; then
     echo "ERROR: Deployment socket not created. Check logs for errors:"
     cat ../logs/deployment-error.log
     echo "Attempting to continue anyway..."
@@ -376,16 +455,16 @@ cd $PROJECT_ROOT
 # Start main application with Gunicorn in foreground
 echo "Starting Inventarsystem main application with Gunicorn..."
 cd Web
-gunicorn app:app --bind unix:/tmp/inventarsystem.sock --workers 1 --access-logfile ../logs/access.log --error-logfile ../logs/error.log
+gunicorn app:app --bind $WEB_BINDING --workers 1 --access-logfile ../logs/access.log --error-logfile ../logs/error.log
 
-# If we get here, kill the background DeploymentCenter process
+# Cleanup section remains the same, but use the appropriate command to stop Nginx
 if ps -p $DEPLOYMENT_PID > /dev/null; then
     echo "Stopping DeploymentCenter (PID: $DEPLOYMENT_PID)..."
     kill $DEPLOYMENT_PID
 fi
 
 # Stop Nginx when done
-sudo systemctl stop nginx
+$NGINX_STOP_CMD
 
 cd $PROJECT_ROOT
 
