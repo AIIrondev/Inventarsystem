@@ -10,6 +10,49 @@ mkdir -p $CERT_DIR
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
+# Set project root directory
+PROJECT_ROOT="/home/max/Dokumente/repos/Inventarsystem"
+VENV_DIR="$PROJECT_ROOT/.venv"
+
+echo "========================================================"
+echo "           CHECKING/CREATING VIRTUAL ENVIRONMENT        "
+echo "========================================================"
+
+# Check if virtual environment exists
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Virtual environment not found. Creating one..."
+    
+    # Check if venv module is available
+    python3 -m venv --help > /dev/null 2>&1 || {
+        echo "Python venv module not available. Installing..."
+        sudo apt-get update
+        sudo apt-get install -y python3-venv || {
+            echo "Failed to install python3-venv. Exiting."
+            exit 1
+        }
+    }
+    
+    # Create virtual environment
+    python3 -m venv "$VENV_DIR" || {
+        echo "Failed to create virtual environment. Exiting."
+        exit 1
+    }
+    
+    echo "✓ Virtual environment created at $VENV_DIR"
+else
+    echo "✓ Virtual environment already exists"
+fi
+
+# Activate virtual environment
+source "$VENV_DIR/bin/activate" || {
+    echo "Failed to activate virtual environment. Exiting."
+    exit 1
+}
+
+# Upgrade pip in virtual environment
+echo "Upgrading pip in virtual environment..."
+pip install --upgrade pip || echo "Warning: Failed to upgrade pip."
+
 # Function to check and install package
 check_and_install() {
     echo "Checking for $1..."
@@ -21,7 +64,7 @@ check_and_install() {
                 sudo apt-get install -y nginx || return 1
                 ;;
             gunicorn)
-                pip install gunicorn || pip3 install gunicorn || return 1
+                pip install gunicorn || return 1
                 ;;
             openssl)
                 sudo apt-get update
@@ -50,12 +93,6 @@ check_and_install() {
     return 0
 }
 
-# Check if Python exists
-if ! command -v python3 &> /dev/null; then
-    echo "Python 3 is required but not installed."
-    exit 1
-fi
-
 echo "========================================================"
 echo "           CHECKING REQUIRED APPLICATIONS               "
 echo "========================================================"
@@ -67,7 +104,7 @@ check_and_install openssl || { echo "Failed to install openssl. Exiting."; exit 
 check_and_install mongod || echo "MongoDB installation incomplete. Continuing anyway..."
 
 # Create Nginx configuration with HTTPS
-cd /home/max/Dokumente/repos/Inventarsystem
+cd $PROJECT_ROOT
 
 echo "========================================================"
 echo "           INSTALLING PYTHON DEPENDENCIES               "
@@ -82,7 +119,7 @@ if [ -f requirements.txt ]; then
     # Install Python requirements except PyMongo (we'll install a specific version later)
     echo "Installing Python dependencies..."
     grep -v "^pymongo" requirements_modified.txt > requirements_no_mongo.txt
-    pip install -r requirements_no_mongo.txt || pip3 install -r requirements_no_mongo.txt || {
+    pip install -r requirements_no_mongo.txt || {
         echo "Warning: Some Python dependencies may not be installed correctly."
     }
     rm requirements_no_mongo.txt requirements_modified.txt
@@ -91,7 +128,7 @@ fi
 # Fix PyMongo/Bson compatibility issue
 echo "Fixing PyMongo/Bson compatibility issue..."
 pip uninstall -y bson pymongo
-pip install pymongo==4.6.1 || pip3 install pymongo==4.6.1 || {
+pip install pymongo==4.6.1 || {
     echo "Failed to install pymongo. Exiting."
     exit 1
 }
@@ -144,11 +181,11 @@ fi
 
 # Verify PyMongo installation is correct
 echo "Verifying PyMongo installation..."
-python3 -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration correct')" || {
+python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration correct')" || {
     echo "ERROR: PyMongo still not configured correctly."
     echo "Trying to fix by uninstalling standalone bson..."
     pip uninstall -y bson
-    python3 -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration fixed')" || {
+    python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration fixed')" || {
         echo "ERROR: PyMongo configuration still incorrect. Exiting."
         exit 1
     }
@@ -156,12 +193,12 @@ python3 -c "from pymongo import MongoClient; from bson import SON; print('✓ Py
 
 # Verify Flask application files
 echo "Checking Flask application files..."
-if [ ! -f "/home/max/Dokumente/repos/Inventarsystem/Web/app.py" ]; then
+if [ ! -f "$PROJECT_ROOT/Web/app.py" ]; then
     echo "ERROR: Main application file Web/app.py not found!"
     exit 1
 fi
 
-if [ ! -f "/home/max/Dokumente/repos/Inventarsystem/DeploymentCenter/app.py" ]; then
+if [ ! -f "$PROJECT_ROOT/DeploymentCenter/app.py" ]; then
     echo "ERROR: DeploymentCenter application file DeploymentCenter/app.py not found!"
     exit 1
 fi
@@ -213,6 +250,10 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
+
+    location /static {
+        alias $PROJECT_ROOT/Web/static;
+    }
 }
 
 # HTTPS for deployment app
@@ -230,6 +271,10 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /static {
+        alias $PROJECT_ROOT/DeploymentCenter/static;
     }
 }
 EOF
@@ -272,7 +317,7 @@ echo "========================================================"
 
 # Start DeploymentCenter in background
 echo "Starting DeploymentCenter with Gunicorn..."
-cd /home/max/Dokumente/repos/Inventarsystem/DeploymentCenter
+cd $PROJECT_ROOT/DeploymentCenter
 gunicorn app:app --bind unix:/tmp/deployment.sock --workers 1 --access-logfile ../logs/deployment-access.log --error-logfile ../logs/deployment-error.log &
 DEPLOYMENT_PID=$!
 echo "DeploymentCenter started with PID: $DEPLOYMENT_PID"
@@ -286,7 +331,7 @@ if [ ! -S "/tmp/deployment.sock" ]; then
 fi
 
 # Return to project directory
-cd /home/max/Dokumente/repos/Inventarsystem
+cd $PROJECT_ROOT
 
 # Start main application with Gunicorn in foreground
 echo "Starting Inventarsystem main application with Gunicorn..."
@@ -302,6 +347,9 @@ fi
 # Stop Nginx when done
 sudo systemctl stop nginx
 
-cd ..
+cd $PROJECT_ROOT
+
+# Deactivate virtual environment
+deactivate
 
 echo "All services stopped."
