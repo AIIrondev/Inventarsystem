@@ -110,7 +110,6 @@ check_and_install() {
                     echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 fi
-                }
                 ;;
             *)
                 echo "Unknown package: $1"
