@@ -1,4 +1,4 @@
-#!/bin/bash
+    #!/bin/bash
 
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
@@ -78,16 +78,38 @@ check_and_install() {
                 sudo apt-get install -y openssl || return 1
                 ;;
             mongod)
-                sudo apt-get update
-                sudo apt-get install -y mongodb || sudo apt-get install -y mongodb-org || {
-                    echo "Failed to install MongoDB. Please install manually."
-                    echo "Instructions: https://docs.mongodb.com/manual/installation/"
-                    
-                    read -p "Continue without MongoDB? (y/n): " -n 1 -r
-                    echo
-                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                        return 1
-                    fi
+                # Clean up any existing MongoDB repos to avoid conflicts
+                echo "=== Cleaning up existing MongoDB repositories ==="
+                sudo rm -f /etc/apt/sources.list.d/mongodb*.list
+                sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1 || true
+
+                # Update system packages
+                echo "=== Updating system packages ==="
+                sudo apt update || { echo "Failed to update package lists"; exit 1; }
+
+                # Add MongoDB repository for Ubuntu 24.04
+                echo "=== Adding MongoDB repository ==="
+                UBUNTU_VERSION=$(lsb_release -rs)
+                UBUNTU_CODENAME=$(lsb_release -cs)
+
+                if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
+                    echo "Detected Ubuntu 24.04 (Noble)"
+                    echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB 6.0"
+    
+                    # Modern way to add repository keys with explicit file
+                    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    
+                    # Add repository using Jammy instead of Noble
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
+                    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+                else
+                    # For older Ubuntu versions
+                    echo "Using repository for $UBUNTU_CODENAME"
+                    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
+    
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
+                    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+                fi
                 }
                 ;;
             *)
