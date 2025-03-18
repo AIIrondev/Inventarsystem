@@ -10,6 +10,9 @@ PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" ||
 }
 VENV_DIR="$PROJECT_ROOT/.venv"
 
+sudo apt install python3.12
+sudo apt install python3.12-venv
+
 # Create logs directory if it doesn't exist
 sudo mkdir -p "$PROJECT_ROOT/logs"
 
