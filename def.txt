@@ -2,3 +2,4 @@ Inventar nummer [Jahr, Code, Kürzel] -> Aufkleber
 Anschaffungskosten
 Detailierte Beschreibung extra window for Card
 Zeitlich ausgeliehen plannen -> Schulstunden Weise + Tage
+Termin Kalender

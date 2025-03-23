@@ -114,17 +114,18 @@ class ausleihung:
     def get_ausleihungen():
         """
         Retrieve all borrowing records from the database.
+        Used by administrators to view complete borrowing history.
         
         Returns:
-            cursor: MongoDB cursor with all borrowing records
+            list: List of all borrowing records
         """
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        ausleihungen = db['ausleihungen']
-        ausleihungen_return = ausleihungen.find()
+        collection = db['ausleihungen']  
+        results = list(collection.find())
         client.close()
-        return ausleihungen_return
-
+        return results
+    
     @staticmethod
     def get_ausleihung(id):
         """
@@ -584,6 +585,33 @@ class User:
             return False
 
     @staticmethod
+    def delete_user(username):
+        """
+        Delete a user from the database.
+        Administrative function for removing user accounts.
+        
+        Args:
+            username (str): Username of the account to delete
+            
+        Returns:
+            bool: True if user was deleted successfully, False otherwise
+        """
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        result = users.delete_one({'username': username})
+        client.close()
+        if result.deleted_count == 0:
+            # Try with different field name
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            users = db['users']
+            result = users.delete_one({'Username': username})
+            client.close()
+        
+        return result.deleted_count > 0
+
+    @staticmethod
     def update_active_borrowing(username, item_id, status):
         """
         Update a user's active borrowing status.
@@ -622,3 +650,22 @@ class User:
             return result.modified_count > 0
         except Exception as e:
             return False
+    
+    @staticmethod
+    def get_all_users():
+        """
+        Retrieve all users from the database.
+        Administrative function for user management.
+        
+        Returns:
+            list: List of all user documents
+        """
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']  # Match your actual database name
+            users = db['users']
+            all_users = list(users.find())
+            client.close()
+            return all_users
+        except Exception as e:
+            return []
