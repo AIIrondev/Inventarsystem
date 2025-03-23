@@ -421,7 +421,6 @@ class User:
             bool: True if password is strong enough, False otherwise
         """
         if len(password) < 12:
-            messagebox.showerror('Critical', 'Password is too weak (12 characters required)\n youre request has been denied')
             return False
         return True
 
