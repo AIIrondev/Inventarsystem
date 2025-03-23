@@ -1,0 +1,642 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+{% extends "base.html" %}
+
+{% block title %}Inventarsystem{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="content">
+        <h1>Inventar Objekte</h1>
+        <div class="filter-container">
+            <div class="filter">
+                <label for="filter1">Filter 1:</label>
+                <select id="filter1" name="filter1" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="filter">
+                <label for="filter2">Filter 2:</label>
+                <select id="filter2" name="filter2" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
+        </div>
+        <div class="qr-container">
+            <button id="scanButton" class="scan-button">QR-Code scannen</button>
+            <div id="qr-reader" style="width: 500px; display: none;"></div>
+        </div>
+        <div id="items-container" class="items-container">
+            <!-- Items will be dynamically loaded here -->
+        </div>
+        <div class="navigation-buttons">
+            <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
+            <button class="next-button" onclick="scrollNext()">&#10095;</button>
+        </div>
+    </div>
+    <div class="upload-form">
+        <h2>Upload Item</h2>
+        <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="ort">Ort:</label>
+                <input type="text" id="ort" name="ort" required>
+            </div>
+            <div class="form-group">
+                <label for="beschreibung">Beschreibung:</label>
+                <textarea id="beschreibung" name="beschreibung" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="filter1-upload">Filter 1:</label>
+                <input type="text" id="filter1-upload" name="filter" required>
+            </div>
+            <div class="form-group">
+                <label for="filter2-upload">Filter 2:</label>
+                <input type="text" id="filter2-upload" name="filter2" required>
+            </div>
+            <div class="form-group">
+                <label for="images">Bilder:</label>
+                <input type="file" id="images" name="images" accept="image/*" multiple required>
+            </div>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
+</div>
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
+<script>
+    // Initialize QR Code scanner
+    // TODO: only allow one Back camera only
+    let html5QrcodeScanner = null;
+    
+    document.getElementById('scanButton').addEventListener('click', function() {
+        const qrReader = document.getElementById('qr-reader');
+        
+        if (qrReader.style.display === 'none') {
+            qrReader.style.display = 'block';
+            
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader", { fps: 10, qrbox: 250 }
+            );
+            
+            html5QrcodeScanner.render((decodedText) => {
+                console.log("QR Code detected:", decodedText);
+                html5QrcodeScanner.clear();
+                qrReader.style.display = 'none';
+                
+                // Navigate to the item
+                window.location.href = decodedText;
+            });
+            
+            this.textContent = 'Scanner schließen';
+        } else {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            this.textContent = 'QR-Code scannen';
+        }
+    });
+
+    // Check if a new item was just created to show download link
+    const urlParams = new URLSearchParams(window.location.search);
+    const newItemId = urlParams.get('new_item_id');
+    const highlightItemId = "{{ highlight_item }}" || '';
+    
+    if (newItemId) {
+        const notification = document.createElement('div');
+        notification.className = 'qr-notification';
+        notification.innerHTML = `
+            <p>QR-Code für neues Item:</p>
+            <a href="{{ url_for('get_qr_code', id='') }}${newItemId}" class="qr-download">QR-Code herunterladen</a>
+        `;
+        document.querySelector('.container').prepend(notification);
+        
+        // Auto-remove notification after 10 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 1000);
+        }, 10000);
+    }
+</script>
+
+<script>    
+    fetch("{{ url_for('get_items') }}")
+        .then(response => response.json())
+        .then(data => {
+            const itemsContainer = document.querySelector('#items-container');
+            // Creating a Set to store unique filter values
+            const filter1Values = new Set();
+            const filter2Values = new Set();
+            
+            data.items.forEach(item => {
+                const card = document.createElement('div');
+                card.classList.add('item-card');
+                
+                // Add highlight class if this is the item we're looking for
+                if (item._id === highlightItemId) {
+                    card.classList.add('highlight-item');
+                    setTimeout(() => {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 500);
+                }
+                
+                // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
+                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
+                const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                
+                card.dataset.filter1 = filter1Value;
+                card.dataset.filter2 = filter2Value;
+                
+                // Add filter values to their respective sets
+                if (filter1Value && filter1Value.trim() !== '') {
+                    filter1Values.add(filter1Value);
+                }
+                if (filter2Value && filter2Value.trim() !== '') {
+                    filter2Values.add(filter2Value);
+                }
+
+                const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                card.innerHTML = `
+                    <h3>${item.Name}</h3>
+                    <p><strong>Ort:</strong> ${item.Ort}</p>
+                    <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
+                    <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
+                    <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
+                    <div class="image-container">
+                        ${imagesHtml}
+                        <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
+                        <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
+                    </div>
+                    <div class="actions">
+                        ${item.Verfuegbar ? `
+                            <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                <button class="ausleihen" type="submit">Ausleihen</button>
+                            </form>
+                        ` : `
+                            <form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                                <button class="ausleihen" type="submit">Zurückgeben</button>
+                            </form>
+                        `}
+                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
+                    </div>
+                `;
+                itemsContainer.appendChild(card);
+
+                // Add QR code download link to each card
+                const qrLink = document.createElement('a');
+                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
+                qrLink.className = 'qr-download-button';
+                qrLink.textContent = 'QR-Code';
+                
+                // Add the QR code link to the actions div
+                const actionsDiv = card.querySelector('.actions');
+                actionsDiv.appendChild(qrLink);
+            });
+            
+            // Now populate the filter dropdowns with the collected unique values
+            const filter1 = document.querySelector('#filter1');
+            const filter2 = document.querySelector('#filter2');
+            
+            // Sort and populate filter1 dropdown
+            [...filter1Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter1.appendChild(option);
+            });
+            
+            // Sort and populate filter2 dropdown
+            [...filter2Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter2.appendChild(option);
+            });
+            
+            // Center the first card
+            const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
+            if (cardWidth > 0) {
+                itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
+            }
+            
+            // Nach dem Laden der Items Filter anwenden
+            applyFilters();
+        })
+        .catch(error => console.error('Error fetching items:', error));
+
+    // Verbesserte Filter-Anwendungsfunktion
+    function applyFilters() {
+        const filter1Value = document.querySelector('#filter1').value;
+        const filter2Value = document.querySelector('#filter2').value;
+        
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            
+            const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
+            const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
+            
+            // Beide Filter müssen übereinstimmen (UND-Operation)
+            if (matchesFilter1 && matchesFilter2) {
+                item.style.display = 'block';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Informationen zur Anzahl der sichtbaren Elemente
+        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+        
+        // After filtering, reset scroll position to show the first visible card
+        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+        if (firstVisibleCard) {
+            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }
+    }
+
+    function prevImage(event) {
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex - 1 + images.length) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+
+    function nextImage(event) {
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex + 1) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+
+    function scrollPrev() {
+        const itemsContainer = document.querySelector('#items-container');
+        // Better selector to find visible cards
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+        }
+    }
+
+    function scrollNext() {
+        const itemsContainer = document.querySelector('#items-container');
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+        }
+    }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Instead, we'll fetch user status just to keep the user info available
+    fetch('/user_status')
+        .then(response => response.json())
+        .then(data => {
+            console.log('User status:', data);
+            // No action needed - users can borrow multiple items
+        })
+        .catch(error => {
+            console.error('Error fetching user status:', error);
+        });
+});
+</script>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 80%;
+    max-width: 1200px;
+    margin: 20px auto;
+}
+
+h1, h2 {
+    text-align: center;
+}
+
+.filter-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.items-container {
+    display: flex;
+    overflow-x: auto; /* Change from hidden to auto */
+    gap: 20px;
+    padding: 20px 0;
+    scroll-snap-type: x mandatory;
+}
+
+.item-card {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    max-width: 300px;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+}
+
+.item-card h3 {
+    margin-top: 0;
+}
+
+.item-card .description {
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.item-card .image-container {
+    position: relative;
+    max-width: 300px;
+    margin: 10px 0;
+}
+
+.item-card .item-image {
+    width: 100%;
+    height: auto;
+    max-height: 300px; /* Set a maximum height for the images */
+    display: none;
+    object-fit: cover;
+}
+
+.item-card .item-image:first-child {
+    display: block;
+}
+
+.prev-image-button, .next-image-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.prev-image-button {
+    left: -30px;
+}
+
+.next-image-button {
+    right: -30px;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button.ausleihen {
+    flex: 1;
+    padding: 10px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button.ausleihen:hover {
+    background-color: #0056b3;
+}
+
+a.delete-button {
+    flex: 1;
+    padding: 10px;
+    background-color: #dc3545;
+    color: #fff;
+    text-align: center;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+a.delete-button:hover {
+    background-color: #c82333;
+}
+
+.upload-form {
+    margin-top: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+input[type="text"],
+textarea,
+input[type="file"] {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.flash {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.flash.success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.flash.error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.navigation-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.navigation-buttons .prev-button,
+.navigation-buttons .next-button {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.navigation-buttons .prev-button:hover,
+.navigation-buttons .next-button:hover {
+    background-color: #0056b3;
+}
+
+.qr-scanner {
+    margin-top: 20px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .container {
+        width: 95%;
+    }
+    .item-card {
+        min-width: 250px;
+    }
+    .filter-container {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        width: 98%;
+        padding: 10px;
+    }
+    .item-card {
+        min-width: 200px;
+    }
+}
+
+.qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.scan-button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.scan-button:hover {
+    background-color: #0056b3;
+}
+
+#qr-reader {
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.qr-download-button {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 5px 10px;
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 0.8em;
+}
+
+.qr-notification {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
+    transition: opacity 1s ease;
+}
+
+.qr-download {
+    display: inline-block;
+    padding: 5px 15px;
+    background-color: #28a745;
+    color: white;
+    text-decoration: none;
+    border-radius: 3px;
+    margin-left: 10px;
+}
+
+.highlight-item {
+    border: 3px solid #ffc107;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+    animation: highlight-pulse 2s infinite;
+}
+
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.8); }
+    100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+}
+
+.disabled-button {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.borrow-limit-banner {
+    background-color: #ffc107;
+    color: #212529;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
+}
+</style>
+{% endblock %}
