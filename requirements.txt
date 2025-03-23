@@ -5,3 +5,5 @@ gunicorn
 pymongo
 pillow
 qrcode
+apscheduler
+python-dateutil

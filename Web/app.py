@@ -41,6 +41,7 @@ from database import ausleihung as au
 from bson.objectid import ObjectId
 import hashlib
 import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -535,55 +536,137 @@ def get_bookings():
     """
     Get all bookings for calendar display
     """
+    if 'username' not in session:
+        return {'error': 'Not logged in'}, 401
+        
     start = request.args.get('start')
     end = request.args.get('end')
     
-    # Hier Logik zum Abrufen der Buchungen aus der Datenbank
-    # Beispiel:
-    # bookings = db.bookings.find({
-    #     "start": {"$gte": start},
-    #     "end": {"$lte": end}
-    # })
+    # Get all current borrowings
+    current_borrowings = au.get_ausleihungen()
+    bookings = []
     
-    # Beispiel-Ausgabeformat
-    '''
-    return [
-        {
-            "id": booking_id,
-            "title": item_name,
-            "start": start_date,
-            "end": end_date,
-            "itemId": item_id,
-            "userName": user_name,
-            "notes": notes,
-            "status": "current" or "planned",
-            "isCurrentUser": is_current_user
-        }
-    ]
-    '''
+    # Format current borrowings for calendar
+    for borrowing in current_borrowings:
+        item = it.get_item(borrowing.get('Item'))
+        if not item:
+            continue
+            
+        # Determine if this is current or planned
+        is_current = borrowing.get('End') is None
+        status = "current" if is_current else "planned"
+        
+        # Format dates
+        start_date = borrowing.get('Start')
+        end_date = borrowing.get('End') or (start_date + datetime.timedelta(days=1))
+        
+        bookings.append({
+            "id": str(borrowing.get('_id')),
+            "title": item.get('Name', 'Unknown Item'),
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "itemId": borrowing.get('Item'),
+            "userName": borrowing.get('User'),
+            "notes": borrowing.get('Notes', ''),
+            "status": status,
+            "isCurrentUser": borrowing.get('User') == session['username']
+        })
+    
+    # Get planned bookings (future borrowings)
+    planned_bookings = au.get_planned_bookings(start, end)
+    for booking in planned_bookings:
+        item = it.get_item(booking.get('Item'))
+        if not item:
+            continue
+            
+        bookings.append({
+            "id": str(booking.get('_id')),
+            "title": item.get('Name', 'Unknown Item'),
+            "start": booking.get('Start').isoformat(),
+            "end": booking.get('End').isoformat(),
+            "itemId": booking.get('Item'),
+            "userName": booking.get('User'),
+            "notes": booking.get('Notes', ''),
+            "status": "planned",
+            "isCurrentUser": booking.get('User') == session['username']
+        })
+    
+    return bookings
 
 @app.route('/plan_booking', methods=['POST'])
 def plan_booking():
     """
     Create a new planned booking
     """
+    if 'username' not in session:
+        return {"success": False, "error": "Not logged in"}, 401
+        
     item_id = request.form.get('item_id')
-    start_date = request.form.get('start_date')
-    end_date = request.form.get('end_date')
-    notes = request.form.get('notes')
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
+    notes = request.form.get('notes', '')
     
-    # Hier Logik zum Erstellen einer neuen Buchung
+    # Validate inputs
+    if not all([item_id, start_date_str, end_date_str]):
+        return {"success": False, "error": "Missing required fields"}, 400
+        
+    # Parse dates
+    try:
+        start_date = datetime.datetime.fromisoformat(start_date_str)
+        end_date = datetime.datetime.fromisoformat(end_date_str)
+    except ValueError:
+        return {"success": False, "error": "Invalid date format"}, 400
+        
+    # Check if item exists
+    item = it.get_item(item_id)
+    if not item:
+        return {"success": False, "error": "Item not found"}, 404
     
-    return {"success": True}
+    # Check for date conflicts
+    if au.check_booking_conflict(item_id, start_date, end_date):
+        return {"success": False, "error": "Item already booked for this time period"}, 409
+    
+    # Create the planned booking
+    booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
+    
+    # Schedule automatic borrowing and return
+    # This would typically be done with a background task scheduler
+    # For simplicity, we'll add a "planned" flag to the booking
+    
+    return {"success": True, "booking_id": str(booking_id)}
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):
     """
     Cancel a planned booking
     """
-    # Hier Logik zum Stornieren einer Buchung
+    if 'username' not in session:
+        return {"success": False, "error": "Not logged in"}, 401
     
-    return {"success": True}
+    # Get the booking
+    booking = au.get_booking(id)
+    if not booking:
+        return {"success": False, "error": "Booking not found"}, 404
+        
+    # Check if user owns this booking
+    if booking.get('User') != session['username'] and not us.check_admin(session['username']):
+        return {"success": False, "error": "Not authorized to cancel this booking"}, 403
+    
+    # Cancel the booking
+    result = au.cancel_booking(id)
+    
+    if result:
+        return {"success": True}
+    else:
+        return {"success": False, "error": "Failed to cancel booking"}
+
+@app.route('/terminplan', methods=['GET'])
+def terminplan():
+    """
+    Route to display the booking calendar
+    """
+    return render_template('terminplan.html')
+
 
 '''-------------------------------------------------------------------------------------------------------------ADMIN ROUTES------------------------------------------------------------------------------------------------------------------'''
 
@@ -777,6 +860,39 @@ def get_usernames():
     else:
         flash('Please login to access this function', 'error')
 
+'''-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
+
+scheduler = BackgroundScheduler()
+
+def process_bookings():
+    """
+    Process planned bookings:
+    1. Check for bookings that should be active now and mark items as borrowed
+    2. Check for bookings that should be complete and mark items as returned
+    """
+    current_time = datetime.datetime.now()
+    
+    start_bookings = au.get_bookings_starting_now(current_time)
+    for booking in start_bookings:
+        item_id = booking.get('Item')
+        username = booking.get('User')
+        
+        item = it.get_item(item_id)
+        if item and item.get('Verfuegbar'):
+            it.update_item_status(item_id, False, username)
+            au.mark_booking_active(str(booking.get('_id')))
+    
+    end_bookings = au.get_bookings_ending_now(current_time)
+    for booking in end_bookings:
+        item_id = booking.get('Item')
+        
+        item = it.get_item(item_id)
+        if item and not item.get('Verfuegbar'):
+            it.update_item_status(item_id, True)
+            au.mark_booking_completed(str(booking.get('_id')))
+
+scheduler.add_job(process_bookings, 'interval', minutes=1)
+scheduler.start()
 
 if __name__ == '__main__':
     """
@@ -787,3 +903,6 @@ if __name__ == '__main__':
     # SSL configuration
     ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
     app.run("0.0.0.0", 8000, ssl_context=ssl_context)
+
+import atexit
+atexit.register(lambda: scheduler.shutdown())

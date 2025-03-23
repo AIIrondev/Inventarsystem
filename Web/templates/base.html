@@ -57,7 +57,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('license') }}">License</a>
                     </li>
-                    <!-- Admin-only navigation items -->
+                    {% if 'username' in session %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('terminplan') }}">Terminplaner</a>
+                        </li>
+                    {% endif %}
                     {% if 'username' in session and session.get('admin', False) %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logs') }}">Logs</a>
