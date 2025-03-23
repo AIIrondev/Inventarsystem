@@ -1,0 +1,142 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+{% extends "base.html" %}
+
+{% block title %}Delete User{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h2 class="text-center mb-0">Delete User</h2>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+                    
+                    <form id="deleteUserForm" method="POST" action="{{ url_for('delete_user') }}">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Select User to Delete</label>
+                            <select class="form-select" id="username" name="username" required>
+                                <option value="" selected disabled>-- Select a user --</option>
+                                {% for user in users %}
+                                <option value="{{ user.username }}">{{ user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="button" id="confirmDelete" class="btn btn-danger">Delete User</button>
+                            <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-muted text-center">
+                    <small>Warning: This action cannot be undone</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmation Dialog -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteConfirmModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the user <strong id="userToDelete"></strong>? 
+                This action cannot be undone and will remove all access for this user.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="finalDeleteBtn" class="btn btn-danger">Delete User</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Variables
+        const form = document.getElementById('deleteUserForm');
+        const confirmButton = document.getElementById('confirmDelete');
+        const finalDeleteButton = document.getElementById('finalDeleteBtn');
+        const userSelect = document.getElementById('username');
+        const userToDeleteSpan = document.getElementById('userToDelete');
+        
+        // Check if Bootstrap is available
+        if (typeof bootstrap !== 'undefined') {
+            // Using Bootstrap modal
+            const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+            
+            confirmButton.addEventListener('click', function() {
+                if (userSelect.value) {
+                    userToDeleteSpan.textContent = userSelect.value;
+                    deleteModal.show();
+                } else {
+                    alert('Please select a user to delete.');
+                }
+            });
+            
+            finalDeleteButton.addEventListener('click', function() {
+                form.submit();
+                deleteModal.hide();
+            });
+        } else {
+            // Fallback for when Bootstrap is not available
+            confirmButton.addEventListener('click', function() {
+                if (userSelect.value) {
+                    if (confirm(`Are you sure you want to delete the user "${userSelect.value}"? This action cannot be undone.`)) {
+                        form.submit();
+                    }
+                } else {
+                    alert('Please select a user to delete.');
+                }
+            });
+        }
+        
+        // Add search functionality if there are many users
+        if (userSelect.options.length > 10) {
+            const searchBox = document.createElement('input');
+            searchBox.type = 'text';
+            searchBox.className = 'form-control mb-2';
+            searchBox.placeholder = 'Search users...';
+            searchBox.addEventListener('input', function() {
+                const filter = this.value.toLowerCase();
+                Array.from(userSelect.options).forEach(option => {
+                    if (option.value === '' || option.text.toLowerCase().includes(filter)) {
+                        option.style.display = '';
+                    } else {
+                        option.style.display = 'none';
+                    }
+                });
+            });
+            
+            userSelect.parentNode.insertBefore(searchBox, userSelect);
+        }
+    });
+</script>
+{% endblock %}

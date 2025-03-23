@@ -114,17 +114,18 @@ class ausleihung:
     def get_ausleihungen():
         """
         Retrieve all borrowing records from the database.
+        Used by administrators to view complete borrowing history.
         
         Returns:
-            cursor: MongoDB cursor with all borrowing records
+            list: List of all borrowing records
         """
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        ausleihungen = db['ausleihungen']
-        ausleihungen_return = ausleihungen.find()
+        collection = db['ausleihungen']  
+        results = list(collection.find())
         client.close()
-        return ausleihungen_return
-
+        return results
+    
     @staticmethod
     def get_ausleihung(id):
         """
