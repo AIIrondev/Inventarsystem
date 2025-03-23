@@ -48,7 +48,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Initialize Flask application
 app = Flask(__name__)
 app.secret_key = 'secret'  # For production, use a secure key!
-app.debug = False  # Debug disabled in production
+app.debug = True  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
@@ -320,7 +320,7 @@ def ausleihen(id):
     
     item = it.get_item(id)
     if item and item['Verfuegbar']:
-        it.update_item_status(id, False)
+        it.update_item_status(id, False, session['username'])
         start_date = datetime.datetime.now()
         au.add_ausleihung(id, session['username'], start_date)
 
@@ -512,7 +512,6 @@ def admin_reset_item(id):
         return redirect(url_for('login'))
     
     try:
-        # Force the item to be available
         it.update_item_status(id, True)
         
         it.unstuck_item(id)

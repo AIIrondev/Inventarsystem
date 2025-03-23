@@ -267,7 +267,7 @@ class Inventory:
         client.close()
 
     @staticmethod
-    def update_item_status(id, verfügbar):
+    def update_item_status(id, verfügbar, user=None):
         """
         Update the availability status of an inventory item.
         
@@ -282,6 +282,7 @@ class Inventory:
         db = client['Inventarsystem']
         items = db['items']
         items.update_one({'_id': ObjectId(id)}, {'$set': {'Verfuegbar': verfügbar}})
+        items.update_one({'_id': ObjectId(id)}, {'$set': {'User': user}})
         client.close()
 
     @staticmethod
