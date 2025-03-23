@@ -405,6 +405,8 @@ def create_qr_code(id):
         str: Filename of the generated QR code, or None if item not found
     """
     import qrcode
+    from urllib.parse import urlparse, urlunparse
+    
     if not os.path.exists(app.config['QR_CODE_FOLDER']):
         os.makedirs(app.config['QR_CODE_FOLDER'])
         
@@ -415,13 +417,18 @@ def create_qr_code(id):
         border=4,
     )
     
-    # Get base URL from request
-    base_url = request.url_root
-    if base_url.startswith('http:'):
-        base_url = base_url.replace('http:', 'https:')
+    # Parse and reconstruct the URL properly
+    parsed_url = urlparse(request.url_root)
+    
+    # Force HTTPS if needed
+    scheme = 'https' if parsed_url.scheme == 'http' else parsed_url.scheme
+    
+    # Properly reconstruct the base URL
+    base_url = urlunparse((scheme, parsed_url.netloc, '', '', '', ''))
     
     # URL that will open this item directly
-    qr.add_data(f"{base_url}item/{id}")
+    item_url = f"{base_url}:8443/item/{id}"
+    qr.add_data(item_url)
     qr.make(fit=True)
 
     item = it.get_item(id)

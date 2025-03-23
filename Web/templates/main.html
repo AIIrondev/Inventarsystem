@@ -169,10 +169,20 @@
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
                             </form>
                         `}
+                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
                     </div>
                 `;
                 itemsContainer.appendChild(card);
 
+                // Add QR code download link to each card
+                const qrLink = document.createElement('a');
+                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
+                qrLink.className = 'qr-download-button';
+                qrLink.textContent = 'QR-Code';
+                
+                // Add the QR code link to the actions div
+                const actionsDiv = card.querySelector('.actions');
+                actionsDiv.appendChild(qrLink);
             });
             
             // Now populate the filter dropdowns with the collected unique values
@@ -233,6 +243,12 @@
         
         // Informationen zur Anzahl der sichtbaren Elemente
         console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+        
+        // After filtering, reset scroll position to show the first visible card
+        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+        if (firstVisibleCard) {
+            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }
     }
 
     function prevImage(event) {
@@ -255,14 +271,25 @@
 
     function scrollPrev() {
         const itemsContainer = document.querySelector('#items-container');
-        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
-        itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+        // Better selector to find visible cards
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+        }
     }
 
     function scrollNext() {
         const itemsContainer = document.querySelector('#items-container');
-        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
-        itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+        }
     }
 </script>
 <script>
@@ -316,7 +343,7 @@ h1, h2 {
 
 .items-container {
     display: flex;
-    overflow-x: hidden;
+    overflow-x: auto; /* Change from hidden to auto */
     gap: 20px;
     padding: 20px 0;
     scroll-snap-type: x mandatory;
