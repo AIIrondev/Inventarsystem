@@ -40,7 +40,7 @@ class ausleihung:
     """
     
     @staticmethod
-    def add_ausleihung(item_id, user_id, start, end=None):
+    def add_ausleihung(item_id, user_id, start, end=None, notes=""):
         """
         Add a new borrowing record to the database.
         
@@ -49,20 +49,34 @@ class ausleihung:
             user_id (str): ID or username of the borrower
             start (datetime): Start date/time of the borrowing period
             end (datetime, optional): End date/time of the borrowing period, None if item is still borrowed
+            notes (str, optional): Additional notes for the borrowing
             
         Returns:
-            None
+            str: ID of the new ausleihung record, or None if failed
         """
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        ausleihungen = db['ausleihungen']
-        ausleihungen.insert_one({
-            'Item': item_id, 
-            'User': user_id, 
-            'Start': start, 
-            'End': end if end else None
-        })
-        client.close()
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            ausleihungen = db['ausleihungen']
+            
+            record = {
+                'Item': item_id, 
+                'User': user_id, 
+                'Start': start, 
+                'End': end,
+                'Notes': notes,
+                'Created': datetime.datetime.now()
+            }
+            
+            result = ausleihungen.insert_one(record)
+            client.close()
+            
+            if result.inserted_id:
+                return str(result.inserted_id)
+            return None
+        except Exception as e:
+            print(f"Error adding ausleihung: {e}")
+            return None
     
     @staticmethod
     def remove_ausleihung(id):
@@ -349,83 +363,114 @@ class ausleihung:
         except:
             return False
 
-    @staticmethod
     def get_bookings_starting_now(current_time):
         """
-        Get bookings that should be starting now
+        Get bookings that should start now or in the recent past
 
         Args:
-            current_time (datetime): Current time to check against
+            current_time: Current datetime
 
         Returns:
-            list: List of bookings that should be starting
+            List of bookings that should start now
         """
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        planned_bookings = db['planned_bookings']
-        
-        # Find bookings where start time is within 5 minutes of current time
-        five_min_window = datetime.timedelta(minutes=5)
+        booking_collection = db['planned_bookings']
 
-        bookings = list(planned_bookings.find({
+        # Create a time window - look at bookings starting in the past hour
+        # This ensures we catch any bookings that might have been missed
+        start_time = current_time - datetime.timedelta(hours=1)
+        end_time = current_time + datetime.timedelta(minutes=1)
+
+        # Find bookings that:
+        # 1. Have status 'planned'
+        # 2. Start time is in the past or right now
+        # 3. Don't have an AusleihungId yet
+        query = {
             'Status': 'planned',
-            'Start': {'$lte': current_time + five_min_window, 
-                      '$gte': current_time - five_min_window}
-        }))
-        
-        client.close()
-        return bookings
+            'Start': {'$lte': end_time, '$gte': start_time},
+            'AusleihungId': {'$exists': False}
+        }
 
-    @staticmethod
+        try:
+            bookings = list(booking_collection.find(query))
+            client.close()
+            return bookings
+        except Exception as e:
+            print(f"Error getting bookings starting now: {e}")
+            client.close()
+            return []
+
     def get_bookings_ending_now(current_time):
         """
-        Get bookings that should be ending now
+        Get bookings that should end now (rounded to minutes)
 
         Args:
-            current_time (datetime): Current time to check against
+            current_time: Current datetime
 
         Returns:
-            list: List of bookings that should be ending
+            List of bookings that should end now
         """
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
-        planned_bookings = db['planned_bookings']
-        
-        # Find bookings where end time is within 5 minutes of current time
-        five_min_window = datetime.timedelta(minutes=5)
+        booking_collection = db['planned_bookings']
+        # Round current time to the nearest minute
+        current_hour = current_time.hour
+        current_minute = current_time.minute
+        end_time = current_time.replace(hour=current_hour, minute=current_minute, 
+                                        second=0, microsecond=0)
 
-        bookings = list(planned_bookings.find({
+        # Create a window - look at bookings ending in this hour
+        next_minute = end_time + datetime.timedelta(minutes=1)
+
+        # Find bookings that:
+        # 1. Have status 'active'
+        # 2. Have end date in this minute window
+        query = {
             'Status': 'active',
-            'End': {'$lte': current_time + five_min_window, 
-                    '$gte': current_time - five_min_window}
-        }))
-        
-        client.close()
-        return bookings
+            'End': {'$gte': end_time, '$lt': next_minute}
+        }
+
+        try:
+            bookings = booking_collection.find(query)
+            return list(bookings)
+        except Exception as e:
+            print(f"Error getting bookings ending now: {e}")
+            return []
 
     @staticmethod
-    def mark_booking_active(booking_id):
+    def mark_booking_active(booking_id, ausleihung_id=None):
         """
-        Mark a booking as active (item borrowed)
-
+        Mark a planned booking as active and link it to an ausleihung record
+        
         Args:
-            booking_id (str): ID of the booking
-
+            booking_id (str): ID of the booking to mark as active
+            ausleihung_id (str, optional): ID of the associated ausleihung record
+        
         Returns:
-            bool: True if updated successfully
+            bool: True if successful, False otherwise
         """
         try:
             client = MongoClient('localhost', 27017)
             db = client['Inventarsystem']
-            planned_bookings = db['planned_bookings']
+            booking_collection = db['planned_bookings']
             
-            result = planned_bookings.update_one(
+            update_data = {
+                'Status': 'active',
+                'LastUpdated': datetime.datetime.now()
+            }
+            
+            if ausleihung_id:
+                update_data['AusleihungId'] = ausleihung_id
+                
+            result = booking_collection.update_one(
                 {'_id': ObjectId(booking_id)},
-                {'$set': {'Status': 'active'}}
+                {'$set': update_data}
             )
             client.close()
             return result.modified_count > 0
-        except:
+        except Exception as e:
+            print(f"Error marking booking active: {e}")
             return False
 
     @staticmethod
@@ -454,38 +499,32 @@ class ausleihung:
             return False
 
     @staticmethod
-    def mark_booking_active(booking_id, ausleihung_id=None):
+    def mark_booking_completed(booking_id):
         """
-        Mark a planned booking as active and link it to an ausleihung record
-        
+        Mark a booking as completed (item returned)
+
         Args:
-            booking_id (str): ID of the booking to mark as active
-            ausleihung_id (str, optional): ID of the associated ausleihung record
-        
+            booking_id (str): ID of the booking
+
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if updated successfully
         """
         try:
             client = MongoClient('localhost', 27017)
             db = client['Inventarsystem']
             booking_collection = db['planned_bookings']
             
-            update_data = {
-                'Status': 'active',
-                'LastUpdated': datetime.datetime.now()
-            }
-            
-            if ausleihung_id:
-                update_data['AusleihungId'] = ausleihung_id
-                
-            booking_collection.update_one(
+            result = booking_collection.update_one(
                 {'_id': ObjectId(booking_id)},
-                {'$set': update_data}
+                {'$set': {
+                    'Status': 'completed',
+                    'LastUpdated': datetime.datetime.now()
+                }}
             )
             client.close()
-            return True
+            return result.modified_count > 0
         except Exception as e:
-            print(f"Error marking booking active: {e}")
+            print(f"Error marking booking completed: {e}")
             return False
 
 
