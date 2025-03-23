@@ -1,4 +1,7 @@
 .venv
 certs
 *.log
-*.pyc
+*.cpython-312.pyc
+*.png
+*.jpg
+*.jpeg

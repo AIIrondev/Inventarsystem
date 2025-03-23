@@ -273,6 +273,12 @@
         
         // Informationen zur Anzahl der sichtbaren Elemente
         console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+        
+        // After filtering, reset scroll position to show the first visible card
+        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+        if (firstVisibleCard) {
+            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }
     }
 
     function prevImage(event) {
@@ -295,14 +301,25 @@
 
     function scrollPrev() {
         const itemsContainer = document.querySelector('#items-container');
-        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
-        itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+        // Better selector to find visible cards
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+        }
     }
 
     function scrollNext() {
         const itemsContainer = document.querySelector('#items-container');
-        const cardWidth = itemsContainer.querySelector('.item-card').offsetWidth;
-        itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+            .filter(card => window.getComputedStyle(card).display !== 'none');
+        
+        if (visibleCards.length > 0) {
+            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+            itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+        }
     }
 </script>
 <script>
@@ -356,7 +373,7 @@ h1, h2 {
 
 .items-container {
     display: flex;
-    overflow-x: hidden;
+    overflow-x: auto; /* Change from hidden to auto */
     gap: 20px;
     padding: 20px 0;
     scroll-snap-type: x mandatory;
