@@ -334,7 +334,7 @@ def ausleihen(id):
 
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])
-def zurueckgeben(id):
+def zurueckgeben(id): # Wenn da Item ausgeliehen von jemand anerem wird und ich es zurückgeben will, dann wird es nicht zurückgegeben
     """
     Route for returning a borrowed item.
     Creates or updates a record of the borrowing session.
@@ -351,6 +351,9 @@ def zurueckgeben(id):
     
     item = it.get_item(id)
     if item and not item['Verfuegbar']:
+        if not us.check_admin(session['username']) and item['User'] != session['username']:
+            flash('You are not authorized to return this item', 'error')
+            return redirect(url_for('home'))
         it.update_item_status(id, True)
         
         try:

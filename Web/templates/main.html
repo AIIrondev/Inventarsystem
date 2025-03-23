@@ -169,20 +169,9 @@
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
                             </form>
                         `}
-                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
                     </div>
                 `;
                 itemsContainer.appendChild(card);
-
-                // Add QR code download link to each card
-                const qrLink = document.createElement('a');
-                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
-                qrLink.className = 'qr-download-button';
-                qrLink.textContent = 'QR-Code';
-                
-                // Add the QR code link to the actions div
-                const actionsDiv = card.querySelector('.actions');
-                actionsDiv.appendChild(qrLink);
             });
             
             // Now populate the filter dropdowns with the collected unique values

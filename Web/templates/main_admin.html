@@ -83,6 +83,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
     // Initialize QR Code scanner
+    // TODO: only allow one Back camera only
     let html5QrcodeScanner = null;
     
     document.getElementById('scanButton').addEventListener('click', function() {
@@ -136,11 +137,7 @@
     }
 </script>
 
-<script>
-    // Using the urlParams variable already declared above
-    // REMOVE THIS LINE: const urlParams = new URLSearchParams(window.location.search);
-    // REMOVE THIS LINE: const highlightItemId = "{{ highlight_item }}" || '';
-    
+<script>    
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -176,7 +173,6 @@
                     filter2Values.add(filter2Value);
                 }
 
-                // Rest of card creation code remains the same
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
