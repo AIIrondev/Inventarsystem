@@ -31,8 +31,6 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from bson import ObjectId
 import hashlib
-from tkinter import messagebox
-
 
 class ausleihung:
     """

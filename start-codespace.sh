@@ -15,6 +15,10 @@ sudo apt install python3.12-venv
 
 # Create logs directory if it doesn't exist
 sudo mkdir -p "$PROJECT_ROOT/logs"
+# Ensure current user owns the logs directory
+sudo chown -R $(whoami) "$PROJECT_ROOT/logs"
+# Set appropriate permissions
+sudo chmod -R 755 "$PROJECT_ROOT/logs"
 
 # Create certificates directory if it doesn't exist
 CERT_DIR="$PROJECT_ROOT/certs"
@@ -244,13 +248,27 @@ echo "========================================================"
 # Generate SSL certificates if they don't exist
 if [ ! -f $CERT_DIR/inventarsystem.crt ] || [ ! -f $CERT_DIR/inventarsystem.key ]; then
     echo "Generating SSL certificates..."
+    # First ensure the directory is writable by the current user
+    sudo chown -R $(whoami) $CERT_DIR
+    
+    # Generate certificates
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
         -keyout $CERT_DIR/inventarsystem.key -out $CERT_DIR/inventarsystem.crt \
-        -subj "/C=DE/ST=State/L=City/O=Inventarsystem/CN=$NETWORK_IP"
+        -subj "/C=DE/ST=State/L=City/O=Inventarsystem/CN=$NETWORK_IP" || {
+            echo "ERROR: Failed to generate SSL certificates"
+            exit 1
+        }
     
     # Fix permissions
     chmod 600 $CERT_DIR/inventarsystem.key
-    echo "✓ SSL certificates generated"
+    
+    # Verify certificates exist
+    if [ -f $CERT_DIR/inventarsystem.crt ] && [ -f $CERT_DIR/inventarsystem.key ]; then
+        echo "✓ SSL certificates generated"
+    else
+        echo "ERROR: SSL certificates were not created properly"
+        exit 1
+    fi
 else
     echo "✓ SSL certificates already exist"
 fi
