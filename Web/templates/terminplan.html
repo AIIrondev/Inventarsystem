@@ -166,15 +166,32 @@ document.addEventListener('DOMContentLoaded', function() {
         const itemSelect = document.getElementById('item-select');
         itemSelect.innerHTML = '<option value="">-- Bitte wählen --</option>';
         
-        fetch('/get_items')
+        fetch('/get_items?available_only=true')
             .then(response => response.json())
             .then(data => {
-                data.forEach(item => {
+                // Access the items array in the response
+                const items = data.items || [];
+                
+                items.forEach(item => {
+                    // Skip items that are not available
+                    if (!item.Verfuegbar) {
+                        return;
+                    }
+                    
                     const option = document.createElement('option');
-                    option.value = item._id.$oid;
+                    // Handle different ID formats
+                    const itemId = item._id.$oid || item._id || item.id;
+                    option.value = itemId;
                     option.textContent = item.Name;
                     itemSelect.appendChild(option);
                 });
+                
+                if (items.length === 0) {
+                    itemSelect.innerHTML += '<option value="" disabled>Keine verfügbaren Objekte</option>';
+                    console.log('No available items found');
+                } else {
+                    console.log(`Loaded ${items.length} available items into dropdown`);
+                }
             })
             .catch(error => console.error('Error loading items:', error));
     }

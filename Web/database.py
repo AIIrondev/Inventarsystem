@@ -453,6 +453,41 @@ class ausleihung:
         except:
             return False
 
+    @staticmethod
+    def mark_booking_active(booking_id, ausleihung_id=None):
+        """
+        Mark a planned booking as active and link it to an ausleihung record
+        
+        Args:
+            booking_id (str): ID of the booking to mark as active
+            ausleihung_id (str, optional): ID of the associated ausleihung record
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            booking_collection = db['planned_bookings']
+            
+            update_data = {
+                'Status': 'active',
+                'LastUpdated': datetime.datetime.now()
+            }
+            
+            if ausleihung_id:
+                update_data['AusleihungId'] = ausleihung_id
+                
+            booking_collection.update_one(
+                {'_id': ObjectId(booking_id)},
+                {'$set': update_data}
+            )
+            client.close()
+            return True
+        except Exception as e:
+            print(f"Error marking booking active: {e}")
+            return False
+
 
 class Inventory:
     """

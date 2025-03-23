@@ -190,9 +190,19 @@ def get_items():
     Returns:
         dict: Dictionary containing all inventory items
     """
+    # Check if we should filter for available items only
+    available_only = request.args.get('available_only', 'false').lower() == 'true'
+    
+    # Get all items
     items = it.get_items()
+    
+    # Filter items if needed
+    if available_only:
+        items = [item for item in items if item.get('Verfuegbar', False)]
+    
     for item in items:
         item['Images'] = item.get('Images', [])
+    
     return {'items': items}
 
 
@@ -531,6 +541,8 @@ def license():
     return render_template('license.html')
 
 
+'''----------------------------------------------------------------------BOOKING ROUTES-----------------------------------------------------------------------------------------------------------------'''
+
 @app.route('/get_bookings')
 def get_bookings():
     """
@@ -617,21 +629,21 @@ def plan_booking():
     except ValueError:
         return {"success": False, "error": "Invalid date format"}, 400
         
-    # Check if item exists
+    # Check if item exists and is available
     item = it.get_item(item_id)
     if not item:
         return {"success": False, "error": "Item not found"}, 404
+        
+    # Verify item is available (not currently borrowed)
+    if not item.get('Verfuegbar', False):
+        return {"success": False, "error": "Dieses Objekt ist aktuell nicht verfügbar"}, 409
     
-    # Check for date conflicts
+    # Check for date conflicts with other bookings
     if au.check_booking_conflict(item_id, start_date, end_date):
-        return {"success": False, "error": "Item already booked for this time period"}, 409
+        return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
     
     # Create the planned booking
     booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
-    
-    # Schedule automatic borrowing and return
-    # This would typically be done with a background task scheduler
-    # For simplicity, we'll add a "planned" flag to the booking
     
     return {"success": True, "booking_id": str(booking_id)}
 
@@ -879,8 +891,19 @@ def process_bookings():
         
         item = it.get_item(item_id)
         if item and item.get('Verfuegbar'):
+            # Update item status to unavailable
             it.update_item_status(item_id, False, username)
-            au.mark_booking_active(str(booking.get('_id')))
+            
+            # Create an ausleihung record to track this borrowing
+            # This prevents others from borrowing during this period
+            start_date = booking.get('Start') or current_time
+            notes = booking.get('Notes', 'Automatic booking activation')
+            
+            # Add the ausleihung record
+            ausleihung_id = au.add_ausleihung(item_id, username, start_date, None, notes)
+            
+            # Mark the booking as active and link it to the ausleihung
+            au.mark_booking_active(str(booking.get('_id')), str(ausleihung_id))
     
     end_bookings = au.get_bookings_ending_now(current_time)
     for booking in end_bookings:
@@ -888,7 +911,17 @@ def process_bookings():
         
         item = it.get_item(item_id)
         if item and not item.get('Verfuegbar'):
+            # Update item status to available
             it.update_item_status(item_id, True)
+            
+            # If this booking is linked to an ausleihung, update that record too
+            ausleihung_id = booking.get('AusleihungId')
+            if ausleihung_id:
+                end_date = booking.get('End') or current_time
+                au.update_ausleihung(ausleihung_id, item_id, booking.get('User'), 
+                                    booking.get('Start'), end_date)
+            
+            # Mark booking as completed
             au.mark_booking_completed(str(booking.get('_id')))
 
 scheduler.add_job(process_bookings, 'interval', minutes=1)
