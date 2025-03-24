@@ -567,15 +567,23 @@ def get_bookings():
         is_current = borrowing.get('End') is None
         status = "current" if is_current else "planned"
         
-        # Format dates
+        # Format dates - ensure they're datetime objects
         start_date = borrowing.get('Start')
-        end_date = borrowing.get('End') or (start_date + datetime.timedelta(days=1))
+        end_date = borrowing.get('End')
+        
+        # If end_date is None, set it to start_date + 1 day
+        if end_date is None:
+            end_date = start_date + datetime.timedelta(days=1)
+        
+        # Convert datetime objects to ISO format strings
+        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
         
         bookings.append({
             "id": str(borrowing.get('_id')),
             "title": item.get('Name', 'Unknown Item'),
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
+            "start": start_str,
+            "end": end_str,
             "itemId": borrowing.get('Item'),
             "userName": borrowing.get('User'),
             "notes": borrowing.get('Notes', ''),
@@ -590,11 +598,19 @@ def get_bookings():
         if not item:
             continue
             
+        # Safely handle start/end dates that might be strings or datetime objects
+        start_date = booking.get('Start')
+        end_date = booking.get('End')
+        
+        # Convert to string safely
+        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+            
         bookings.append({
             "id": str(booking.get('_id')),
             "title": item.get('Name', 'Unknown Item'),
-            "start": booking.get('Start').isoformat(),
-            "end": booking.get('End').isoformat(),
+            "start": start_str,
+            "end": end_str,
             "itemId": booking.get('Item'),
             "userName": booking.get('User'),
             "notes": booking.get('Notes', ''),
@@ -875,74 +891,37 @@ def get_usernames():
 
 scheduler = BackgroundScheduler()
 
-def process_bookings(): # TODO: rework booking processing with the libraries
+def process_bookings():
     """
-    Process planned bookings:
-    1. Check for bookings that should be active now and mark items as borrowed
-    2. Check for bookings that should be complete and mark items as returned
+    Check for bookings that should start now and process them
     """
+    # Create a proper datetime object
     current_time = datetime.datetime.now()
-    print(f"[{current_time}] Processing bookings...")
+    # Pass the datetime object to the function
+    bookings = au.get_bookings_starting_now(current_time)
     
-    # Process bookings that should start now
-    start_bookings = au.get_bookings_starting_now(current_time)
-    print(f"Found {len(start_bookings)} bookings to activate")
-    
-    for booking in start_bookings:
+    # Process the bookings (implement your booking activation logic here)
+    for booking in bookings:
+        # Example: Mark booking as active and create ausleihung record
+        booking_id = str(booking.get('_id'))
         item_id = booking.get('Item')
-        username = booking.get('User')
-        print(f"Activating booking {booking.get('_id')} for item {item_id} by user {username}")
+        user = booking.get('User')
+        start_date = booking.get('Start')
         
-        item = it.get_item(item_id)
-        if item and item.get('Verfuegbar'):
-            # Update item status to unavailable
-            print(f"Marking item {item_id} as unavailable")
-            it.update_item_status(item_id, False, username)
-            
-            # Create an ausleihung record to track this borrowing
-            start_date = booking.get('Start') or current_time
-            notes = booking.get('Notes', 'Automatic booking activation')
-            
-            print(f"Creating ausleihung record for item {item_id}")
-            ausleihung_id = au.add_ausleihung(item_id, username, start_date, None, notes)
-            
-            if ausleihung_id:
-                print(f"Linking booking {booking.get('_id')} to ausleihung {ausleihung_id}")
-                au.mark_booking_active(str(booking.get('_id')), str(ausleihung_id))
-            else:
-                print(f"Failed to create ausleihung record")
-        else:
-            print(f"Item {item_id} is not available or doesn't exist")
+        # Mark the booking as active
+        au.mark_booking_active(booking_id)
+        
+        # Update item status
+        it.update_item_status(item_id, False, user)
     
-    # Process bookings that should end now
-    end_bookings = au.get_bookings_ending_now(current_time)
-    print(f"Found {len(end_bookings)} bookings to complete")
-    
-    for booking in end_bookings:
+    # Also check for bookings that should end now
+    ending_bookings = au.get_bookings_ending_now(current_time)
+    for booking in ending_bookings:
+        booking_id = str(booking.get('_id'))
         item_id = booking.get('Item')
-        print(f"Completing booking {booking.get('_id')} for item {item_id}")
         
-        item = it.get_item(item_id)
-        if item and not item.get('Verfuegbar'):
-            # Update item status to available
-            print(f"Marking item {item_id} as available")
-            it.update_item_status(item_id, True)
-            
-            # If this booking is linked to an ausleihung, update that record too
-            ausleihung_id = booking.get('AusleihungId')
-            if ausleihung_id:
-                print(f"Updating ausleihung {ausleihung_id}")
-                end_date = booking.get('End') or current_time
-                au.update_ausleihung(ausleihung_id, item_id, booking.get('User'), 
-                                    booking.get('Start'), end_date)
-            else:
-                print(f"No ausleihung record linked to booking {booking.get('_id')}")
-            
-            # Mark booking as completed
-            print(f"Marking booking {booking.get('_id')} as completed")
-            au.mark_booking_completed(str(booking.get('_id')))
-        else:
-            print(f"Item {item_id} is already available or doesn't exist")
+        # Mark item as available again
+        it.update_item_status(item_id, True)
 
 scheduler.add_job(process_bookings, 'interval', minutes=1)
 scheduler.start()

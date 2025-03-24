@@ -349,8 +349,11 @@ def get_bookings_starting_now(current_time):
     booking_collection = db['planned_bookings']
     # Create a time window - look at bookings starting in the past hour
     # This ensures we catch any bookings that might have been missed
-    start_time = current_time - datetime.timedelta(hours=1)
-    end_time = current_time + datetime.timedelta(minutes=1)
+    h_1 = datetime.timedelta(hours=1)
+    m_1 = datetime.timedelta(minutes=1)
+    start_time = current_time - h_1
+    end_time = current_time + m_1
+    print(f"start: {start_time}, end: {end_time}")
     # Find bookings that:
     # 1. Have status 'planned'
     # 2. Start time is in the past or right now
@@ -360,8 +363,10 @@ def get_bookings_starting_now(current_time):
         'Start': {'$lte': end_time, '$gte': start_time},
         'AusleihungId': {'$exists': False}
     }
+    print(f"query: {query}")
     try:
         bookings = list(booking_collection.find(query))
+        print(f"Bookings: {bookings}")
         client.close()
         return bookings
     except Exception as e:
