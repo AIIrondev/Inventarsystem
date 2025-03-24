@@ -35,9 +35,9 @@ Features:
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages
 from werkzeug.utils import secure_filename
-from database import User as us
-from database import Inventory as it
-from database import ausleihung as au
+import user as us
+import items as it
+import ausleihung as au
 from bson.objectid import ObjectId
 import hashlib
 import datetime
@@ -153,8 +153,7 @@ def login():
             flash('Please fill all fields', 'error')
             return redirect(url_for('login'))
         
-        user_instance = us()
-        user = user_instance.check_nm_pwd(username, password)
+        user = us.check_nm_pwd(username, password)
 
         if user:
             session['username'] = username
