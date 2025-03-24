@@ -13,7 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 '''
-
 """
 Inventarsystem - Flask Web Application
 
@@ -38,8 +37,6 @@ from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
-from bson.objectid import ObjectId
-import hashlib
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -875,7 +872,7 @@ def get_usernames():
 
 scheduler = BackgroundScheduler()
 
-def process_bookings():
+def process_bookings(): # TODO: rework booking processing with the libraries
     """
     Process planned bookings:
     1. Check for bookings that should be active now and mark items as borrowed
