@@ -221,6 +221,9 @@ def upload_item():
     images = request.files.getlist('images')
     filter_upload = request.form.getlist('filter')
     filter_upload2 = request.form.getlist('filter2')
+    anschaffungs_jahr = request.form.getlist('anschaffungsjahr')
+    anschaffungs_kosten = request.form.getlist('anschaffungskosten')
+    code_4 = request.form.getlist('code_4')
     
     if not name or not ort or not beschreibung or not images:
         flash('Please fill all fields', 'error')
@@ -236,7 +239,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2)
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, anschaffungs_jahr, anschaffungs_kosten, code_4)
     flash('Item uploaded successfully', 'success')
     
     # Get the item ID and create QR code

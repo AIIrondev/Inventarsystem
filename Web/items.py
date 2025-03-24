@@ -22,7 +22,7 @@ from bson.objectid import ObjectId
 from bson import ObjectId
 
 
-def add_item(name, ort, beschreibung, images, filter, filter2):
+def add_item(name, ort, beschreibung, images, filter, filter2, ansch_jahr, ansch_kost, code_4):
     """
     Add a new item to the inventory.
     
@@ -47,7 +47,10 @@ def add_item(name, ort, beschreibung, images, filter, filter2):
         'Images': images,
         'Verfuegbar': True,
         'Filter': filter,
-        'Filter2': filter2
+        'Filter2': filter2,
+        'Anschaffungsjahr': ansch_jahr,
+        'Anschaffungskosten': ansch_kost,
+        'Code_4': code_4
     }
     items.insert_one(item)
     client.close()
@@ -70,7 +73,7 @@ def remove_item(id):
     client.close()
 
 
-def update_item(id, name, ort, beschreibung, images, verfügbar, filter, filter2):
+def update_item(id, name, ort, beschreibung, images, verfügbar, filter, filter2, ansch_jahr, ansch_kost, code_4):
     """
     Update an existing inventory item.
     
@@ -90,7 +93,7 @@ def update_item(id, name, ort, beschreibung, images, verfügbar, filter, filter2
     client = MongoClient('localhost', 27017)
     db = client['Inventarsystem']
     items = db['items']
-    items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': images, 'Verfuegbar': verfügbar, 'Filter': filter, 'Filter2': filter2})
+    items.insert_one({'Name': name, 'Ort': ort, 'Beschreibung': beschreibung, 'Image': images, 'Verfuegbar': verfügbar, 'Filter': filter, 'Filter2': filter2, 'Anschaffungsjahr': ansch_jahr, 'Anschaffungskosten': ansch_kost, 'Code_4': code_4})
     client.close()
 
 
@@ -204,6 +207,15 @@ def get_filter():
     client.close()
     return filters
 
+
+def get_item_code_4(code_4):
+    """
+    
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    items = db['items']
+    item = items.find({"Code_4": code_4})
 
 def unstuck_item(id):
     """
