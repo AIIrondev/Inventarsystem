@@ -929,28 +929,79 @@ def process_bookings():
     # Pass the datetime object to the function
     bookings = bo.get_bookings_starting_now(current_time)
     
+    print(f"Processing {len(bookings)} bookings scheduled to start now")
+    
     # Process the bookings (implement your booking activation logic here)
     for booking in bookings:
-        # Example: Mark booking as active and create ausleihung record
-        booking_id = str(booking.get('_id'))
-        item_id = booking.get('Item')
-        user = booking.get('User')
-        start_date = booking.get('Start')
-        
-        # Mark the booking as active
-        bo.mark_booking_active(booking_id)
-        
-        # Update item status
-        it.update_item_status(item_id, False, user)
+        try:
+            booking_id = str(booking.get('_id'))
+            item_id = booking.get('Item')
+            user = booking.get('User')
+            start_date = booking.get('Start')
+            end_date = booking.get('End')
+            notes = booking.get('Notes', '')
+            
+            print(f"Processing booking {booking_id} for item {item_id} by {user}")
+            
+            # Create an ausleihung record first
+            ausleihung_id = au.add_ausleihung(
+                item_id,
+                user,
+                start_date,
+                end_date,
+                notes
+            )
+            
+            if ausleihung_id:
+                print(f"Created ausleihung record {ausleihung_id}")
+                
+                # Mark the booking as active and link it to the ausleihung
+                bo.mark_booking_active(booking_id, str(ausleihung_id))
+                
+                # Update item status
+                it.update_item_status(item_id, False, user)
+                print(f"Successfully processed booking {booking_id}")
+            else:
+                print(f"Failed to create ausleihung for booking {booking_id}")
+        except Exception as e:
+            print(f"Error processing booking: {e}")
     
     # Also check for bookings that should end now
     ending_bookings = bo.get_bookings_ending_now(current_time)
+    print(f"Processing {len(ending_bookings)} bookings scheduled to end now")
+    
     for booking in ending_bookings:
-        booking_id = str(booking.get('_id'))
-        item_id = booking.get('Item')
-        
-        # Mark item as available again
-        it.update_item_status(item_id, True)
+        try:
+            booking_id = str(booking.get('_id'))
+            item_id = booking.get('Item')
+            ausleihung_id = booking.get('AusleihungId')
+            
+            print(f"Ending booking {booking_id} for item {item_id}")
+            
+            # Mark item as available again
+            it.update_item_status(item_id, True)
+            
+            # Update booking status to completed
+            bo.mark_booking_completed(booking_id)
+            
+            # Update the ausleihung record to set end date if it exists
+            if ausleihung_id:
+                # Get the ausleihung record
+                ausleihung = au.get_ausleihung(ausleihung_id)
+                if ausleihung:
+                    # Update with end date
+                    au.update_ausleihung(
+                        ausleihung_id,
+                        item_id,
+                        ausleihung.get('User'),
+                        ausleihung.get('Start'),
+                        current_time
+                    )
+                    print(f"Updated ausleihung {ausleihung_id} with end date")
+            
+            print(f"Successfully completed booking {booking_id}")
+        except Exception as e:
+            print(f"Error ending booking: {e}")
 
 scheduler.add_job(process_bookings, 'interval', minutes=1)
 scheduler.start()

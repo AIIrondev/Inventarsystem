@@ -221,37 +221,40 @@ def get_bookings_starting_now(current_time):
 
 def get_bookings_ending_now(current_time):
     """
-    Get all bookings that should end now (within a window of time)
-    
+    Get bookings that should end now (rounded to minutes)
     Args:
-        current_time (datetime): Current time to check against
-    
+        current_time: Current datetime
     Returns:
-        list: List of bookings that should end now
+        List of bookings that should end now
     """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    booking_collection = db['planned_bookings']  # Use planned_bookings, not bookings
+    
+    # Create a window of time (5 minutes before and after)
+    window = datetime.timedelta(minutes=5)
+    start_time = current_time - window
+    end_time = current_time + window
+    
+    # Find bookings that:
+    # 1. Have status 'active'
+    # 2. Have end date within this time window
+    query = {
+        'Status': 'active',
+        'End': {'$gte': start_time, '$lte': end_time}
+    }
+    
+    print(f"Searching for ending bookings with query: {query}")
+    
     try:
-        # Define a window of time (e.g., 5 minutes before and after now)
-        window = datetime.timedelta(minutes=5)
-        start_time = current_time - window
-        end_time = current_time + window
-        
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        bookings_collection = db['bookings']
-        
-        # Find bookings that should end now
-        bookings = list(bookings_collection.find({
-            'Status': 'active',
-            'End': {
-                '$lte': end_time,
-                '$gte': start_time
-            }
-        }))
-        
+        bookings = booking_collection.find(query)
+        result = list(bookings)
+        print(f"Found {len(result)} bookings ending now")
         client.close()
-        return bookings
+        return result
     except Exception as e:
         print(f"Error getting bookings ending now: {e}")
+        client.close()
         return []
 
 def mark_booking_active(booking_id):
