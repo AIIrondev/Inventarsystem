@@ -555,19 +555,60 @@ def get_bookings():
     end = request.args.get('end')
     
     bookings = []
+    processed_items = set()  # Keep track of item IDs that are already in the list
     
-    # 1. Get all current borrowings (from ausleihungen collection)
+    # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
+    # We process these first as they are the most current
+    active_bookings = bo.get_active_bookings(start, end)
+    for booking in active_bookings:
+        item = it.get_item(booking.get('Item'))
+        if not item:
+            continue
+            
+        item_id = booking.get('Item')
+        processed_items.add(item_id)  # Add to processed items
+            
+        # Format dates
+        start_date = booking.get('Start') 
+        end_date = booking.get('End')
+        
+        # Convert to string safely
+        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+        
+        bookings.append({
+            "id": str(booking.get('_id')),
+            "title": item.get('Name', 'Unknown Item'),
+            "start": start_str,
+            "end": end_str,
+            "itemId": item_id,
+            "userName": booking.get('User'),
+            "notes": booking.get('Notes', ''),
+            "status": "current",
+            "isCurrentUser": booking.get('User') == session['username']
+        })
+    
+    # 2. Get all current borrowings (from ausleihungen collection)
+    # Skip items that are already in active bookings
     current_borrowings = au.get_ausleihungen()
     
     # Format current borrowings for calendar
     for borrowing in current_borrowings:
-        item = it.get_item(borrowing.get('Item'))
+        item_id = borrowing.get('Item')
+        
+        # Skip if this item is already in our list (from active bookings)
+        if item_id in processed_items:
+            continue
+            
+        processed_items.add(item_id)  # Add to processed items
+        
+        item = it.get_item(item_id)
         if not item:
             continue
             
-        # Determine if this is current or planned
+        # Determine if this is current or completed
         is_current = borrowing.get('End') is None
-        status = "current" if is_current else "planned"
+        status = "current" if is_current else "completed"
         
         # Format dates
         start_date = borrowing.get('Start')
@@ -586,44 +627,23 @@ def get_bookings():
             "title": item.get('Name', 'Unknown Item'),
             "start": start_str,
             "end": end_str,
-            "itemId": borrowing.get('Item'),
+            "itemId": item_id,
             "userName": borrowing.get('User'),
             "notes": borrowing.get('Notes', ''),
             "status": status,
             "isCurrentUser": borrowing.get('User') == session['username']
         })
     
-    # 2. Get ACTIVE bookings (from planned_bookings collection with status="active")
-    active_bookings = bo.get_active_bookings(start, end)
-    for booking in active_bookings:
-        item = it.get_item(booking.get('Item'))
-        if not item:
-            continue
-            
-        # Format dates
-        start_date = booking.get('Start') 
-        end_date = booking.get('End')
-        
-        # Convert to string safely
-        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-        
-        bookings.append({
-            "id": str(booking.get('_id')),
-            "title": item.get('Name', 'Unknown Item'),
-            "start": start_str,
-            "end": end_str,
-            "itemId": booking.get('Item'),
-            "userName": booking.get('User'),
-            "notes": booking.get('Notes', ''),
-            "status": "current",  # Mark active bookings as current for display
-            "isCurrentUser": booking.get('User') == session['username']
-        })
-    
     # 3. Get planned bookings (from planned_bookings collection with status="planned")
     planned_bookings = bo.get_planned_bookings(start, end)
     for booking in planned_bookings:
-        item = it.get_item(booking.get('Item'))
+        item_id = booking.get('Item')
+        
+        # Only show planned bookings for items that aren't currently active
+        if item_id in processed_items:
+            continue
+            
+        item = it.get_item(item_id)
         if not item:
             continue
             
@@ -640,10 +660,38 @@ def get_bookings():
             "title": item.get('Name', 'Unknown Item'),
             "start": start_str,
             "end": end_str,
-            "itemId": booking.get('Item'),
+            "itemId": item_id,
             "userName": booking.get('User'),
             "notes": booking.get('Notes', ''),
             "status": "planned",
+            "isCurrentUser": booking.get('User') == session['username']
+        })
+    
+    # 4. Add completed bookings (from planned_bookings with status="completed")
+    completed_bookings = bo.get_completed_bookings(start, end)
+    for booking in completed_bookings:
+        item_id = booking.get('Item')
+        item = it.get_item(item_id)
+        if not item:
+            continue
+            
+        # Format dates
+        start_date = booking.get('Start')
+        end_date = booking.get('End')
+        
+        # Convert to string safely
+        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+            
+        bookings.append({
+            "id": str(booking.get('_id')),
+            "title": item.get('Name', 'Unknown Item'),
+            "start": start_str,
+            "end": end_str,
+            "itemId": item_id,
+            "userName": booking.get('User'),
+            "notes": booking.get('Notes', ''),
+            "status": "completed",
             "isCurrentUser": booking.get('User') == session['username']
         })
     

@@ -15,8 +15,16 @@
         <div class="calendar-legend">
             <span class="legend-item"><span class="legend-color current"></span> Aktuelle Ausleihen</span>
             <span class="legend-item"><span class="legend-color planned"></span> Geplante Ausleihen</span>
+            <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Ausleihen</span>
             <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Ausleihen</span>
         </div>
+    </div>
+    
+    <div class="calendar-options">
+        <label class="checkbox-container">
+            <input type="checkbox" id="show-completed-bookings"> 
+            Abgeschlossene Ausleihen anzeigen
+        </label>
     </div>
     
     <div id="calendar"></div>
@@ -79,6 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const newBookingBtn = document.getElementById('new-booking');
     let currentEventId = null;
     let calendar;
+    let showCompletedBookings = false;
     
     // Initialize calendar
     calendar = new FullCalendar.Calendar(calendarEl, {
@@ -104,11 +113,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     // Process events to add colors based on status
-                    const events = data.map(event => {
+                    let events = data.map(event => {
                         let eventColor = '#3788d8'; // Default color
                         
                         if (event.isCurrentUser) {
                             eventColor = '#8e44ad'; // Purple for current user's bookings
+                        } else if (event.status === 'completed') {
+                            eventColor = '#7f8c8d'; // Gray for completed bookings
                         } else if (event.status === 'current') {
                             eventColor = '#e74c3c'; // Red for current bookings
                         } else if (event.status === 'planned') {
@@ -131,6 +142,11 @@ document.addEventListener('DOMContentLoaded', function() {
                             borderColor: eventColor
                         };
                     });
+                    
+                    // Filter out completed bookings if toggle is off
+                    if (!showCompletedBookings) {
+                        events = events.filter(event => event.extendedProps.status !== 'completed');
+                    }
                     
                     successCallback(events);
                 })
@@ -228,6 +244,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set current event ID
         currentEventId = event.id;
         
+        // Get status text based on status value
+        let statusText = 'Unbekannt';
+        if (event.extendedProps.status === 'current') {
+            statusText = 'Aktuell ausgeliehen';
+        } else if (event.extendedProps.status === 'planned') {
+            statusText = 'Geplant';
+        } else if (event.extendedProps.status === 'completed') {
+            statusText = 'Abgeschlossen';
+        }
+        
         // Populate details
         details.innerHTML = `
             <p><strong>Objekt:</strong> ${event.title}</p>
@@ -235,11 +261,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <p><strong>Bis:</strong> ${new Date(event.end).toLocaleString('de-DE')}</p>
             <p><strong>Ausgeliehen von:</strong> ${event.extendedProps.userName}</p>
             ${event.extendedProps.notes ? `<p><strong>Notizen:</strong> ${event.extendedProps.notes}</p>` : ''}
-            <p><strong>Status:</strong> ${event.extendedProps.status === 'current' ? 'Aktuell ausgeliehen' : 'Geplant'}</p>
+            <p><strong>Status:</strong> ${statusText}</p>
         `;
         
-        // Show/hide cancel button based on ownership
-        if (event.extendedProps.isCurrentUser) {
+        // Show/hide cancel button based on ownership and status
+        // Only allow cancellation for planned bookings that belong to the current user
+        if (event.extendedProps.isCurrentUser && event.extendedProps.status === 'planned') {
             actions.style.display = 'block';
         } else {
             actions.style.display = 'none';
@@ -325,6 +352,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+
+    document.getElementById('show-completed-bookings').addEventListener('change', function() {
+        showCompletedBookings = this.checked;
+        calendar.refetchEvents();
+    });
 });
 </script>
 
@@ -393,8 +425,32 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #2ecc71;
 }
 
+.legend-color.completed {
+    background-color: #7f8c8d;
+}
+
 .legend-color.your-bookings {
     background-color: #8e44ad;
+}
+
+/* Add to existing styles */
+.calendar-options {
+    margin: 10px 0;
+}
+
+.checkbox-container {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.checkbox-container input {
+    margin-right: 8px;
+}
+
+/* Make sure the completed color is consistent with its legend */
+.legend-color.completed {
+    background-color: #7f8c8d;
 }
 
 /* Modal styles */

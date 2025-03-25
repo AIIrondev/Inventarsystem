@@ -527,3 +527,49 @@ def get_active_bookings(start=None, end=None):
     except Exception as e:
         print(f"Error getting active bookings: {e}")
         return []
+
+def get_completed_bookings(start=None, end=None):
+    """
+    Get completed bookings within a date range
+    
+    Args:
+        start (str): Start date in ISO format
+        end (str): End date in ISO format
+        
+    Returns:
+        list: List of completed bookings
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        bookings_collection = db['planned_bookings']
+        
+        query = {'Status': 'completed'}
+        
+        # Add date filter if provided
+        if start and end:
+            try:
+                # Try to parse the dates
+                start_date = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
+                end_date = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
+                
+                # Add date filter
+                query['$or'] = [
+                    # Booking starts within the range
+                    {'Start': {'$gte': start_date, '$lte': end_date}},
+                    # Booking ends within the range
+                    {'End': {'$gte': start_date, '$lte': end_date}},
+                    # Booking spans the entire range
+                    {'$and': [{'Start': {'$lte': start_date}}, {'End': {'$gte': end_date}}]}
+                ]
+            except ValueError:
+                # If date parsing fails, ignore the date filter
+                pass
+        
+        # Get completed bookings
+        bookings = list(bookings_collection.find(query))
+        client.close()
+        return bookings
+    except Exception as e:
+        print(f"Error getting completed bookings: {e}")
+        return []
