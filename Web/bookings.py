@@ -1,6 +1,21 @@
 """
-Module for managing borrowing records in the database.
-Provides methods for creating, updating, and retrieving borrowing information.
+Booking Management System
+========================
+
+This module handles all booking-related operations for the inventory system.
+It manages the lifecycle of bookings from creation through activation to completion.
+
+Key Features:
+- Creating planned bookings for items
+- Checking for booking conflicts
+- Retrieving bookings by status (planned, active, completed)
+- Managing booking state transitions
+- Integration with the ausleihung (borrowing) system
+
+Collection Structure:
+- planned_bookings: Stores all booking records with their current status
+  - Status values: 'planned', 'active', 'completed', 'cancelled'
+
 """
 '''
    Copyright 2025 Maximilian Gründinger
@@ -19,15 +34,16 @@ Provides methods for creating, updating, and retrieving borrowing information.
 '''
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from bson import ObjectId
 import datetime
 import ausleihung as au
 
 
+# === BOOKING CREATION AND MANAGEMENT ===
+
 def add_planned_booking(item_id, user, start_date, end_date, notes=""):
     """
-    Add a planned booking for an item
-
+    Create a new planned booking for an item.
+    
     Args:
         item_id (str): ID of the item to book
         user (str): Username of the person making the booking
@@ -36,7 +52,7 @@ def add_planned_booking(item_id, user, start_date, end_date, notes=""):
         notes (str, optional): Additional notes for the booking
 
     Returns:
-        str: ID of the newly created booking
+        ObjectId: ID of the newly created booking
     """
     client = MongoClient('localhost', 27017)
     db = client['Inventarsystem']
@@ -48,7 +64,8 @@ def add_planned_booking(item_id, user, start_date, end_date, notes=""):
         'Start': start_date,
         'End': end_date,
         'Notes': notes,
-        'Status': 'planned'  # Status can be: planned, active, completed, cancelled
+        'Status': 'planned',  # Status can be: planned, active, completed, cancelled
+        'LastUpdated': datetime.datetime.now()
     }
     result = planned_bookings.insert_one(booking)
     client.close()
@@ -57,7 +74,12 @@ def add_planned_booking(item_id, user, start_date, end_date, notes=""):
 
 def check_booking_conflict(item_id, start_date, end_date):
     """
-    Check if there's a conflict with existing bookings
+    Check if there's a conflict with existing bookings or active borrowings.
+    
+    Args:
+        item_id (str): ID of the item to check
+        start_date (datetime): Proposed booking start date
+        end_date (datetime): Proposed booking end date
 
     Returns:
         bool: True if there's a conflict, False otherwise
@@ -91,76 +113,15 @@ def check_booking_conflict(item_id, start_date, end_date):
     return overlapping is not None or active_borrowing is not None
 
 
-def get_planned_bookings(start=None, end=None):
-    """
-    Get planned bookings within a date range
-
-    Args:
-        start (str, optional): Start date for range
-        end (str, optional): End date for range
-
-    Returns:
-        list: List of planned bookings
-    """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
-    planned_bookings = db['planned_bookings']
-    
-    query = {'Status': {'$in': ['planned', 'active']}}
-    if start and end:
-        try:
-            # Use dateutil parser instead of fromisoformat
-            from dateutil import parser
-            
-            # Parse dates more robustly
-            start_date = parser.parse(start)
-            end_date = parser.parse(end)
-            
-            query['$or'] = [
-                # Booking starts in range
-                {'Start': {'$gte': start_date, '$lte': end_date}},
-                # Booking ends in range
-                {'End': {'$gte': start_date, '$lte': end_date}},
-                # Booking spans the entire range
-                {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
-            ]
-        except Exception as e:
-            print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
-            bookings = []
-            client.close()
-            return bookings
-    bookings = list(planned_bookings.find(query))
-    client.close()
-    return bookings
-
-
-def get_booking(booking_id):
-    """
-    Get a specific booking by ID
-    Args:
-        booking_id (str): ID of the booking
-    Returns:
-        dict: Booking data or None if not found
-    """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        planned_bookings = db['planned_bookings']
-        
-        booking = planned_bookings.find_one({'_id': ObjectId(booking_id)})
-        client.close()
-        return booking
-    except:
-        return None
-    
-
 def cancel_booking(booking_id):
     """
-    Cancel a planned booking
+    Cancel a planned booking.
+    
     Args:
         booking_id (str): ID of the booking to cancel
+        
     Returns:
-        bool: True if cancelled successfully
+        bool: True if cancelled successfully, False otherwise
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -169,220 +130,23 @@ def cancel_booking(booking_id):
         
         result = planned_bookings.update_one(
             {'_id': ObjectId(booking_id)},
-            {'$set': {'Status': 'cancelled'}}
-        )
-        client.close()
-        return result.modified_count > 0
-    except:
-        return False
-    
-def get_bookings_starting_now(current_time):
-    """
-    Get all bookings that should start now (within a window of time)
-    
-    Args:
-        current_time (datetime): Current time to check against
-    
-    Returns:
-        list: List of bookings that should start now
-    """
-    try:
-        # Define a window of time (1 hour before and after now)
-        h_1 = datetime.timedelta(hours=1)
-        start_time = current_time - h_1
-        end_time = current_time + h_1
-        
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        # Use planned_bookings collection instead of bookings
-        bookings_collection = db['planned_bookings']
-        
-        query = {
-            'Status': 'planned',
-            'Start': {
-                '$lte': end_time,
-                '$gte': start_time
-            },
-            'AusleihungId': {'$exists': False}  # Not yet processed
-        }
-        
-        # Find bookings that should start now
-        bookings = list(bookings_collection.find(query))
-        
-        client.close()
-        return bookings
-    except Exception as e:
-        print(f"Error getting bookings starting now: {e}")
-        return []
-
-def get_bookings_ending_now(current_time):
-    """
-    Get bookings that should end now (rounded to minutes)
-    Args:
-        current_time: Current datetime
-    Returns:
-        List of bookings that should end now
-    """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
-    booking_collection = db['planned_bookings']  # Use planned_bookings, not bookings
-    
-    # Create a window of time (5 minutes before and after)
-    window = datetime.timedelta(minutes=5)
-    start_time = current_time - window
-    end_time = current_time + window
-    
-    # Find bookings that:
-    # 1. Have status 'active'
-    # 2. Have end date within this time window
-    query = {
-        'Status': 'active',
-        'End': {'$gte': start_time, '$lte': end_time}
-    }
-    
-    try:
-        bookings = booking_collection.find(query)
-        result = list(bookings)
-        client.close()
-        return result
-    except Exception as e:
-        print(f"Error getting bookings ending now: {e}")
-        client.close()
-        return []
-
-def mark_booking_active(booking_id):
-    """
-    Mark a booking as active and create an ausleihung record
-    
-    Args:
-        booking_id (str): ID of the booking to mark as active
-        
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        bookings_collection = db['planned_bookings']
-        
-        # Find the booking
-        booking = bookings_collection.find_one({'_id': ObjectId(booking_id)})
-        if not booking:
-            print(f"Booking {booking_id} not found")
-            client.close()
-            return False
-        
-        # Import ausleihung module here to avoid circular imports
-        import ausleihung as au
-        
-        ausleihung_id = au.add_ausleihung(
-            booking['Item'],
-            booking['User'],
-            booking['Start'],
-            booking['End'],
-            booking.get('Notes', '')
-        )
-        
-        if not ausleihung_id:
-            print(f"Failed to create ausleihung record for booking {booking_id}")
-            client.close()
-            return False
-        
-        # Important: Update booking status to "active" (not removing it)
-        bookings_collection.update_one(
-            {'_id': ObjectId(booking_id)},
             {'$set': {
-                'Status': 'active',
-                'AusleihungId': str(ausleihung_id)
+                'Status': 'cancelled',
+                'LastUpdated': datetime.datetime.now()
             }}
         )
         client.close()
-        return True
+        return result.modified_count > 0
     except Exception as e:
-        print(f"Error marking booking as active: {e}")
+        print(f"Error cancelling booking: {e}")
         return False
 
-def get_planned_bookings(start=None, end=None):
-    """
-    Get all planned bookings within a date range
-    
-    Args:
-        start (str): Start date in ISO format
-        end (str): End date in ISO format
-        
-    Returns:
-        list: List of planned bookings
-    """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        bookings_collection = db['bookings']
-        
-        # Convert string dates to datetime if provided
-        query = {'Status': 'planned'}
-        if start and end:
-            try:
-                # Try to parse the dates
-                start_date = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
-                end_date = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
-                
-                # Add date filter
-                query['$or'] = [
-                    # Booking starts within the range
-                    {'Start': {'$gte': start_date, '$lte': end_date}},
-                    # Booking ends within the range
-                    {'End': {'$gte': start_date, '$lte': end_date}},
-                    # Booking spans the entire range
-                    {'$and': [{'Start': {'$lte': start_date}}, {'End': {'$gte': end_date}}]}
-                ]
-            except ValueError:
-                # If date parsing fails, ignore the date filter
-                pass
-        
-        # Get planned bookings
-        bookings = list(bookings_collection.find(query))
-        client.close()
-        return bookings
-    except Exception as e:
-        print(f"Error getting planned bookings: {e}")
-        return []
-    
-def get_bookings_ending_now(current_time):
-    """
-    Get bookings that should end now (rounded to minutes)
-    Args:
-        current_time: Current datetime
-    Returns:
-        List of bookings that should end now
-    """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
-    booking_collection = db['planned_bookings']
-    # Round current time to the nearest minute
-    current_hour = current_time.hour
-    current_minute = current_time.minute
-    end_time = current_time.replace(hour=current_hour, minute=current_minute, 
-                                    second=0, microsecond=0)
-    # Create a window - look at bookings ending in this hour
-    next_minute = end_time + datetime.timedelta(minutes=1)
-    # Find bookings that:
-    # 1. Have status 'active'
-    # 2. Have end date in this minute window
-    query = {
-        'Status': 'active',
-        'End': {'$gte': end_time, '$lt': next_minute}
-    }
-    try:
-        bookings = booking_collection.find(query)
-        return list(bookings)
-    except Exception as e:
-        print(f"Error getting bookings ending now: {e}")
-        return []
-    
+
+# === BOOKING STATE TRANSITIONS ===
 
 def mark_booking_active(booking_id, ausleihung_id=None):
     """
-    Mark a planned booking as active and link it to an ausleihung record
+    Mark a planned booking as active and link it to an ausleihung record.
     
     Args:
         booking_id (str): ID of the booking to mark as active
@@ -396,13 +160,34 @@ def mark_booking_active(booking_id, ausleihung_id=None):
         db = client['Inventarsystem']
         booking_collection = db['planned_bookings']
         
+        # First, verify the booking exists and is in 'planned' status
+        booking = booking_collection.find_one({'_id': ObjectId(booking_id)})
+        if not booking or booking.get('Status') != 'planned':
+            print(f"Booking {booking_id} not found or not in planned status")
+            client.close()
+            return False
+        
+        # If no ausleihung_id provided, create the ausleihung record
+        if not ausleihung_id:
+            ausleihung_id = au.add_ausleihung(
+                booking['Item'],
+                booking['User'],
+                booking['Start'],
+                booking['End'],
+                booking.get('Notes', '')
+            )
+            
+            if not ausleihung_id:
+                print(f"Failed to create ausleihung record for booking {booking_id}")
+                client.close()
+                return False
+        
+        # Update the booking status
         update_data = {
             'Status': 'active',
+            'AusleihungId': str(ausleihung_id),
             'LastUpdated': datetime.datetime.now()
         }
-        
-        if ausleihung_id:
-            update_data['AusleihungId'] = ausleihung_id
             
         result = booking_collection.update_one(
             {'_id': ObjectId(booking_id)},
@@ -413,42 +198,17 @@ def mark_booking_active(booking_id, ausleihung_id=None):
     except Exception as e:
         print(f"Error marking booking active: {e}")
         return False
-    
+
 
 def mark_booking_completed(booking_id):
     """
-    Mark a booking as completed (item returned)
-
+    Mark a booking as completed (item returned).
+    
     Args:
-        booking_id (str): ID of the booking
-
-    Returns:
-        bool: True if updated successfully
-    """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        planned_bookings = db['planned_bookings']
+        booking_id (str): ID of the booking to mark as completed
         
-        result = planned_bookings.update_one(
-            {'_id': ObjectId(booking_id)},
-            {'$set': {'Status': 'completed'}}
-        )
-        client.close()
-        return result.modified_count > 0
-    except:
-        return False
-    
-
-def mark_booking_completed(booking_id):
-    """
-    Mark a booking as completed (item returned)
-
-    Args:
-        booking_id (str): ID of the booking
-
     Returns:
-        bool: True if updated successfully
+        bool: True if updated successfully, False otherwise
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -468,9 +228,79 @@ def mark_booking_completed(booking_id):
         print(f"Error marking booking completed: {e}")
         return False
 
+
+# === BOOKING RETRIEVAL ===
+
+def get_booking(booking_id):
+    """
+    Get a specific booking by ID.
+    
+    Args:
+        booking_id (str): ID of the booking to retrieve
+        
+    Returns:
+        dict: Booking data or None if not found
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        planned_bookings = db['planned_bookings']
+        
+        booking = planned_bookings.find_one({'_id': ObjectId(booking_id)})
+        client.close()
+        return booking
+    except Exception as e:
+        print(f"Error retrieving booking: {e}")
+        return None
+
+
+def get_planned_bookings(start=None, end=None):
+    """
+    Get all planned bookings within a date range.
+    
+    Args:
+        start (str): Start date in ISO format
+        end (str): End date in ISO format
+        
+    Returns:
+        list: List of planned bookings
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        bookings_collection = db['planned_bookings']
+        
+        query = {'Status': 'planned'}
+        
+        # Add date range filter if provided
+        if start and end:
+            try:
+                from dateutil import parser
+                start_date = parser.parse(start)
+                end_date = parser.parse(end)
+                
+                query['$or'] = [
+                    # Booking starts in range
+                    {'Start': {'$gte': start_date, '$lte': end_date}},
+                    # Booking ends in range
+                    {'End': {'$gte': start_date, '$lte': end_date}},
+                    # Booking spans the entire range
+                    {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
+                ]
+            except Exception as e:
+                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
+        
+        bookings = list(bookings_collection.find(query))
+        client.close()
+        return bookings
+    except Exception as e:
+        print(f"Error getting planned bookings: {e}")
+        return []
+
+
 def get_active_bookings(start=None, end=None):
     """
-    Get active bookings (bookings that have been activated but still in the planned_bookings collection)
+    Get active bookings within a date range.
     
     Args:
         start (str): Start date in ISO format
@@ -486,37 +316,35 @@ def get_active_bookings(start=None, end=None):
         
         query = {'Status': 'active'}
         
-        # Add date filter if provided
+        # Add date range filter if provided
         if start and end:
             try:
-                # Try to parse the dates
-                start_date = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
-                end_date = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
+                from dateutil import parser
+                start_date = parser.parse(start)
+                end_date = parser.parse(end)
                 
-                # Add date filter
                 query['$or'] = [
-                    # Booking starts within the range
+                    # Booking starts in range
                     {'Start': {'$gte': start_date, '$lte': end_date}},
-                    # Booking ends within the range
+                    # Booking ends in range
                     {'End': {'$gte': start_date, '$lte': end_date}},
                     # Booking spans the entire range
-                    {'$and': [{'Start': {'$lte': start_date}}, {'End': {'$gte': end_date}}]}
+                    {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
                 ]
-            except ValueError:
-                # If date parsing fails, ignore the date filter
-                pass
+            except Exception as e:
+                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
         
         bookings = list(bookings_collection.find(query))
-        
         client.close()
         return bookings
     except Exception as e:
         print(f"Error getting active bookings: {e}")
         return []
 
+
 def get_completed_bookings(start=None, end=None):
     """
-    Get completed bookings within a date range
+    Get completed bookings within a date range.
     
     Args:
         start (str): Start date in ISO format
@@ -532,30 +360,114 @@ def get_completed_bookings(start=None, end=None):
         
         query = {'Status': 'completed'}
         
-        # Add date filter if provided
+        # Add date range filter if provided
         if start and end:
             try:
-                # Try to parse the dates
-                start_date = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
-                end_date = datetime.datetime.fromisoformat(end.replace('Z', '+00:00'))
+                from dateutil import parser
+                start_date = parser.parse(start)
+                end_date = parser.parse(end)
                 
-                # Add date filter
                 query['$or'] = [
-                    # Booking starts within the range
+                    # Booking starts in range
                     {'Start': {'$gte': start_date, '$lte': end_date}},
-                    # Booking ends within the range
+                    # Booking ends in range
                     {'End': {'$gte': start_date, '$lte': end_date}},
                     # Booking spans the entire range
-                    {'$and': [{'Start': {'$lte': start_date}}, {'End': {'$gte': end_date}}]}
+                    {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
                 ]
-            except ValueError:
-                # If date parsing fails, ignore the date filter
-                pass
+            except Exception as e:
+                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
         
-        # Get completed bookings
         bookings = list(bookings_collection.find(query))
         client.close()
         return bookings
     except Exception as e:
         print(f"Error getting completed bookings: {e}")
+        return []
+
+
+# === AUTOMATED BOOKING PROCESSING ===
+
+def get_bookings_starting_now(current_time):
+    """
+    Get all bookings that should start now (within a time window).
+    
+    This function is used by the scheduler to find bookings that should be 
+    automatically activated based on their start time.
+    
+    Args:
+        current_time (datetime): Current time to check against
+    
+    Returns:
+        list: List of bookings that should start now
+    """
+    try:
+        # Define a window of time (1 hour before and after now)
+        h_1 = datetime.timedelta(hours=1)
+        start_time = current_time - h_1
+        end_time = current_time + h_1
+        
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        bookings_collection = db['planned_bookings']
+        
+        query = {
+            'Status': 'planned',
+            'Start': {
+                '$lte': end_time,
+                '$gte': start_time
+            },
+            'AusleihungId': {'$exists': False}  # Not yet processed
+        }
+        
+        print(f"Looking for bookings starting between {start_time} and {end_time}")
+        bookings = list(bookings_collection.find(query))
+        print(f"Found {len(bookings)} bookings to activate")
+        
+        client.close()
+        return bookings
+    except Exception as e:
+        print(f"Error getting bookings starting now: {e}")
+        return []
+
+
+def get_bookings_ending_now(current_time):
+    """
+    Get bookings that should end now (within a time window).
+    
+    This function is used by the scheduler to find active bookings that should be
+    automatically completed based on their end time.
+    
+    Args:
+        current_time (datetime): Current time to check against
+    
+    Returns:
+        list: List of bookings that should end now
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        booking_collection = db['planned_bookings']
+        
+        # Create a window of time (5 minutes before and after)
+        window = datetime.timedelta(minutes=5)
+        start_time = current_time - window
+        end_time = current_time + window
+        
+        # Find bookings that:
+        # 1. Have status 'active'
+        # 2. Have end date within this time window
+        query = {
+            'Status': 'active',
+            'End': {'$gte': start_time, '$lte': end_time}
+        }
+        
+        print(f"Looking for bookings ending between {start_time} and {end_time}")
+        bookings = list(booking_collection.find(query))
+        print(f"Found {len(bookings)} bookings to complete")
+        
+        client.close()
+        return bookings
+    except Exception as e:
+        print(f"Error getting bookings ending now: {e}")
         return []
