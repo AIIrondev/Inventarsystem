@@ -977,8 +977,6 @@ def process_bookings():
     # Pass the datetime object to the function
     bookings = bo.get_bookings_starting_now(current_time)
     
-    print(f"Processing {len(bookings)} bookings scheduled to start now")
-    
     # Process the bookings (implement your booking activation logic here)
     for booking in bookings:
         try:
@@ -988,8 +986,6 @@ def process_bookings():
             start_date = booking.get('Start')
             end_date = booking.get('End')
             notes = booking.get('Notes', '')
-            
-            print(f"Processing booking {booking_id} for item {item_id} by {user}")
             
             # Create an ausleihung record first
             ausleihung_id = au.add_ausleihung(
@@ -1001,14 +997,12 @@ def process_bookings():
             )
             
             if ausleihung_id:
-                print(f"Created ausleihung record {ausleihung_id}")
                 
                 # Mark the booking as active and link it to the ausleihung
                 bo.mark_booking_active(booking_id, str(ausleihung_id))
                 
                 # Update item status
                 it.update_item_status(item_id, False, user)
-                print(f"Successfully processed booking {booking_id}")
             else:
                 print(f"Failed to create ausleihung for booking {booking_id}")
         except Exception as e:
@@ -1016,15 +1010,12 @@ def process_bookings():
     
     # Also check for bookings that should end now
     ending_bookings = bo.get_bookings_ending_now(current_time)
-    print(f"Processing {len(ending_bookings)} bookings scheduled to end now")
     
     for booking in ending_bookings:
         try:
             booking_id = str(booking.get('_id'))
             item_id = booking.get('Item')
             ausleihung_id = booking.get('AusleihungId')
-            
-            print(f"Ending booking {booking_id} for item {item_id}")
             
             # Mark item as available again
             it.update_item_status(item_id, True)
@@ -1045,9 +1036,6 @@ def process_bookings():
                         ausleihung.get('Start'),
                         current_time
                     )
-                    print(f"Updated ausleihung {ausleihung_id} with end date")
-            
-            print(f"Successfully completed booking {booking_id}")
         except Exception as e:
             print(f"Error ending booking: {e}")
 

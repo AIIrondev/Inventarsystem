@@ -197,8 +197,6 @@ def get_bookings_starting_now(current_time):
         # Use planned_bookings collection instead of bookings
         bookings_collection = db['planned_bookings']
         
-        # Print diagnostic info
-        print(f"start: {start_time}, end: {end_time}")
         query = {
             'Status': 'planned',
             'Start': {
@@ -207,11 +205,9 @@ def get_bookings_starting_now(current_time):
             },
             'AusleihungId': {'$exists': False}  # Not yet processed
         }
-        print(f"query: {query}")
         
         # Find bookings that should start now
         bookings = list(bookings_collection.find(query))
-        print(f"Bookings: {bookings}")
         
         client.close()
         return bookings
@@ -244,12 +240,9 @@ def get_bookings_ending_now(current_time):
         'End': {'$gte': start_time, '$lte': end_time}
     }
     
-    print(f"Searching for ending bookings with query: {query}")
-    
     try:
         bookings = booking_collection.find(query)
         result = list(bookings)
-        print(f"Found {len(result)} bookings ending now")
         client.close()
         return result
     except Exception as e:
@@ -282,8 +275,6 @@ def mark_booking_active(booking_id):
         # Import ausleihung module here to avoid circular imports
         import ausleihung as au
         
-        # Create ausleihung record
-        print(f"Creating ausleihung for booking {booking_id}, item {booking['Item']}, user {booking['User']}")
         ausleihung_id = au.add_ausleihung(
             booking['Item'],
             booking['User'],
@@ -305,8 +296,6 @@ def mark_booking_active(booking_id):
                 'AusleihungId': str(ausleihung_id)
             }}
         )
-        
-        print(f"Successfully activated booking {booking_id} with ausleihung {ausleihung_id}")
         client.close()
         return True
     except Exception as e:
@@ -517,10 +506,7 @@ def get_active_bookings(start=None, end=None):
                 # If date parsing fails, ignore the date filter
                 pass
         
-        # Get active bookings
-        print(f"Query for active bookings: {query}")
         bookings = list(bookings_collection.find(query))
-        print(f"Found {len(bookings)} active bookings")
         
         client.close()
         return bookings
