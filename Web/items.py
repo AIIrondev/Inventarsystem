@@ -216,6 +216,7 @@ def get_item_code_4(code_4):
     db = client['Inventarsystem']
     items = db['items']
     item = items.find({"Code_4": code_4})
+    return item
 
 def unstuck_item(id):
     """

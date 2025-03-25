@@ -37,6 +37,7 @@ from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
+import bookings as bo
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -553,9 +554,10 @@ def get_bookings():
     start = request.args.get('start')
     end = request.args.get('end')
     
-    # Get all current borrowings
-    current_borrowings = au.get_ausleihungen()
     bookings = []
+    
+    # 1. Get all current borrowings (from ausleihungen collection)
+    current_borrowings = au.get_ausleihungen()
     
     # Format current borrowings for calendar
     for borrowing in current_borrowings:
@@ -567,7 +569,7 @@ def get_bookings():
         is_current = borrowing.get('End') is None
         status = "current" if is_current else "planned"
         
-        # Format dates - ensure they're datetime objects
+        # Format dates
         start_date = borrowing.get('Start')
         end_date = borrowing.get('End')
         
@@ -575,7 +577,7 @@ def get_bookings():
         if end_date is None:
             end_date = start_date + datetime.timedelta(days=1)
         
-        # Convert datetime objects to ISO format strings
+        # Convert to string safely
         start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
         end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
         
@@ -591,14 +593,41 @@ def get_bookings():
             "isCurrentUser": borrowing.get('User') == session['username']
         })
     
-    # Get planned bookings (future borrowings)
-    planned_bookings = au.get_planned_bookings(start, end)
+    # 2. Get ACTIVE bookings (from planned_bookings collection with status="active")
+    active_bookings = bo.get_active_bookings(start, end)
+    for booking in active_bookings:
+        item = it.get_item(booking.get('Item'))
+        if not item:
+            continue
+            
+        # Format dates
+        start_date = booking.get('Start') 
+        end_date = booking.get('End')
+        
+        # Convert to string safely
+        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+        
+        bookings.append({
+            "id": str(booking.get('_id')),
+            "title": item.get('Name', 'Unknown Item'),
+            "start": start_str,
+            "end": end_str,
+            "itemId": booking.get('Item'),
+            "userName": booking.get('User'),
+            "notes": booking.get('Notes', ''),
+            "status": "current",  # Mark active bookings as current for display
+            "isCurrentUser": booking.get('User') == session['username']
+        })
+    
+    # 3. Get planned bookings (from planned_bookings collection with status="planned")
+    planned_bookings = bo.get_planned_bookings(start, end)
     for booking in planned_bookings:
         item = it.get_item(booking.get('Item'))
         if not item:
             continue
             
-        # Safely handle start/end dates that might be strings or datetime objects
+        # Format dates
         start_date = booking.get('Start')
         end_date = booking.get('End')
         
@@ -654,11 +683,11 @@ def plan_booking():
         return {"success": False, "error": "Dieses Objekt ist aktuell nicht verfügbar"}, 409
     
     # Check for date conflicts with other bookings
-    if au.check_booking_conflict(item_id, start_date, end_date):
+    if bo.check_booking_conflict(item_id, start_date, end_date):
         return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
     
     # Create the planned booking
-    booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
+    booking_id = bo.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
     
     return {"success": True, "booking_id": str(booking_id)}
 
@@ -671,7 +700,7 @@ def cancel_booking(id):
         return {"success": False, "error": "Not logged in"}, 401
     
     # Get the booking
-    booking = au.get_booking(id)
+    booking = bo.get_booking(id)
     if not booking:
         return {"success": False, "error": "Booking not found"}, 404
         
@@ -680,7 +709,7 @@ def cancel_booking(id):
         return {"success": False, "error": "Not authorized to cancel this booking"}, 403
     
     # Cancel the booking
-    result = au.cancel_booking(id)
+    result = bo.cancel_booking(id)
     
     if result:
         return {"success": True}
@@ -898,7 +927,7 @@ def process_bookings():
     # Create a proper datetime object
     current_time = datetime.datetime.now()
     # Pass the datetime object to the function
-    bookings = au.get_bookings_starting_now(current_time)
+    bookings = bo.get_bookings_starting_now(current_time)
     
     # Process the bookings (implement your booking activation logic here)
     for booking in bookings:
@@ -909,13 +938,13 @@ def process_bookings():
         start_date = booking.get('Start')
         
         # Mark the booking as active
-        au.mark_booking_active(booking_id)
+        bo.mark_booking_active(booking_id)
         
         # Update item status
         it.update_item_status(item_id, False, user)
     
     # Also check for bookings that should end now
-    ending_bookings = au.get_bookings_ending_now(current_time)
+    ending_bookings = bo.get_bookings_ending_now(current_time)
     for booking in ending_bookings:
         booking_id = str(booking.get('_id'))
         item_id = booking.get('Item')
