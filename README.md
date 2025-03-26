@@ -24,30 +24,17 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 
 ### Einrichtung
 
-1. Installation des Systems mit dem Installations-Script(for Linux):
+Installation des Systems mit dem Installations-Script(for Linux):
 
 ```bash
-wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Linux.sh | sudo bash
+wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
 ```
 
 OR
 
 ```bash
-curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Linux.sh | sudo bash
+curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
 ```
-
-2. Installation des Systems mit dem Installations-Script (für Windows):
-
-```powershell
-powershell -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/Installation-Windows.cmd | iex"
-```
-
-This command:
-1. Bypasses the execution policy to allow script execution
-2. Downloads the Windows installation script from your GitHub repository
-3. Executes it immediately with appropriate permissions
-
-The user will need to run PowerShell as administrator for the installation to work properly.
 
 ## Benutzerhandbuch
 
