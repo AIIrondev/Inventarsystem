@@ -378,14 +378,17 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
+    flex-wrap: wrap; /* Allow items to wrap on small screens */
+    gap: 10px; /* Add gap between items */
 }
 
 .calendar-actions button {
     background-color: #f0f0f0;
     border: 1px solid #ddd;
     padding: 5px 10px;
-    margin: 0 5px;
+    margin: 0;  /* Remove horizontal margins */
     cursor: pointer;
+    white-space: nowrap;  /* Prevent button text from wrapping */
 }
 
 .calendar-actions .primary-button {
@@ -399,6 +402,39 @@ document.addEventListener('DOMContentLoaded', function() {
     margin: 0 15px;
     min-width: 150px;
     text-align: center;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .calendar-actions {
+        justify-content: center; /* Center items on mobile */
+        flex-direction: column; /* Stack buttons vertically on very small screens */
+        margin-bottom: 15px;
+    }
+    
+    .calendar-actions button {
+        width: 100%; /* Full width buttons on mobile */
+        margin: 5px 0; /* Add vertical spacing between buttons */
+    }
+    
+    .calendar-actions .primary-button {
+        margin-left: 0; /* Reset margin on mobile */
+        order: -1; /* Place the primary button first */
+    }
+    
+    #current-month-display {
+        margin: 10px 0;
+        text-align: center;
+    }
+
+    .calendar-legend {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .legend-item {
+        margin-bottom: 8px;
+    }
 }
 
 .calendar-legend {
