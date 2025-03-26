@@ -1,0 +1,192 @@
+name: Deploy to GitHub Pages
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push to the main branch
+  push:
+    branches: [ "main" ]
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+# Environment variables
+env:
+  PYTHON_VERSION: '3.10'
+  NODE_VERSION: '18'
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      # Set up Python environment (similar to start-codespace.sh)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+        
+      # Set up Node.js (for handling frontend assets if needed)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+        
+      # Create logs directory
+      - name: Create logs directory
+        run: |
+          mkdir -p logs
+          chmod -R 755 logs
+        
+      # Install Python dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          
+          # Similar to start-codespace.sh, handle PyMongo/bson issue
+          grep -v "^bson" requirements.txt > requirements_modified.txt || echo "No requirements.txt found"
+          grep -v "^pymongo" requirements_modified.txt > requirements_no_mongo.txt || echo "Continuing without modified requirements"
+          
+          # Install dependencies except PyMongo
+          if [ -f requirements_no_mongo.txt ]; then
+            pip install -r requirements_no_mongo.txt
+          fi
+          
+          # Install specific PyMongo version
+          pip uninstall -y bson pymongo || echo "No PyMongo to uninstall"
+          pip install pymongo==4.6.1
+          
+          # Install documentation generation tools
+          pip install sphinx mkdocs mkdocs-material pdoc3
+      
+      # Verify Python packages
+      - name: Verify Python packages
+        run: |
+          python -c "from pymongo import MongoClient; from bson import SON; print('PyMongo configuration correct')" || echo "PyMongo configuration issue but continuing"
+        
+      # Generate static documentation
+      - name: Generate documentation
+        run: |
+          echo "Generating documentation..."
+          
+          # Option 1: MkDocs (if you have mkdocs.yml)
+          if [ -f mkdocs.yml ]; then
+            mkdocs build
+            mkdir -p site
+            cp -R Web/static/* site/ || echo "No static files to copy"
+          else
+            # Option 2: Custom documentation generation
+            mkdir -p site
+            
+            # Generate system documentation
+            echo "# Inventarsystem Documentation" > site/index.md
+            echo "Generated on $(date)" >> site/index.md
+            
+            # Copy static assets
+            cp -R Web/templates site/ || echo "No templates to copy"
+            cp -R Web/static site/ || echo "No static files to copy"
+            
+            # Create simple HTML landing page
+            cat > site/index.html << EOF
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Inventarsystem</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 800px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }
+                    h1 { color: #2c3e50; }
+                    .header { 
+                        background-color: #3498db;
+                        color: white;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                        border-radius: 5px;
+                    }
+                    .features {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                        gap: 20px;
+                        margin-top: 30px;
+                    }
+                    .feature {
+                        border: 1px solid #ddd;
+                        padding: 20px;
+                        border-radius: 5px;
+                    }
+                    footer {
+                        margin-top: 50px;
+                        border-top: 1px solid #ddd;
+                        padding-top: 20px;
+                        text-align: center;
+                        font-size: 0.8em;
+                        color: #777;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>Inventarsystem</h1>
+                    <p>Comprehensive Inventory Management Solution</p>
+                </div>
+                
+                <h2>About</h2>
+                <p>
+                    Inventarsystem is a comprehensive inventory management solution designed for efficient 
+                    tracking, borrowing, and scheduling of equipment and resources.
+                </p>
+                
+                <div class="features">
+                    <div class="feature">
+                        <h3>Item Management</h3>
+                        <p>Add, edit, and remove inventory items with detailed descriptions and images.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Borrowing System</h3>
+                        <p>Check items in and out with a simple interface and track their location.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Advanced Booking</h3>
+                        <p>Reserve items for future use with an intuitive calendar interface.</p>
+                    </div>
+                </div>
+                
+                <footer>
+                    &copy; 2025 Maximilian Gründinger | Licensed under the Apache License, Version 2.0
+                </footer>
+            </body>
+            </html>
+            EOF
+          fi
+          
+          # Create .nojekyll file to prevent Jekyll processing
+          touch site/.nojekyll
+      
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: site  # The folder containing the built site
+          branch: gh-pages  # The branch to deploy to
+          clean: true  # Automatically remove deleted files from the deployment
+          
+      # Notify on completion (optional)
+      - name: Deployment status notification
+        if: always()
+        run: |
+          echo "GitHub Pages deployment ${{ job.status }}!"
+          echo "Your site will be available at https://${{ github.repository_owner }}.github.io/Inventarsystem/"

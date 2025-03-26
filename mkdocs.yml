@@ -1,0 +1,149 @@
+# Site information
+site_name: Inventarsystem
+site_description: Comprehensive Inventory Management Solution
+site_author: Maximilian Gründinger
+site_url: https://github.com/username/Inventarsystem
+
+# Repository
+repo_name: Inventarsystem
+repo_url: https://github.com/username/Inventarsystem
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2025 Maximilian Gründinger - Licensed under the Apache License, Version 2.0
+
+# Configuration
+theme:
+  name: material
+  language: de
+  palette:
+    primary: blue
+    accent: blue
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    logo: material/database
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - content.code.annotate
+    - content.tabs.link
+    - search.highlight
+    - search.suggest
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - attr_list
+  - codehilite:
+      guess_lang: false
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - pymdownx.arithmatex
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - User Guide:
+    - Getting Started: user-guide/getting-started.md
+    - Inventory Management: user-guide/inventory-management.md
+    - Borrowing System: user-guide/borrowing.md
+    - Booking Calendar: user-guide/booking-calendar.md
+    - QR Code System: user-guide/qr-codes.md
+  - Administrator Guide:
+    - Installation: admin-guide/installation.md
+    - User Management: admin-guide/user-management.md
+    - System Configuration: admin-guide/configuration.md
+    - Logs & Monitoring: admin-guide/logs.md
+  - API Reference:
+    - Authentication: api/authentication.md
+    - Items API: api/items.md
+    - Borrowing API: api/borrowing.md
+    - Booking API: api/booking.md
+    - Users API: api/users.md
+  - Development:
+    - Architecture: development/architecture.md
+    - Contributing: development/contributing.md
+    - Module Reference: 
+      - Web App: development/modules/app.md
+      - Items Module: development/modules/items.md
+      - Users Module: development/modules/users.md
+      - Booking System: development/modules/bookings.md
+      - Database Schema: development/modules/database.md
+  - About:
+    - Release Notes: about/releases.md
+    - License: about/license.md
+
+# Plugins
+plugins:
+  - search
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      type: date
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+  - social
+
+# Additional configuration
+extra:
+  version:
+    provider: mike
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/username/Inventarsystem
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: This page was helpful
+          data: 1
+          note: >-
+            Thanks for your feedback!
+        - icon: material/emoticon-sad-outline
+          name: This page could be improved
+          data: 0
+          note: >- 
+            Thanks for your feedback! Help us improve by using our feedback form.
+
+# Custom CSS
+extra_css:
+  - stylesheets/extra.css
+
+# JavaScript
+extra_javascript:
+  - javascripts/extra.js
