@@ -112,8 +112,11 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('/get_bookings?start=' + info.startStr + '&end=' + info.endStr)
                 .then(response => response.json())
                 .then(data => {
+                    // Extract bookings from response - handle both formats for compatibility
+                    const bookingsArray = Array.isArray(data) ? data : (data.bookings || []);
+                    
                     // Process events to add colors based on status
-                    let events = data.map(event => {
+                    let processedEvents = bookingsArray.map(event => {
                         let eventColor = '#3788d8'; // Default color
                         
                         if (event.isCurrentUser) {
@@ -145,10 +148,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Filter out completed bookings if toggle is off
                     if (!showCompletedBookings) {
-                        events = events.filter(event => event.extendedProps.status !== 'completed');
+                        processedEvents = processedEvents.filter(event => event.extendedProps.status !== 'completed');
                     }
                     
-                    successCallback(events);
+                    successCallback(processedEvents);
                 })
                 .catch(error => {
                     console.error('Error loading bookings:', error);

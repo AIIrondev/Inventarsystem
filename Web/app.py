@@ -555,7 +555,7 @@ def get_bookings():
     end = request.args.get('end')
     
     bookings = []
-    processed_items = set()  # Keep track of item IDs that are already in the list
+    processed_items_with_status = set()  # Track item_id+status combinations instead of just items
     
     # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
     # We process these first as they are the most current
@@ -566,7 +566,7 @@ def get_bookings():
             continue
             
         item_id = booking.get('Item')
-        processed_items.add(item_id)  # Add to processed items
+        processed_items_with_status.add(f"{item_id}_active")  # Add with status
             
         # Format dates
         start_date = booking.get('Start') 
@@ -596,20 +596,21 @@ def get_bookings():
     for borrowing in current_borrowings:
         item_id = borrowing.get('Item')
         
-        # Skip if this item is already in our list (from active bookings)
-        if item_id in processed_items:
-            continue
-            
-        processed_items.add(item_id)  # Add to processed items
-        
-        item = it.get_item(item_id)
-        if not item:
+        # Skip if this item already has an active booking
+        if f"{item_id}_active" in processed_items_with_status:
             continue
             
         # Determine if this is current or completed
         is_current = borrowing.get('End') is None
         status = "current" if is_current else "completed"
         
+        # Track this item+status combination
+        processed_items_with_status.add(f"{item_id}_{status}")
+        
+        item = it.get_item(item_id)
+        if not item:
+            continue
+            
         # Format dates
         start_date = borrowing.get('Start')
         end_date = borrowing.get('End')
@@ -639,10 +640,9 @@ def get_bookings():
     for booking in planned_bookings:
         item_id = booking.get('Item')
         
-        # Only show planned bookings for items that aren't currently active
-        if item_id in processed_items:
-            continue
-            
+        # Remove the filter that was excluding planned bookings
+        # for items with active borrowings
+        
         item = it.get_item(item_id)
         if not item:
             continue
@@ -695,7 +695,7 @@ def get_bookings():
             "isCurrentUser": booking.get('User') == session['username']
         })
     
-    return bookings
+    return {"bookings": bookings}
 
 @app.route('/plan_booking', methods=['POST'])
 def plan_booking():
