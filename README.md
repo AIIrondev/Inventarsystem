@@ -24,7 +24,7 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 
 ### Einrichtung
 
-1. Installation des Systems mit dem Installations-Script(for Linux):
+Installation des Systems mit dem Installations-Script(for Linux):
 
 ```bash
 wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
