@@ -2,124 +2,165 @@
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
-Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung und eine filterbasierte Artikelsuche.
+Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen, zu reservieren und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung, Buchungskalender und eine filterbasierte Artikelsuche.
 
 ## Funktionen
 
-- Benutzeranmeldung mit sicheren Passwort-Richtlinien (Das Password braucht midestens 12 Zeichen!)
+### Benutzeranmeldung
+- Sichere Passwort-Richtlinien (mindestens 6 Zeichen!)
 - Rollenbasierter Zugriff (Admin und reguläre Benutzer)
-- Artikelverwaltung (hinzufügen, löschen, ausleihen, zurückgeben)
-- Mehrfachbild-Upload und Verwaltung für jeden Artikel
-- Artikel-Filterung basierend auf benutzerdefinierten Kategorien
-- QR-Code-Generierung zur einfachen Identifikation von Artikeln
-- Responsives Design für Desktop- und Mobilgeräte
+
+### Artikelverwaltung
+- Hinzufügen und Löschen von Artikeln
+- Ausleihen und Zurückgeben
+- Detaillierte Artikelansicht mit Metadaten
+- Anschaffungsdaten (Jahr, Kosten)
+- Mehrfachbild-Upload und Verwaltung
+
+### Buchungssystem
+- Terminkalender für Reservierungen
+- Farbcodierte Anzeige (aktuell, geplant, abgeschlossen)
+- Konfliktprüfung bei Buchungen
+- Automatische Aktivierung und Beendigung von Buchungen
+
+### QR-Code-Funktionalität
+- Automatische Generierung für jeden Artikel
+- Scannen mit eingebautem QR-Scanner
+- Schnellzugriff auf Artikeldetails
+
+### Filterfunktionen
+- Zweistufiges Filtersystem (Kategorie 1 und 2)
+- Kombinierte Filter für präzise Ergebnisse
+
+### Administratorwerkzeuge
+- Benutzerverwaltung (Hinzufügen, Löschen)
+- Protokollierung aller Ausleihen
+- Zurücksetzen fehlerhafter Artikel
+
+### Mobiloptimiertes Design
+- Responsive Benutzeroberfläche
+- Angepasste Bedienelemente für kleine Bildschirme
 
 ## Installation
 
 ### Voraussetzungen
-
 - Python 3.7+
 - MongoDB
 - pip
 
-### Einrichtung
+### Lokale Einrichtung
+Installation des Systems mit dem Installations-Skript (für Linux):
 
-Installation des Systems mit dem Installations-Script(for Linux):
-
-```bash
-wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+```sh
+bash install.sh
 ```
 
-OR
+### Deployment mit Render
+Das Inventarsystem kann auf Render.com bereitgestellt werden:
 
-```bash
-curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
-```
+1. Registrieren bei Render.com
+2. Neuen Webservice erstellen und GitHub-Repository verbinden
+3. Dienst konfigurieren:
+   - Name: `inventarsystem`
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn "Web.app:app" --bind 0.0.0.0:$PORT`
+   - Python Version: `3.10`
+4. Umgebungsvariablen hinzufügen:
+   - `MONGODB_URI`: Ihre MongoDB-Verbindungszeichenfolge
+   - `SECRET_KEY`: Ein sicherer Schlüssel für Flask-Sitzungen
+5. Auf "Create Web Service" klicken und Bereitstellung abwarten
 
 ## Benutzerhandbuch
 
 ### Für reguläre Benutzer
 
 #### Login und Hauptseite
-
-1. Den Nutzernamen und das Password in die Dafür vorhergesehenen Felder eintragen.![Login Screen](Images/Login.png)
-
-2. Auf den Blauen Knopf mit der Aufschrift "Login" tippen.![Login Credentials](Images/Login_cred.png)
+- Nutzernamen und Passwort eingeben
+- Auf den "Login"-Button klicken
 
 #### Artikel durchsuchen
-
-- Die Hauptseite zeigt alle verfügbaren Artikel in einer kartenbasierten Ansicht.
-- Navigationspfeile (links/rechts) zum Durchblättern der Artikel nutzen.
+- Alle Artikel in einer kartenbasierten Ansicht durchblättern
 - Jeder Artikel zeigt:
   - Name
   - Ort
   - Beschreibung
-  - Bilder (mit Pfeilen durch mehrere Bilder blättern)
+  - Bilder
   - Filterkategorien
 
-![no_admin](Images/no_admin.png)
-
 #### Artikel filtern
-
-- Die Dropdown-Menüs "Filter 1" und "Filter 2" zur Eingrenzung der Suche nutzen.
-
-![Filter1](Images/Filter1.png) ![Filter2](Images/Filter2.png)
-
-- Optionen aus beiden Dropdown-Menüs auswählen, um kombinierte Filter anzuwenden.
-
-![Filter3](Images/Filter3.png) ![Filter4](Images/Filter4.png)
-
-- Um alle Artikel wieder anzuzeigen, "Alle" in beiden Filtern auswählen.
+- Dropdown-Menüs "Filter 1" und "Filter 2" nutzen
+- Kombinierte Filter für präzise Ergebnisse
+- "Alle" auswählen, um alle Artikel anzuzeigen
 
 #### Artikel ausleihen und zurückgeben
+- "Ausleihen"-Button klicken
+- Zurückgeben durch erneuten Klick auf "Zurückgeben"
+- System protokolliert Zeitpunkte
 
-- Um einen verfügbaren Artikel auszuleihen, auf den "Ausleihen"-Button klicken.
-![Ausleihen](Images/Ausleihen.png)
-- Um einen ausgeliehenen Artikel zurückzugeben, den Artikel suchen und auf "Zurückgeben" klicken.
-![Zurueckgeben](Images/Zurueckgeben.png)
-- Das System verfolgt die Zeitpunkte von Ausleihe und Rückgabe.
+#### QR-Codes scannen
+- "QR-Code scannen" Button klicken
+- Kamera-Zugriff erlauben
+- QR-Code scannen, um Detailansicht zu öffnen
+
+#### Buchungssystem nutzen
+- "Terminplan" öffnen
+- Neue Buchung erstellen:
+  - Objekt auswählen
+  - Zeitraum festlegen
+  - Notizen hinzufügen
+  - Buchung bestätigen
+- Eigene Buchungen sind farblich hervorgehoben
+- Buchung stornieren durch Klick auf "Ausleihe stornieren"
 
 ### Für Administratoren
 
 #### Admin-Oberfläche
-
-- Mit Administrator-Zugangsdaten anmelden, um auf die Admin-Oberfläche zuzugreifen.
-- Die Admin-Oberfläche bietet alle Standardfunktionen sowie zusätzliche Verwaltungsfunktionen.
+- Anmeldung mit Admin-Zugangsdaten
+- Erweiterte Verwaltungsfunktionen verfügbar
 
 #### Neue Artikel hinzufügen
-
-1. In der Admin-Oberfläche zum Formular "Artikel hochladen" scrollen.
-2. Folgende Informationen eingeben:
-   - **Name**: Eindeutige Bezeichnung des Artikels
-   - **Ort**: Lagerort des Artikels
-   - **Beschreibung**: Detaillierte Informationen
-   - **Filter 1 & Filter 2**: Kategorien zur Organisation
-   - **Bilder hochladen**: Ein oder mehrere Bilder des Artikels auswählen
-3. Auf "Hochladen" klicken, um den Artikel zum Inventar hinzuzufügen.
-
-![Upload](Images/Upload.png)
+- "Artikel hochladen" Formular ausfüllen:
+  - Name
+  - Ort
+  - Beschreibung
+  - Filter-Kategorien
+  - Anschaffungsjahr & -kosten
+  - Interne Artikelnummer
+  - Bilder hochladen
+- "Hochladen" klicken
 
 #### Artikel löschen
-
-- Den gewünschten Artikel finden und auf "Delete" klicken.
-- Der Artikel und zugehörige Bilder werden aus dem System entfernt.
-![delete](Images/delete.png)
+- Artikel suchen und "Delete" klicken
 
 #### Ausgeliehene Artikel verwalten
+- Alle Artikel, auch ausgeliehene, einsehen
+- Artikel im Namen von Benutzern zurückgeben
+- "Zurücksetzen" für problematische Artikel
 
-- Administratoren können alle Artikel einsehen, einschließlich ausgeliehener Artikel.
-- Falls erforderlich, können Administratoren Artikel im Namen der Benutzer zurückgeben.
+#### Benutzer verwalten
+- Neue Benutzer hinzufügen
+- Bestehende Benutzer löschen
+- Ausleihhistorie einsehen
+
+#### Buchungssystem verwalten
+- Alle Buchungen einsehen und verwalten
+- Problematische Buchungen stornieren/bearbeiten
 
 ### QR-Code-System
+- Jeder Artikel erhält automatisch einen QR-Code
+- QR-Codes können gedruckt und an Objekten angebracht werden
+- Scannen leitet direkt zur Artikelseite
 
-Jeder Artikel wird bei der Erstellung automatisch mit einem eindeutigen QR-Code versehen. Diese QR-Codes können ausgedruckt und an physischen Gegenständen angebracht werden, um eine einfache Identifikation durch Scannen zu ermöglichen.
+## Systemanforderungen
+- Moderner Webbrowser (Chrome, Firefox, Safari, Edge)
+- Internetzugang
+- Für Administratoren: Desktop-Umgebung empfohlen
+- Für QR-Scanning: Gerät mit Kamera
 
 ## Lizenz
-
 Dieses Projekt ist unter der Apache License, Version 2.0 lizenziert. Siehe die LICENSE-Datei für Details.
 
 ## Mitwirkende
-
 **Maximilian Gründinger** - Projektgründer
 
 Für technische Unterstützung oder Fragen bitte ein Issue im GitHub-Repository eröffnen.
