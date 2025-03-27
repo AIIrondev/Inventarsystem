@@ -20,7 +20,7 @@
 {% block content %}
 <div class="container">
     <div class="content">
-        <h1>Inventory Items</h1>
+        <h1>Inventar Objekte</h1>
         <div class="filter-container">
             <div class="filter">
                 <label for="filter1">Filter 1:</label>
@@ -53,6 +53,7 @@
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
     // Initialize QR Code scanner
+    // TODO: only allow one Back camera only
     let html5QrcodeScanner = null;
     
     document.getElementById('scanButton').addEventListener('click', function() {
@@ -106,11 +107,7 @@
     }
 </script>
 
-<script>
-    // Using the urlParams variable already declared above
-    // REMOVE THIS LINE: const urlParams = new URLSearchParams(window.location.search);
-    // REMOVE THIS LINE: const highlightItemId = "{{ highlight_item }}" || '';
-    
+<script>    
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -146,12 +143,10 @@
                     filter2Values.add(filter2Value);
                 }
 
-                // Rest of card creation code remains the same
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
                     <p><strong>Ort:</strong> ${item.Ort}</p>
-                    <p><strong>Beschreibung:</strong> <div class="description">${item.Beschreibung}</div></p>
                     <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
                     <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
                     <div class="image-container">
@@ -169,9 +164,36 @@
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
                             </form>
                         `}
+                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
                     </div>
                 `;
                 itemsContainer.appendChild(card);
+
+                // Add QR code download link to each card
+                const qrLink = document.createElement('a');
+                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
+                qrLink.className = 'qr-download-button';
+                qrLink.textContent = 'QR-Code';
+                
+                // Add the QR code link to the actions div
+                const actionsDiv = card.querySelector('.actions');
+                actionsDiv.appendChild(qrLink);
+                
+                // Add click event to open the modal with item details
+                card.addEventListener('click', function(e) {
+                    // Prevent modal from opening when clicking buttons or links
+                    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || 
+                        e.target.closest('button') || e.target.closest('a')) {
+                        return;
+                    }
+                    
+                    // Prepare the item data with correct image paths
+                    const itemData = {...item};
+                    itemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
+                    
+                    // Open the modal
+                    openItemModal(itemData);
+                });
             });
             
             // Now populate the filter dropdowns with the collected unique values
@@ -295,6 +317,121 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 });
 </script>
+<script>
+    // Modal functionality
+    const modal = document.getElementById('item-modal');
+    const closeModal = document.querySelector('.close-modal');
+    
+    // Close modal when clicking the X button
+    closeModal.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    
+    // Close modal when clicking outside the modal content
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    // Function to open modal with item details
+    function openItemModal(itemData) {
+        const modalContent = document.getElementById('modal-content-wrapper');
+        
+        // Create image gallery
+        let imagesHtml = '';
+        if (itemData.Images && itemData.Images.length > 0) {
+            imagesHtml = `
+                <div class="modal-image-container">
+                    ${itemData.Images.map((image, index) => 
+                        `<img src="${image}" alt="${itemData.Name}" class="modal-image" 
+                         data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`
+                    ).join('')}
+                    <button class="modal-image-nav modal-prev-image" onclick="prevModalImage()">&#10094;</button>
+                    <button class="modal-image-nav modal-next-image" onclick="nextModalImage()">&#10095;</button>
+                </div>
+            `;
+        }
+        
+        // Build modal content
+        modalContent.innerHTML = `
+            <h2>${itemData.Name}</h2>
+            ${imagesHtml}
+            <div class="modal-details">
+                <div class="detail-section">
+                    <div class="detail-group">
+                        <div class="detail-label">Ort:</div>
+                        <div class="detail-value">${itemData.Ort || '-'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Kategorie 1:</div>
+                        <div class="detail-value">${itemData.Filter || '-'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Kategorie 2:</div>
+                        <div class="detail-value">${itemData.Filter2 || '-'}</div>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-group">
+                        <div class="detail-label">Anschaffungsjahr:</div>
+                        <div class="detail-value">${itemData.Anschaffungsjahr || '-'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Anschaffungskosten:</div>
+                        <div class="detail-value">${itemData.Anschaffungskosten ? itemData.Anschaffungskosten + ' €' : '-'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Status:</div>
+                        <div class="detail-value">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Code:</div>
+                        <div class="detail-value">${itemData.code_4 || '-'}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-group full-width">
+                <div class="detail-label">Beschreibung:</div>
+                <div class="detail-value">${itemData.Beschreibung || '-'}</div>
+            </div>
+            <div class="modal-actions">
+                ${itemData.Verfuegbar ? 
+                    `<form method="POST" action="/ausleihen/${itemData._id}">
+                        <button class="ausleihen" type="submit">Ausleihen</button>
+                    </form>` : 
+                    `<form method="POST" action="/zurueckgeben/${itemData._id}">
+                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                    </form>`
+                }
+                <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
+                <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
+            </div>
+        `;
+        
+        // Show the modal
+        modal.style.display = 'block';
+    }
+    
+    // Image navigation in modal
+    function prevModalImage() {
+        const images = document.querySelectorAll('.modal-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex - 1 + images.length) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+    
+    function nextModalImage() {
+        const images = document.querySelectorAll('.modal-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex + 1) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+</script>
 <style>
 body {
     font-family: Arial, sans-serif;
@@ -347,6 +484,13 @@ h1, h2 {
     max-width: 300px;
     flex-shrink: 0;
     scroll-snap-align: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.item-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 .item-card h3 {
@@ -600,6 +744,117 @@ input[type="file"] {
     margin-bottom: 15px;
     border-radius: 5px;
     text-align: center;
+}
+
+/* Modal Styles */
+.item-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    overflow-y: auto;
+}
+
+.modal-content {
+    position: relative;
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 5px;
+    width: 80%;
+    max-width: 900px;
+    animation: modalAppear 0.3s ease-out;
+}
+
+@keyframes modalAppear {
+    from {opacity: 0; transform: translateY(-30px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover {
+    color: #555;
+}
+
+.modal-image-container {
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+}
+
+.modal-image {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: 5px;
+}
+
+.modal-image-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 10px;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.modal-prev-image {
+    left: 10px;
+}
+
+.modal-next-image {
+    right: 10px;
+}
+
+.modal-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.detail-group {
+    margin-bottom: 15px;
+}
+
+.detail-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.detail-value {
+    padding: 5px 0;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.modal-actions .ausleihen,
+.modal-actions .delete-button,
+.modal-actions .qr-download-button {
+    padding: 10px 20px;
+}
+
+.full-width {
+    grid-column: 1 / -1;
 }
 </style>
 {% endblock %}
