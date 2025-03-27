@@ -52,13 +52,13 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 Installation des Systems mit dem Installations-Skript (für Linux):
 
 ```bash
- wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
-
+wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+```
 OR
  
- ```bash
- curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
- ```
+```bash
+curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+```
 
 ### Deployment mit Render
 Das Inventarsystem kann auf Render.com bereitgestellt werden:
