@@ -46,8 +46,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Initialize Flask application
 app = Flask(__name__)
-app.secret_key = 'secret'  # For production, use a secure key!
-app.debug = True  # Debug disabled in production
+app.secret_key = 'Hsse783942h2342f342342i34hwebf8'  # For production, use a secure key!
+app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
