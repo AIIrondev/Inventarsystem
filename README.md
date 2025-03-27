@@ -51,9 +51,14 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 ### Lokale Einrichtung
 Installation des Systems mit dem Installations-Skript (für Linux):
 
-```sh
-bash install.sh
-```
+```bash
+ wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+
+OR
+ 
+ ```bash
+ curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+ ```
 
 ### Deployment mit Render
 Das Inventarsystem kann auf Render.com bereitgestellt werden:
