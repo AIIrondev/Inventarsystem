@@ -32,7 +32,7 @@ def check_password_strength(password):
     Returns:
         bool: True if password is strong enough, False otherwise
     """
-    if len(password) < 12:
+    if len(password) < 6:
         return False
     return True
 
