@@ -60,21 +60,6 @@ OR
 curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
 ```
 
-### Deployment mit Render
-Das Inventarsystem kann auf Render.com bereitgestellt werden:
-
-1. Registrieren bei Render.com
-2. Neuen Webservice erstellen und GitHub-Repository verbinden
-3. Dienst konfigurieren:
-   - Name: `inventarsystem`
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn "Web.app:app" --bind 0.0.0.0:$PORT`
-   - Python Version: `3.10`
-4. Umgebungsvariablen hinzufügen:
-   - `MONGODB_URI`: Ihre MongoDB-Verbindungszeichenfolge
-   - `SECRET_KEY`: Ein sicherer Schlüssel für Flask-Sitzungen
-5. Auf "Create Web Service" klicken und Bereitstellung abwarten
-
 ## Benutzerhandbuch
 
 ### Für reguläre Benutzer
