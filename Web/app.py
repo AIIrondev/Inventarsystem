@@ -117,11 +117,13 @@ def home():
     Returns:
         flask.Response: Rendered template or redirect
     """
-    if 'username' in session and not us.check_admin(session['username']):
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    elif not us.check_admin(session['username']):
         return render_template('main.html', username=session['username'])
-    elif 'username' in session and us.check_admin(session['username']):
+    else:
         return redirect(url_for('home_admin'))
-    return redirect(url_for('logout'))
 
 
 @app.route('/home_admin')
@@ -133,13 +135,13 @@ def home_admin():
     Returns:
         flask.Response: Rendered template or redirect
     """
-    if 'username' in session:
-        if not us.check_admin(session['username']):
-            flash('You are not authorized to view this page', 'error')
-            return redirect(url_for('logout'))
-        return render_template('main_admin.html', username=session['username'])
-    
-    return redirect(url_for('logout'))
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    return render_template('main_admin.html', username=session['username'])
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -221,9 +223,12 @@ def upload_item():
     Returns:
         flask.Response: Redirect to admin homepage
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('You are not authorized to upload items', 'error')
-        return redirect(url_for('home'))
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
     
     name = request.form['name']
     ort = request.form['ort']
@@ -272,9 +277,12 @@ def delete_item(id):
     Returns:
         flask.Response: Redirect to admin homepage
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('You are not authorized to delete items', 'error')
-        return redirect(url_for('home'))
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
     
     it.remove_item(id)
     flash('Item deleted successfully', 'success')
@@ -305,7 +313,7 @@ def ausleihen(id):
         flask.Response: Redirect to appropriate homepage
     """
     if 'username' not in session:
-        flash('You need to be logged in to borrow items', 'error')
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     item = it.get_item(id)
@@ -324,7 +332,7 @@ def ausleihen(id):
 
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])
-def zurueckgeben(id): # Wenn da Item ausgeliehen von jemand anerem wird und ich es zurückgeben will, dann wird es nicht zurückgegeben
+def zurueckgeben(id): 
     """
     Route for returning a borrowed item.
     Creates or updates a record of the borrowing session.
@@ -336,7 +344,7 @@ def zurueckgeben(id): # Wenn da Item ausgeliehen von jemand anerem wird und ich 
         flask.Response: Redirect to appropriate homepage
     """
     if 'username' not in session:
-        flash('You need to be logged in to return items', 'error')
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     item = it.get_item(id)
@@ -449,6 +457,7 @@ def show_item(id):
         flask.Response: Rendered template with item highlighted
     """
     if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
         
     item = it.get_item(id)
@@ -497,8 +506,11 @@ def admin_reset_item(id):
     Returns:
         flask.Response: Redirect to admin homepage
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('Unauthorized access', 'error')
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     try:
@@ -558,7 +570,8 @@ def get_bookings():
     Get all bookings for calendar display
     """
     if 'username' not in session:
-        return {'error': 'Not logged in'}, 401
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
         
     start = request.args.get('start')
     end = request.args.get('end')
@@ -712,7 +725,8 @@ def plan_booking():
     Create a new planned booking
     """
     if 'username' not in session:
-        return {"success": False, "error": "Not logged in"}, 401
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
         
     item_id = request.form.get('item_id')
     start_date_str = request.form.get('start_date')
@@ -754,7 +768,8 @@ def cancel_booking(id):
     Cancel a planned booking
     """
     if 'username' not in session:
-        return {"success": False, "error": "Not logged in"}, 401
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
     
     # Get the booking
     booking = bo.get_booking(id)
@@ -778,6 +793,9 @@ def terminplan():
     """
     Route to display the booking calendar
     """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
     return render_template('terminplan.html')
 
 
@@ -792,6 +810,12 @@ def register():
     Returns:
         flask.Response: Rendered template or redirect
     """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
     if 'username' in session and us.check_admin(session['username']):
         if request.method == 'POST':
             username = request.form['username']
@@ -822,8 +846,11 @@ def user_del():
     Returns:
         flask.Response: Rendered template with user list or redirect
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('You are not authorized to view this page', 'error')
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     # Get all users except the current one (to prevent self-deletion)
@@ -858,8 +885,11 @@ def delete_user():
     Returns:
         flask.Response: Redirect to the user deletion interface with status
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('You are not authorized to perform this action', 'error')
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     username = request.form.get('username')
@@ -891,8 +921,11 @@ def logs():
     Returns:
         flask.Response: Rendered template with logs or redirect
     """
-    if 'username' not in session or not us.check_admin(session['username']):
-        flash('You are not authorized to view this page', 'error')
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
         
     # Get ausleihungen
@@ -965,8 +998,11 @@ def get_usernames():
     Returns:
         dict: Dictionary containing all users or redirect if not authenticated
     """
-    if 'username' in session and not us.check_admin(session['username']):
-        flash('You are not authorised to use this page', 'error')
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('logout'))
     elif 'username' in session and us.check_admin(session['username']):
         return us.get_users()
