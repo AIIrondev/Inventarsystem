@@ -54,6 +54,15 @@ QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 __version__ = '0.0.1'
 
+APP_VERSION = "1.0.0"
+
+@app.context_processor
+def inject_version():
+    """
+    Makes the application version available to all templates
+    """
+    return {'version': APP_VERSION}
+
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
