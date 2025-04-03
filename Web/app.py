@@ -45,17 +45,6 @@ import json
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Import config
-try:
-    with open(os.path.join(BASE_DIR, 'config'), 'r') as f:
-        conf = json.load(f)
-except FileNotFoundError:
-    conf = {
-        'host': 'localhost',
-        'port': 27017,
-        'db': 'inventarsystem'
-    }
-
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -66,6 +55,36 @@ app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 __version__ = '1.2.4'  # Version of the application
+Host = '0.0.0.0'
+Port = 8080
+
+
+# Import config
+try:
+    with open(os.path.join(BASE_DIR, 'config.json'), 'r') as f:
+        conf = json.load(f)
+    # Check if config file has the required keys
+    required_keys = ['dbg', 'key', 'ver', 'host', 'port']
+    for key in required_keys:
+        if key not in conf:
+            raise KeyError(f"Missing required key in config: {key}")
+    # Check if the config file is empty
+    if not conf:
+        raise ValueError("Config file is empty")
+    # Check if the config file is a valid JSON
+    if not isinstance(conf, dict):
+        raise ValueError("Config file is not a valid JSON object")
+    __version__ = conf['ver']
+    app.debug = conf['dbg']
+    app.secret_key = conf['key']
+    Host = conf['host']
+    Port = conf['port']
+except FileNotFoundError:
+    conf = {
+        'host': 'localhost',
+        'port': 27017,
+        'db': 'inventarsystem'
+    }
 
 APP_VERSION = __version__
 
@@ -1108,7 +1127,7 @@ if __name__ == '__main__':
     """
     # SSL configuration
     ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
-    app.run("0.0.0.0", 8000, ssl_context=ssl_context)
+    app.run(Host, Port, ssl_context=ssl_context)
 
 import atexit
 atexit.register(lambda: scheduler.shutdown())
