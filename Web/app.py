@@ -40,9 +40,22 @@ import ausleihung as au
 import bookings as bo
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
+import json
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Import config
+try:
+    with open(os.path.join(BASE_DIR, 'config'), 'r') as f:
+        conf = json.load(f)
+except FileNotFoundError:
+    conf = {
+        'host': 'localhost',
+        'port': 27017,
+        'db': 'inventarsystem'
+    }
+
 
 # Initialize Flask application
 app = Flask(__name__)
