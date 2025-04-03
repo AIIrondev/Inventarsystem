@@ -6,3 +6,4 @@ certs
 *.jpg
 *.jpeg
 __pycache__
+config.json
