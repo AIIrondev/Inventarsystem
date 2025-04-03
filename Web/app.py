@@ -52,9 +52,9 @@ app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
-__version__ = '0.0.1'
+__version__ = '1.2.4'  # Version of the application
 
-APP_VERSION = "1.0.0"
+APP_VERSION = __version__
 
 @app.context_processor
 def inject_version():
