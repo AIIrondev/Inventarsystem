@@ -1,5 +1,22 @@
 #!/bin/bash
 
+sudo apt-get update
+sudo apt-get install -y curl wget git
+
+# Clone the repository if it doesn't exist already
+REPO_URL="https://github.com/aiirondev/Inventarsystem.git"
+REPO_DIR="$HOME/Inventarsystem"
+
+if [ ! -d "$REPO_DIR" ]; then
+    echo "Cloning Inventarsystem repository..."
+    git clone $REPO_URL $REPO_DIR
+else
+    echo "Repository already exists at $REPO_DIR"
+fi
+
+# Change to the repository directory
+cd $REPO_DIR
+
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
