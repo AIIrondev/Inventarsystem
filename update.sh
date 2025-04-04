@@ -165,6 +165,3 @@ else
     echo "  $PROJECT_ROOT/logs/update.log"
     echo "========================================================"
 fi
-
-# Make this script executable
-chmod +x "$0"
