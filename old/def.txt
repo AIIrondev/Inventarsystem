@@ -1,4 +1,0 @@
-Inventar nummer [Jahr, Code, Kürzel] -> Aufkleber Done
-Anschaffungskosten done
-Detailierte Beschreibung extra window for Card Done
-Zeitlich ausgeliehen plannen -> Schulstunden Weise + Tage In arbeit
