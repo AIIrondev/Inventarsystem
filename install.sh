@@ -4,38 +4,13 @@ sudo apt-get update
 sudo apt-get install -y curl wget git
 
 echo "Installing Inventarsystem..."
-# Clone the repository if it doesn't exist already
-REPO_URL="https://github.com/aiirondev/Inventarsystem.git"
-REPO_DIR="$HOME/.local/share/inventarsystem"
+# Clone the repository to /var
+git clone https://github.com/AIIrondev/Inventarsystem.git /var/Inventarsystem || {
+    echo "Failed to clone repository to /var/Inventarsystem. Exiting."
+    exit 1
+}
 
-# Create directory structure if it doesn't exist
-mkdir -p "$HOME/.local/bin"
-
-if [ ! -d "$REPO_DIR" ]; then
-    echo "Cloning Inventarsystem repository..."
-    git clone $REPO_URL $REPO_DIR
-else
-    echo "Repository already exists at $REPO_DIR"
-    
-    # Auto-update functionality
-    echo "Checking for updates..."
-    cd $REPO_DIR
-    
-    # Check if there are any updates available
-    git fetch origin
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse @{u})
-    
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "Updates available. Updating Inventarsystem..."
-        git pull origin main || {
-            echo "Failed to update. Continuing with existing version."
-        }
-        echo "✓ Inventarsystem updated to the latest version"
-    else
-        echo "✓ Inventarsystem is already up to date"
-    fi
-fi
+REPO_DIR = /var/Inventarsystem
 
 cd $REPO_DIR
 # Check if the start-codespace.sh script exists
