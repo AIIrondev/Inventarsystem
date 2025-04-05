@@ -239,11 +239,31 @@ fi
 echo "✓ Flask application files found"
 
 echo "========================================================"
-echo "           GENERATING SSL CERTIFICATES                  "
+echo "           CHECKING FOR SSL CERTIFICATES                "
 echo "========================================================"
 
+# Set default certificate paths
+CERT_PATH="${CUSTOM_CERT_PATH:-$CERT_DIR/inventarsystem.crt}"
+KEY_PATH="${CUSTOM_KEY_PATH:-$CERT_DIR/inventarsystem.key}"
+
+# Check if custom certificates are specified and exist
+if [ -n "$CUSTOM_CERT_PATH" ] && [ -n "$CUSTOM_KEY_PATH" ]; then
+    if [ -f "$CUSTOM_CERT_PATH" ] && [ -f "$CUSTOM_KEY_PATH" ]; then
+        echo "Using custom certificates from:"
+        echo "  - Certificate: $CUSTOM_CERT_PATH"
+        echo "  - Key: $CUSTOM_KEY_PATH"
+    else
+        echo "WARNING: Specified custom certificates not found!"
+        echo "  - Certificate: $CUSTOM_CERT_PATH"
+        echo "  - Key: $CUSTOM_KEY_PATH"
+        echo "Falling back to default certificate location."
+        CERT_PATH="$CERT_DIR/inventarsystem.crt"
+        KEY_PATH="$CERT_DIR/inventarsystem.key"
+    fi
+fi
+
 # Generate SSL certificates if they don't exist
-if [ ! -f $CERT_DIR/inventarsystem.crt ] || [ ! -f $CERT_DIR/inventarsystem.key ]; then
+if [ ! -f $CERT_PATH ] || [ ! -f $KEY_PATH ]; then
     echo "Generating SSL certificates..."
     # First ensure the directory is writable by the current user
     sudo chown -R $(whoami) $CERT_DIR
@@ -259,8 +279,12 @@ if [ ! -f $CERT_DIR/inventarsystem.crt ] || [ ! -f $CERT_DIR/inventarsystem.key 
     # Fix permissions
     chmod 600 $CERT_DIR/inventarsystem.key
     
+    # Set paths to the newly generated certificates
+    CERT_PATH="$CERT_DIR/inventarsystem.crt"
+    KEY_PATH="$CERT_DIR/inventarsystem.key"
+    
     # Verify certificates exist
-    if [ -f $CERT_DIR/inventarsystem.crt ] && [ -f $CERT_DIR/inventarsystem.key ]; then
+    if [ -f $CERT_PATH ] && [ -f $KEY_PATH ]; then
         echo "✓ SSL certificates generated"
     else
         echo "ERROR: SSL certificates were not created properly"
@@ -268,6 +292,8 @@ if [ ! -f $CERT_DIR/inventarsystem.crt ] || [ ! -f $CERT_DIR/inventarsystem.key 
     fi
 else
     echo "✓ SSL certificates already exist"
+    # Ensure key has appropriate permissions
+    chmod 600 $KEY_PATH
 fi
 
 # Set environment variables
@@ -407,8 +433,12 @@ if [ "$IS_CODESPACE" = true ]; then
     sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
 # Main app configuration - Codespace-specific
 server {
-    listen 80;
+    listen 8443 ssl;
     server_name _;
+    
+    ssl_certificate $CERT_PATH;
+    ssl_certificate_key $KEY_PATH;
+    ssl_protocols TLSv1.2 TLSv1.3;
     
     location / {
         proxy_pass http://localhost:8443;
