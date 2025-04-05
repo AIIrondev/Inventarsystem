@@ -3,6 +3,7 @@
 sudo apt-get update
 sudo apt-get install -y curl wget git
 
+echo "Installing Inventarsystem..."
 # Clone the repository if it doesn't exist already
 REPO_URL="https://github.com/aiirondev/Inventarsystem.git"
 REPO_DIR="$HOME/Inventarsystem"
