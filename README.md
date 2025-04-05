@@ -52,12 +52,31 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 Installation des Systems mit dem Installations-Skript (für Linux):
 
 ```bash
-wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
 ```
 OR
  
 ```bash
-curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/start-codespace.sh | sudo bash
+curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
+```
+
+## Starten des Servers nach der erst Instalation
+
+Als erstes müssen sie in die Website Direktion navigieren.
+Anschließend führen sie den folgenden Comand aus:
+
+```bash
+sudo ./start-codespace.sh
+```
+
+## Optionale Autostart funktion(not finisched)
+
+** Warnung nicht Fertig, mögliche Fehler die zu System Fehlern führen können ** 
+
+Starten sie mit dem folgenden Comand den automatischen prozess:
+
+```bash
+sudo ./update.sh
 ```
 
 ## Benutzerhandbuch
