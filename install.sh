@@ -67,7 +67,34 @@ echo ""
 echo "Please run the following command to activate the changes in your current terminal:"
 echo "source ~/.bashrc"
 
+# Ask if the user wants to install it as a autostartup application
+read -p "Do you want to install it as an autostart application? (y/n): " install_autostart
+if [[ $install_autostart == "y" || $install_autostart == "Y" ]]; then
+    ./update.sh
+    echo "Autostart application installed successfully!"
+else
+    echo "Autostart application installation skipped."
+fi
+
 # Run the script
+# Ask the user if they want to run the script now
+read -p "Do you want to run the script now? (y/n): " run_now
+if [[ $run_now == "y" || $run_now == "Y" ]]; then
+    echo "Running the script now..."
+    ./start-codespace.sh
+else
+    echo "You can run the script later by typing 'inventarsystem' in your terminal."
+fi
+echo "========================================================"
+echo "                  INSTALLATION COMPLETE                 "
+echo "========================================================"
+echo "You can now access Inventarsystem in these ways:"
+echo "1. Type 'inventarsystem' in terminal"
+echo "2. Type 'invsys' to navigate to the directory"
+echo "3. Find 'Inventarsystem' in your application menu"
 echo ""
-echo "Running start-codespace.sh..."
-./start-codespace.sh
+echo "Please run the following command to activate the changes in your current terminal:"
+echo "source ~/.bashrc"
+echo "========================================================"
+echo "                  INSTALLATION COMPLETE                 "
+echo "========================================================"
