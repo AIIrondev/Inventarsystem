@@ -22,33 +22,6 @@ fi
 # Make the script executable
 chmod +x ./start-codespace.sh
 
-# Create user-level symbolic link for easy access (no sudo required)
-echo "Creating symbolic link for easy access..."
-ln -sf "$REPO_DIR/start-codespace.sh" "$HOME/.local/bin/inventarsystem"
-
-# Make sure ~/.local/bin is in PATH
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-    echo "Added ~/.local/bin to your PATH"
-fi
-
-# Add alias for quick directory access
-echo "Adding alias for quick directory navigation..."
-if ! grep -q "alias invsys=" "$HOME/.bashrc"; then
-    echo "alias invsys='cd $REPO_DIR'" >> "$HOME/.bashrc"
-fi
-
-# Create a desktop file for easy launching
-mkdir -p "$HOME/.local/share/applications"
-cat > "$HOME/.local/share/applications/inventarsystem.desktop" << EOF
-[Desktop Entry]
-Name=Inventarsystem
-Comment=Launch Inventarsystem
-Exec=$HOME/.local/bin/inventarsystem
-Terminal=true
-Type=Application
-Categories=Utility;
-EOF
 
 echo "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
@@ -64,6 +37,7 @@ echo "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
 echo "========================================================"
 
+cd $REPO_DIR
 # Run the script
 # Ask the user if they want to run the script now
 echo "Running the script now..."
