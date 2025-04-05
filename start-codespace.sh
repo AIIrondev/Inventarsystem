@@ -1,16 +1,13 @@
 #!/bin/bash
 
-# Change to the repository directory
-cd $REPO_DIR
-
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
-    echo "Failed to determine project root directory. Exiting."
-    exit 1
-}
+PROJECT_ROOT=/var/Inventarsystem
+VENV_DIR="$PROJECT_ROOT/.venv"
+
+# Rest of the script remains the same starting from line 16
 VENV_DIR="$PROJECT_ROOT/.venv"
 
 sudo apt install python3.12
@@ -514,6 +511,8 @@ if [ "$IS_CODESPACE" = true ]; then
     echo "IMPORTANT: If ports are not public, please make them manually public in the PORTS tab."
 fi
 
+
+
 echo "========================================================"
 echo "           STARTING APPLICATION                         "
 echo "========================================================"
@@ -521,6 +520,7 @@ echo "========================================================"
 # Show access information
 echo "========================================================"
 echo "Access Information:"
+echo "========================================================"
 
 if [ "$IS_CODESPACE" = true ]; then
     CODESPACE_NAME=$(gh codespace list --json name -q '.[0].name' 2>/dev/null)
@@ -530,6 +530,42 @@ if [ "$IS_CODESPACE" = true ]; then
     echo "Local Web Interface: http://localhost:8443"
 else
     echo "Web Interface: https://$NETWORK_IP:8443"
+fi
+
+# Add autostart functionality
+echo "========================================================"
+echo "           CONFIGURING AUTOSTART                        "
+echo "========================================================"
+if [ "$IS_CODESPACE" = false ]; then  # Only for non-Codespace environments
+    # Create systemd service file
+    SERVICE_FILE="$HOME/.config/systemd/user/inventarsystem.service"
+    mkdir -p "$HOME/.config/systemd/user"
+    
+    cat > "$SERVICE_FILE" << EOF
+[Unit]
+Description=Inventarsystem Service
+After=network.target mongodb.service
+
+[Service]
+Type=simple
+ExecStart=$PROJECT_ROOT/start-codespace.sh
+WorkingDirectory=$PROJECT_ROOT
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+    
+    # Enable the service for autostart
+    systemctl --user enable inventarsystem.service
+    
+    # Enable lingering for the user to allow the service to start on boot
+    sudo loginctl enable-linger $(whoami)
+    
+    echo "✓ Autostart enabled. Inventarsystem will start automatically on system boot."
+else
+    echo "Autostart is not available in Codespace environment."
 fi
 
 echo "========================================================"
