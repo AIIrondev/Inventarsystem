@@ -22,18 +22,7 @@ fi
 # Make the script executable
 chmod +x ./start-codespace.sh
 
-
-echo "========================================================"
-echo "                  INSTALLATION COMPLETE                 "
-echo "========================================================"
-echo "You can now access Inventarsystem in these ways:"
-echo "1. Type 'inventarsystem' in terminal"
-echo "2. Type 'invsys' to navigate to the directory"
-echo "3. Find 'Inventarsystem' in your application menu"
-echo ""
-echo "Please run the following command to activate the changes in your current terminal:"
-echo "source ~/.bashrc"
-echo "========================================================"
+ "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
 echo "========================================================"
 
