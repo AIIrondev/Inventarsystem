@@ -411,7 +411,8 @@ else
         if [ "$MONGODB_STARTED" = false ]; then
             echo "Warning: Could not start MongoDB service"
             read -p "Continue without MongoDB? (y/n): " -n 1 -r
-            echo
+            echo Warning the Website might not responde to any requests of the Client if the Database is down
+            echo 
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "Exiting."
                 exit 1
