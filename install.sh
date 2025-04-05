@@ -91,15 +91,10 @@ echo "========================================================"
 
 # Run the script
 # Ask the user if they want to run the script now
-read -p "Do you want to run the script now? (y/n): " run_now
-if [[ $run_now == "y" || $run_now == "Y" ]]; then
-    echo "Running the script now..."
-    ./start-codespace.sh
-    if [ $? -ne 0 ]; then
-        echo "Failed to run the script. Please check the logs for more details."
-        exit 1
-    fi
-    echo "Script executed successfully!"
-else
-    echo "You can run the script later by typing 'inventarsystem' in your terminal."
+echo "Running the script now..."
+./start-codespace.sh
+if [ $? -ne 0 ]; then
+    echo "Failed to run the script. Please check the logs for more details."
+    exit 1
 fi
+echo "Script executed successfully!"
