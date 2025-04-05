@@ -60,7 +60,7 @@ OR
 curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
 ```
 
-## Starten des Servers nach der erst Instalation
+### Starten des Servers nach der erst Instalation
 
 Als erstes müssen sie in die Website Direktion navigieren.
 Anschließend führen sie den folgenden Comand aus:
@@ -69,7 +69,7 @@ Anschließend führen sie den folgenden Comand aus:
 sudo ./start-codespace.sh
 ```
 
-## Optionale Autostart funktion(not finisched)
+### Optionale Autostart funktion(not finisched)
 
 ** Warnung nicht Fertig, mögliche Fehler die zu System Fehlern führen können ** 
 
