@@ -1,16 +1,13 @@
 #!/bin/bash
 
-# Change to the repository directory
-cd $REPO_DIR
-
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
-    echo "Failed to determine project root directory. Exiting."
-    exit 1
-}
+PROJECT_ROOT=/var/Inventarsystem
+VENV_DIR="$PROJECT_ROOT/.venv"
+
+# Rest of the script remains the same starting from line 16
 VENV_DIR="$PROJECT_ROOT/.venv"
 
 sudo apt install python3.12
