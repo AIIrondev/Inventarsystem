@@ -91,6 +91,40 @@ def add_user(username, password):
     return True
 
 
+def make_admin(username):
+    """
+    Grant administrator privileges to a user.
+    
+    Args:
+        username (str): Username of the user to promote
+        
+    Returns:
+        bool: True if user was promoted successfully
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    users = db['users']
+    users.update_one({'Username': username}, {'$set': {'Admin': True}})
+    client.close()
+    return True
+
+def remove_admin(username):
+    """
+    Remove administrator privileges from a user.
+    
+    Args:
+        username (str): Username of the user to demote
+        
+    Returns:
+        bool: True if user was demoted successfully
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    users = db['users']
+    users.update_one({'Username': username}, {'$set': {'Admin': False}})
+    client.close()
+    return True
+
 def get_user(username):
     """
     Retrieve a specific user by username.
