@@ -61,7 +61,6 @@ Port = 8080
 
 # Import config
 try:
-    print(f"Loading configuration from {BASE_DIR}/config.json...")
     with open(os.path.join(BASE_DIR, '..', 'config.json'), 'r') as f:
         conf = json.load(f)
     
@@ -69,19 +68,18 @@ try:
     required_keys = ['dbg', 'key', 'ver', 'host', 'port']
     for key in required_keys:
         if key not in conf:
-            print(f"Warning: Missing required key in config: {key}. Using default value.")
+            pass # add logging here
+            #print(f"Warning: Missing required key in config: {key}. Using default value.")
     
     # Set application variables from config or use defaults
     __version__ = conf.get('ver', '1.2.4')
     app.debug = conf.get('dbg', False)
     app.secret_key = conf.get('key', 'Hsse783942h2342f342342i34hwebf8')
     Host = conf.get('host', '0.0.0.0')
-    Port = conf.get('port', 8443)  # Changed default port to 8443 to match your setup
-    
-    print(f"Config loaded successfully: {conf}")
+    Port = conf.get('port', 443)
     
 except FileNotFoundError:
-    print("Config file not found. Using default values.")
+    print("Config file not found. Using values.") # add logging here
     # Default configuration
     __version__ = '1.2.4'
     app.debug = False
@@ -97,7 +95,7 @@ except FileNotFoundError:
     }
     
 except json.JSONDecodeError:
-    print("Error: Config file contains invalid JSON. Using default values.")
+    print("Error: Config file contains invalid JSON. Using values.") # add logging here
     # Default configuration
     __version__ = '1.2.4'
     app.debug = False
@@ -1108,9 +1106,11 @@ def process_bookings():
                 # Update item status
                 it.update_item_status(item_id, False, user)
             else:
-                print(f"Failed to create ausleihung for booking {booking_id}")
+                pass # add logging here
+                #print(f"Failed to create ausleihung for booking {booking_id}")
         except Exception as e:
-            print(f"Error processing booking: {e}")
+            pass # add logging here
+            # print(f"Error processing booking: {e}")
     
     # Also check for bookings that should end now
     ending_bookings = bo.get_bookings_ending_now(current_time)
@@ -1141,7 +1141,8 @@ def process_bookings():
                         current_time
                     )
         except Exception as e:
-            print(f"Error ending booking: {e}")
+            pass # add logging here
+            # print(f"Error ending booking: {e}")
 
 scheduler.add_job(process_bookings, 'interval', minutes=1)
 scheduler.start()
