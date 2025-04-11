@@ -87,20 +87,13 @@ except FileNotFoundError:
     Port = 8443
     
 except json.JSONDecodeError:
-    print("Error: Config file contains invalid JSON. Using values.") # add logging here
+    print("Error: Config file contains invalid JSON. Using default values.")
     # Default configuration
     __version__ = '1.2.4'
     app.debug = False
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
     Port = 8443
-    
-    # Set MongoDB configuration
-    conf = {
-        'mongodb_host': 'localhost',
-        'mongodb_port': 27017,
-        'db': 'inventarsystem'
-    }
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
