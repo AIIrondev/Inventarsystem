@@ -61,31 +61,58 @@ Port = 8080
 
 # Import config
 try:
-    with open(os.path.join(BASE_DIR, 'config.json'), 'r') as f:
+    print(f"Loading configuration from {BASE_DIR}/config.json...")
+    with open(os.path.join(BASE_DIR, '..', 'config.json'), 'r') as f:
         conf = json.load(f)
+    
     # Check if config file has the required keys
     required_keys = ['dbg', 'key', 'ver', 'host', 'port']
     for key in required_keys:
         if key not in conf:
-            raise KeyError(f"Missing required key in config: {key}")
-    # Check if the config file is empty
-    if not conf:
-        raise ValueError("Config file is empty")
-    # Check if the config file is a valid JSON
-    if not isinstance(conf, dict):
-        raise ValueError("Config file is not a valid JSON object")
-    __version__ = conf['ver']
-    app.debug = conf['dbg']
-    app.secret_key = conf['key']
-    Host = conf['host']
-    Port = conf['port']
+            print(f"Warning: Missing required key in config: {key}. Using default value.")
+    
+    # Set application variables from config or use defaults
+    __version__ = conf.get('ver', '1.2.4')
+    app.debug = conf.get('dbg', False)
+    app.secret_key = conf.get('key', 'Hsse783942h2342f342342i34hwebf8')
+    Host = conf.get('host', '0.0.0.0')
+    Port = conf.get('port', 8443)  # Changed default port to 8443 to match your setup
+    
+    print(f"Config loaded successfully: {conf}")
+    
 except FileNotFoundError:
+    print("Config file not found. Using default values.")
+    # Default configuration
+    __version__ = '1.2.4'
+    app.debug = False
+    app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
+    Host = '0.0.0.0'
+    Port = 8443
+    
+    # Set MongoDB configuration
     conf = {
-        'host': 'localhost',
-        'port': 27017,
+        'mongodb_host': 'localhost',
+        'mongodb_port': 27017,
+        'db': 'inventarsystem'
+    }
+    
+except json.JSONDecodeError:
+    print("Error: Config file contains invalid JSON. Using default values.")
+    # Default configuration
+    __version__ = '1.2.4'
+    app.debug = False
+    app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
+    Host = '0.0.0.0'
+    Port = 8443
+    
+    # Set MongoDB configuration
+    conf = {
+        'mongodb_host': 'localhost',
+        'mongodb_port': 27017,
         'db': 'inventarsystem'
     }
 
+# Apply the configuration for general use throughout the app
 APP_VERSION = __version__
 
 @app.context_processor

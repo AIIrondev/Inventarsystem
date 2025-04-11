@@ -4,7 +4,11 @@
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-PROJECT_ROOT=/var/Inventarsystem
+# Get the directory where the script is located
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
+    echo "Failed to determine project root directory. Exiting."
+    exit 1
+}
 VENV_DIR="$PROJECT_ROOT/.venv"
 
 # Rest of the script remains the same starting from line 16
@@ -310,10 +314,10 @@ if [ -n "$CODESPACES" ] && [ "$CODESPACES" = "true" ]; then
     
     # Use direct port binding instead of Unix sockets
     USE_DIRECT_PORTS=true
-    WEB_BINDING="0.0.0.0:8443"
+    WEB_BINDING="0.0.0.0:443" # Direct port binding for Codespaces
     
     echo "Configured for direct port binding in Codespace environment"
-    echo "Port 8443 will be used directly"
+    echo "Port 443 will be used directly"
     
     # Make sure GitHub CLI is available
     if ! command -v gh &> /dev/null; then
@@ -431,7 +435,7 @@ if [ "$IS_CODESPACE" = true ]; then
     sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
 # Main app configuration - Codespace-specific
 server {
-    listen 8443 ssl;
+    listen 443 ssl;
     server_name _;
     
     ssl_certificate $CERT_PATH;
@@ -439,7 +443,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     
     location / {
-        proxy_pass http://localhost:8443;
+        proxy_pass http://localhost:443;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -456,7 +460,7 @@ else
     sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
 # HTTPS for main app
 server {
-    listen 8443 ssl;
+    listen 443 ssl;
     server_name _;
     
     ssl_certificate $CERT_DIR/inventarsystem.crt;
@@ -505,8 +509,8 @@ if [ "$IS_CODESPACE" = true ]; then
     echo "========================================================"
     
     # Try to make ports public
-    echo "Making port 8443 public..."
-    gh codespace ports visibility 8443:public 2>/dev/null || echo "Failed to make port 8443 public via CLI"
+    echo "Making port 443 public..."
+    gh codespace ports visibility 443:public 2>/dev/null || echo "Failed to make port 443 public via CLI"
     
     echo "IMPORTANT: If ports are not public, please make them manually public in the PORTS tab."
 fi
@@ -526,10 +530,10 @@ if [ "$IS_CODESPACE" = true ]; then
     CODESPACE_NAME=$(gh codespace list --json name -q '.[0].name' 2>/dev/null)
     GITHUB_CODESPACE_DOMAIN=$(echo "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" | sed 's/^\(.*\)$/\1/')
     
-    echo "Codespace Web Interface: https://$CODESPACE_NAME-8443.$GITHUB_CODESPACE_DOMAIN"
-    echo "Local Web Interface: http://localhost:8443"
+    echo "Codespace Web Interface: https://$CODESPACE_NAME-443.$GITHUB_CODESPACE_DOMAIN"
+    echo "Local Web Interface: http://localhost:443"
 else
-    echo "Web Interface: https://$NETWORK_IP:8443"
+    echo "Web Interface: https://$NETWORK_IP:443"
 fi
 
 # Add autostart functionality
