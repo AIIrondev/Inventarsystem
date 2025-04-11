@@ -68,31 +68,23 @@ try:
     required_keys = ['dbg', 'key', 'ver', 'host', 'port']
     for key in required_keys:
         if key not in conf:
-            pass # add logging here
-            #print(f"Warning: Missing required key in config: {key}. Using default value.")
+            print(f"Warning: Missing required key in config: {key}. Using default value.")
     
     # Set application variables from config or use defaults
     __version__ = conf.get('ver', '1.2.4')
     app.debug = conf.get('dbg', False)
-    app.secret_key = conf.get('key', 'Hsse783942h2342f342342i34hwebf8')
+    app.secret_key = str(conf.get('key', 'Hsse783942h2342f342342i34hwebf8'))  # Convert to string
     Host = conf.get('host', '0.0.0.0')
     Port = conf.get('port', 443)
     
 except FileNotFoundError:
-    print("Config file not found. Using values.") # add logging here
+    print("Config file not found. Using default values.")
     # Default configuration
     __version__ = '1.2.4'
     app.debug = False
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
     Port = 8443
-    
-    # Set MongoDB configuration
-    conf = {
-        'mongodb_host': 'localhost',
-        'mongodb_port': 27017,
-        'db': 'inventarsystem'
-    }
     
 except json.JSONDecodeError:
     print("Error: Config file contains invalid JSON. Using values.") # add logging here
