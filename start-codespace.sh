@@ -4,18 +4,11 @@
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
 # Set project root directory
-# Get the directory where the script is located
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
     echo "Failed to determine project root directory. Exiting."
     exit 1
 }
 VENV_DIR="$PROJECT_ROOT/.venv"
-
-# Rest of the script remains the same starting from line 16
-VENV_DIR="$PROJECT_ROOT/.venv"
-
-sudo apt install python3.12
-sudo apt install python3.12-venv
 
 # Create logs directory if it doesn't exist
 sudo mkdir -p "$PROJECT_ROOT/logs"
@@ -208,7 +201,8 @@ if ! systemctl is-active --quiet mongodb && ! systemctl is-active --quiet mongod
     if [ "$MONGODB_STARTED" = false ]; then
         echo "Warning: Could not start MongoDB service"
         read -p "Continue without MongoDB? (y/n): " -n 1 -r
-        echo
+        echo "Warning: The website might not respond to any requests from clients if the database is down"
+        echo 
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "Exiting."
             exit 1
@@ -301,163 +295,22 @@ fi
 export FLASK_ENV=production
 export FLASK_APP=Web/app.py
 
-# Check if running in a GitHub Codespace
-if [ -n "$CODESPACES" ] && [ "$CODESPACES" = "true" ]; then
-    echo "========================================================"
-    echo "       DETECTED GITHUB CODESPACE ENVIRONMENT            "
-    echo "========================================================"
-    IS_CODESPACE=true
-    
-    # Use service instead of systemctl in Codespaces
-    NGINX_START_CMD="sudo service nginx start"
-    NGINX_STOP_CMD="sudo service nginx stop"
-    
-    # Use direct port binding instead of Unix sockets
-    USE_DIRECT_PORTS=true
-    WEB_BINDING="0.0.0.0:443" # Direct port binding for Codespaces
-    
-    echo "Configured for direct port binding in Codespace environment"
-    echo "Port 443 will be used directly"
-    
-    # Make sure GitHub CLI is available
-    if ! command -v gh &> /dev/null; then
-        echo "Installing GitHub CLI..."
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-        sudo apt update
-        sudo apt install -y gh
-    fi
-else
-    IS_CODESPACE=false
-    
-    # Use systemctl for standard environments
-    NGINX_START_CMD="sudo systemctl restart nginx"
-    NGINX_STOP_CMD="sudo systemctl stop nginx"
-    
-    # Use Unix sockets for standard environments
-    USE_DIRECT_PORTS=false
-    WEB_BINDING="unix:/tmp/inventarsystem.sock"
-fi
+# Use systemctl for standard environments
+NGINX_START_CMD="sudo systemctl restart nginx"
+NGINX_STOP_CMD="sudo systemctl stop nginx"
 
-if [ "$IS_CODESPACE" = true ]; then
-    echo "========================================================"
-    echo "           CONFIGURING MONGODB FOR CODESPACE            "
-    echo "========================================================"
-    
-    # Check if MongoDB is installed
-    if ! command -v mongod &> /dev/null; then
-        echo "Installing MongoDB in Codespace environment..."
-        # Add MongoDB apt repository
-        curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
-            sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
-            --dearmor
-        
-        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
-            sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-        
-        sudo apt-get update
-        sudo apt-get install -y mongodb-org
-    fi
-    
-    # Create data directory if it doesn't exist
-    echo "Setting up MongoDB data directory..."
-    sudo mkdir -p /data/db
-    sudo chmod 777 /data/db
-    
-    # Check if MongoDB is already running
-    if pgrep mongod > /dev/null; then
-        echo "MongoDB is already running."
-    else
-        echo "Starting MongoDB in the background..."
-        mongod --fork --logpath "$PROJECT_ROOT/logs/mongodb.log" --bind_ip 127.0.0.1
-        
-        # Wait for MongoDB to start
-        echo "Waiting for MongoDB to start..."
-        sleep 5
-        
-        if pgrep mongod > /dev/null; then
-            echo "✓ MongoDB started successfully"
-        else
-            echo "WARNING: MongoDB failed to start. Check logs at $PROJECT_ROOT/logs/mongodb.log"
-        fi
-    fi
-    
-    # Test MongoDB connection
-    echo "Testing MongoDB connection..."
-    if mongo --eval "db.version()" 127.0.0.1:27017 &>/dev/null; then
-        echo "✓ MongoDB connection successful"
-    else
-        echo "WARNING: Could not connect to MongoDB. Your application might not work correctly."
-        echo "You may need to manually run: mongod --fork --logpath $PROJECT_ROOT/logs/mongodb.log"
-    fi
-else
-    # Standard MongoDB setup for non-Codespace environments
-    # Verify MongoDB service using systemctl
-    if ! systemctl is-active --quiet mongodb && ! systemctl is-active --quiet mongod; then
-        echo "Starting MongoDB service..."
-        # Try different service names
-        MONGODB_STARTED=false
-        for SERVICE in mongodb mongod; do
-            if systemctl list-unit-files | grep -q $SERVICE; then
-                sudo systemctl start $SERVICE
-                if [ $? -eq 0 ]; then
-                    echo "Started $SERVICE service"
-                    MONGODB_STARTED=true
-                    break
-                fi
-            fi
-        done
-        
-        if [ "$MONGODB_STARTED" = false ]; then
-            echo "Warning: Could not start MongoDB service"
-            read -p "Continue without MongoDB? (y/n): " -n 1 -r
-            echo Warning the Website might not responde to any requests of the Client if the Database is down
-            echo 
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Exiting."
-                exit 1
-            fi
-        fi
-    else
-        echo "✓ MongoDB is running"
-    fi
-fi
+# Use Unix sockets for standard environments
+WEB_BINDING="unix:/tmp/inventarsystem.sock"
 
 echo "========================================================"
 echo "           CONFIGURING NGINX                            "
 echo "========================================================"
 
-# Create Nginx config file based on environment
+# Create Nginx config file
 echo "Creating Nginx configuration..."
-if [ "$IS_CODESPACE" = true ]; then
-    # Codespace-specific Nginx configuration
-    sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
-# Main app configuration - Codespace-specific
-server {
-    listen 443 ssl;
-    server_name _;
-    
-    ssl_certificate $CERT_PATH;
-    ssl_certificate_key $KEY_PATH;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    
-    location / {
-        proxy_pass http://localhost:443;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    location /static {
-        alias $PROJECT_ROOT/Web/static;
-    }
-}
-EOF
-else
-    # Standard Nginx configuration with SSL
-    sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
+
+# Standard Nginx configuration with SSL
+sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
 # HTTPS for main app
 server {
     listen 443 ssl;
@@ -480,7 +333,6 @@ server {
     }
 }
 EOF
-fi
 
 # Create symbolic link to enable the site
 if [ ! -f /etc/nginx/sites-enabled/inventarsystem.conf ]; then
@@ -502,21 +354,6 @@ $NGINX_START_CMD || {
 }
 echo "✓ Nginx configured and started"
 
-# Expose ports in Codespace if needed
-if [ "$IS_CODESPACE" = true ]; then
-    echo "========================================================"
-    echo "           CONFIGURING PORT FORWARDING                  "
-    echo "========================================================"
-    
-    # Try to make ports public
-    echo "Making port 443 public..."
-    gh codespace ports visibility 443:public 2>/dev/null || echo "Failed to make port 443 public via CLI"
-    
-    echo "IMPORTANT: If ports are not public, please make them manually public in the PORTS tab."
-fi
-
-
-
 echo "========================================================"
 echo "           STARTING APPLICATION                         "
 echo "========================================================"
@@ -526,33 +363,28 @@ echo "========================================================"
 echo "Access Information:"
 echo "========================================================"
 
-if [ "$IS_CODESPACE" = true ]; then
-    CODESPACE_NAME=$(gh codespace list --json name -q '.[0].name' 2>/dev/null)
-    GITHUB_CODESPACE_DOMAIN=$(echo "$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN" | sed 's/^\(.*\)$/\1/')
-    
-    echo "Codespace Web Interface: https://$CODESPACE_NAME-443.$GITHUB_CODESPACE_DOMAIN"
-    echo "Local Web Interface: http://localhost:443"
-else
-    echo "Web Interface: https://$NETWORK_IP:443"
-fi
+echo "Web Interface: https://$NETWORK_IP"
+echo "Web Interface (Unix Socket): http://unix:/tmp/inventarsystem.sock"
+echo "MongoDB: mongodb://localhost:27017"
+echo "========================================================"
 
 # Add autostart functionality
 echo "========================================================"
 echo "           CONFIGURING AUTOSTART                        "
 echo "========================================================"
-if [ "$IS_CODESPACE" = false ]; then  # Only for non-Codespace environments
-    # Create systemd service file
-    SERVICE_FILE="$HOME/.config/systemd/user/inventarsystem.service"
-    mkdir -p "$HOME/.config/systemd/user"
-    
-    cat > "$SERVICE_FILE" << EOF
+
+# Create systemd service file
+SERVICE_FILE="$HOME/.config/systemd/user/inventarsystem.service"
+mkdir -p "$HOME/.config/systemd/user"
+
+cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Inventarsystem Service
 After=network.target mongodb.service
 
 [Service]
 Type=simple
-ExecStart=$PROJECT_ROOT/start-codespace.sh
+ExecStart=$PROJECT_ROOT/start.sh
 WorkingDirectory=$PROJECT_ROOT
 Restart=on-failure
 RestartSec=5
@@ -560,17 +392,14 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-    
-    # Enable the service for autostart
-    systemctl --user enable inventarsystem.service
-    
-    # Enable lingering for the user to allow the service to start on boot
-    sudo loginctl enable-linger $(whoami)
-    
-    echo "✓ Autostart enabled. Inventarsystem will start automatically on system boot."
-else
-    echo "Autostart is not available in Codespace environment."
-fi
+
+# Enable the service for autostart
+systemctl --user enable inventarsystem.service
+
+# Enable lingering for the user to allow the service to start on boot
+sudo loginctl enable-linger $(whoami)
+
+echo "✓ Autostart enabled. Inventarsystem will start automatically on system boot."
 
 echo "========================================================"
 echo "NOTE: Your browser may show a security warning because"
