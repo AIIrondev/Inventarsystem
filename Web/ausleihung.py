@@ -74,7 +74,7 @@ def add_ausleihung(item_id, user_id, start, end=None, notes=""):
         client.close()
         return ausleihung_id
     except Exception as e:
-        print(f"Error adding ausleihung: {e}")
+        # print(f"Error adding ausleihung: {e}") # Log the error
         return None
 
 
@@ -118,7 +118,7 @@ def update_ausleihung(id, item_id, user_id, start, end, notes=None):
         client.close()
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error updating ausleihung: {e}")
+        # print(f"Error updating ausleihung: {e}") # Log the error
         return False
 
 
@@ -152,7 +152,7 @@ def complete_ausleihung(id, end_time=None):
         client.close()
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error completing ausleihung: {e}")
+        # print(f"Error completing ausleihung: {e}") # Log the error
         return False
 
 
@@ -175,7 +175,7 @@ def remove_ausleihung(id):
         client.close()
         return result.deleted_count > 0
     except Exception as e:
-        print(f"Error removing ausleihung: {e}")
+        # print(f"Error removing ausleihung: {e}") # Log the error
         return False
 
 
@@ -199,7 +199,7 @@ def get_ausleihung(id):
         client.close()
         return ausleihung
     except Exception as e:
-        print(f"Error retrieving ausleihung: {e}")
+        # print(f"Error retrieving ausleihung: {e}") # Log the error
         return None
 
 
@@ -225,7 +225,7 @@ def get_ausleihungen(include_completed=True):
         client.close()
         return results
     except Exception as e:
-        print(f"Error retrieving ausleihungen: {e}")
+        # print(f"Error retrieving ausleihungen: {e}") # Log the error
         return []
 
 
@@ -244,7 +244,7 @@ def get_active_ausleihungen():
         client.close()
         return results
     except Exception as e:
-        print(f"Error retrieving active ausleihungen: {e}")
+        # print(f"Error retrieving active ausleihungen: {e}") # Log the error
         return []
 
 
@@ -263,7 +263,7 @@ def get_completed_ausleihungen():
         client.close()
         return results
     except Exception as e:
-        print(f"Error retrieving completed ausleihungen: {e}")
+        # print(f"Error retrieving completed ausleihungen: {e}") # Log the error
         return []
 
 
@@ -293,7 +293,7 @@ def get_ausleihung_by_user(user_id, active_only=False):
         client.close()
         return results
     except Exception as e:
-        print(f"Error retrieving ausleihungen for user {user_id}: {e}")
+        # print(f"Error retrieving ausleihungen for user {user_id}: {e}") # Log the error
         return []
 
 
@@ -328,7 +328,7 @@ def get_ausleihung_by_item(item_id, include_history=False):
             client.close()
             return ausleihung
     except Exception as e:
-        print(f"Error retrieving ausleihungen for item {item_id}: {e}")
+        # print(f"Error retrieving ausleihungen for item {item_id}: {e}") # Log the error
         return [] if include_history else None
 
 
@@ -363,5 +363,5 @@ def get_ausleihungen_by_date_range(start_date, end_date):
         client.close()
         return results
     except Exception as e:
-        print(f"Error retrieving ausleihungen by date range: {e}")
+        # print(f"Error retrieving ausleihungen by date range: {e}") # Log the error
         return []

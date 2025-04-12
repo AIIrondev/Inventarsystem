@@ -138,7 +138,7 @@ def cancel_booking(booking_id):
         client.close()
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error cancelling booking: {e}")
+        # add logging print(f"Error cancelling booking: {e}")
         return False
 
 
@@ -163,7 +163,7 @@ def mark_booking_active(booking_id, ausleihung_id=None):
         # First, verify the booking exists and is in 'planned' status
         booking = booking_collection.find_one({'_id': ObjectId(booking_id)})
         if not booking or booking.get('Status') != 'planned':
-            print(f"Booking {booking_id} not found or not in planned status")
+            # add logging print(f"Booking {booking_id} not found or not in planned status")
             client.close()
             return False
         
@@ -178,7 +178,7 @@ def mark_booking_active(booking_id, ausleihung_id=None):
             )
             
             if not ausleihung_id:
-                print(f"Failed to create ausleihung record for booking {booking_id}")
+                # add logging print(f"Failed to create ausleihung record for booking {booking_id}")
                 client.close()
                 return False
         
@@ -196,7 +196,7 @@ def mark_booking_active(booking_id, ausleihung_id=None):
         client.close()
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error marking booking active: {e}")
+        # add logging print(f"Error marking booking active: {e}")
         return False
 
 
@@ -225,7 +225,7 @@ def mark_booking_completed(booking_id):
         client.close()
         return result.modified_count > 0
     except Exception as e:
-        print(f"Error marking booking completed: {e}")
+        # add logging print(f"Error marking booking completed: {e}")
         return False
 
 
@@ -250,7 +250,7 @@ def get_booking(booking_id):
         client.close()
         return booking
     except Exception as e:
-        print(f"Error retrieving booking: {e}")
+        # add logging print(f"Error retrieving booking: {e}")
         return None
 
 
@@ -288,13 +288,14 @@ def get_planned_bookings(start=None, end=None):
                     {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
                 ]
             except Exception as e:
-                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
+                pass
+                # add logging print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
         
         bookings = list(bookings_collection.find(query))
         client.close()
         return bookings
     except Exception as e:
-        print(f"Error getting planned bookings: {e}")
+        # add logging print(f"Error getting planned bookings: {e}")
         return []
 
 
@@ -332,13 +333,14 @@ def get_active_bookings(start=None, end=None):
                     {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
                 ]
             except Exception as e:
-                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
+                pass
+                # add logging print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
         
         bookings = list(bookings_collection.find(query))
         client.close()
         return bookings
     except Exception as e:
-        print(f"Error getting active bookings: {e}")
+        # add logging print(f"Error getting active bookings: {e}")
         return []
 
 
@@ -376,13 +378,14 @@ def get_completed_bookings(start=None, end=None):
                     {'Start': {'$lte': start_date}, 'End': {'$gte': end_date}}
                 ]
             except Exception as e:
-                print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
+                pass
+                # add logging print(f"Warning: Could not parse date range: {start} to {end}. Error: {e}")
         
         bookings = list(bookings_collection.find(query))
         client.close()
         return bookings
     except Exception as e:
-        print(f"Error getting completed bookings: {e}")
+        # add logging print(f"Error getting completed bookings: {e}")
         return []
 
 
@@ -420,14 +423,14 @@ def get_bookings_starting_now(current_time):
             'AusleihungId': {'$exists': False}  # Not yet processed
         }
         
-        print(f"Looking for bookings starting between {start_time} and {end_time}")
+        # add logging print(f"Looking for bookings starting between {start_time} and {end_time}")
         bookings = list(bookings_collection.find(query))
-        print(f"Found {len(bookings)} bookings to activate")
+        # add logging print(f"Found {len(bookings)} bookings to activate")
         
         client.close()
         return bookings
     except Exception as e:
-        print(f"Error getting bookings starting now: {e}")
+        # add logging print(f"Error getting bookings starting now: {e}")
         return []
 
 
@@ -462,12 +465,12 @@ def get_bookings_ending_now(current_time):
             'End': {'$gte': start_time, '$lte': end_time}
         }
         
-        print(f"Looking for bookings ending between {start_time} and {end_time}")
+        # add logging print(f"Looking for bookings ending between {start_time} and {end_time}")
         bookings = list(booking_collection.find(query))
-        print(f"Found {len(bookings)} bookings to complete")
+        # add logging print(f"Found {len(bookings)} bookings to complete")
         
         client.close()
         return bookings
     except Exception as e:
-        print(f"Error getting bookings ending now: {e}")
+        # add logging print(f"Error getting bookings ending now: {e}")
         return []
