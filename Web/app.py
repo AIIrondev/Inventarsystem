@@ -29,6 +29,7 @@ Features:
 - QR code generation for items
 - Administrative functions
 - History logging of item usage
+- Booking and reservation of items
 """
 
 import os
@@ -37,7 +38,6 @@ from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
-import bookings as bo
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import json
@@ -633,7 +633,7 @@ def get_bookings():
     
     # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
     # We process these first as they are the most current
-    active_bookings = bo.get_active_bookings(start, end)
+    active_bookings = au.get_active_bookings(start, end)
     for booking in active_bookings:
         item = it.get_item(booking.get('Item'))
         if not item:
@@ -710,7 +710,7 @@ def get_bookings():
         })
     
     # 3. Get planned bookings (from planned_bookings collection with status="planned")
-    planned_bookings = bo.get_planned_bookings(start, end)
+    planned_bookings = au.get_planned_bookings(start, end)
     for booking in planned_bookings:
         item_id = booking.get('Item')
         
@@ -742,7 +742,7 @@ def get_bookings():
         })
     
     # 4. Add completed bookings (from planned_bookings with status="completed")
-    completed_bookings = bo.get_completed_bookings(start, end)
+    completed_bookings = au.get_completed_bookings(start, end)
     for booking in completed_bookings:
         item_id = booking.get('Item')
         item = it.get_item(item_id)
@@ -806,11 +806,11 @@ def plan_booking():
         return {"success": False, "error": "Dieses Objekt ist aktuell nicht verfügbar"}, 409
     
     # Check for date conflicts with other bookings
-    if bo.check_booking_conflict(item_id, start_date, end_date):
+    if au.check_booking_conflict(item_id, start_date, end_date):
         return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
     
     # Create the planned booking
-    booking_id = bo.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
+    booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
     
     return {"success": True, "booking_id": str(booking_id)}
 
@@ -824,7 +824,7 @@ def cancel_booking(id):
         return redirect(url_for('login'))
     
     # Get the booking
-    booking = bo.get_booking(id)
+    booking = au.get_booking(id)
     if not booking:
         return {"success": False, "error": "Booking not found"}, 404
         
@@ -833,7 +833,7 @@ def cancel_booking(id):
         return {"success": False, "error": "Not authorized to cancel this booking"}, 403
     
     # Cancel the booking
-    result = bo.cancel_booking(id)
+    result = au.cancel_booking(id)
     
     if result:
         return {"success": True}
@@ -1072,7 +1072,7 @@ def process_bookings():
     # Create a proper datetime object
     current_time = datetime.datetime.now()
     # Pass the datetime object to the function
-    bookings = bo.get_bookings_starting_now(current_time)
+    bookings = au.get_bookings_starting_now(current_time)
     
     # Process the bookings (implement your booking activation logic here)
     for booking in bookings:
@@ -1096,7 +1096,7 @@ def process_bookings():
             if ausleihung_id:
                 
                 # Mark the booking as active and link it to the ausleihung
-                bo.mark_booking_active(booking_id, str(ausleihung_id))
+                au.mark_booking_active(booking_id, str(ausleihung_id))
                 
                 # Update item status
                 it.update_item_status(item_id, False, user)
@@ -1108,7 +1108,7 @@ def process_bookings():
             # print(f"Error processing booking: {e}")
     
     # Also check for bookings that should end now
-    ending_bookings = bo.get_bookings_ending_now(current_time)
+    ending_bookings = au.get_bookings_ending_now(current_time)
     
     for booking in ending_bookings:
         try:
@@ -1120,7 +1120,7 @@ def process_bookings():
             it.update_item_status(item_id, True)
             
             # Update booking status to completed
-            bo.mark_booking_completed(booking_id)
+            au.mark_booking_completed(booking_id)
             
             # Update the ausleihung record to set end date if it exists
             if ausleihung_id:
