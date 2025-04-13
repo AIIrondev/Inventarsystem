@@ -295,70 +295,104 @@ fi
 export FLASK_ENV=production
 export FLASK_APP=Web/app.py
 
-# Use systemctl for standard environments
-NGINX_START_CMD="sudo systemctl restart nginx"
-NGINX_STOP_CMD="sudo systemctl stop nginx"
-
-# Use Unix sockets for standard environments
-WEB_BINDING="unix:/tmp/inventarsystem.sock"
-
 echo "========================================================"
-echo "           CONFIGURING NGINX                            "
+echo "           CONFIGURING SYSTEMD SERVICES                 "
 echo "========================================================"
 
-# Create Nginx config file
-echo "Creating Nginx configuration..."
+echo "Fixing systemd service configuration..."
 
-# Standard Nginx configuration with SSL
-sudo tee /etc/nginx/sites-available/inventarsystem.conf > /dev/null << EOF
-# HTTPS for main app
-server {
-    listen 443 ssl;
-    server_name _;
-    
-    ssl_certificate $CERT_DIR/inventarsystem.crt;
-    ssl_certificate_key $CERT_DIR/inventarsystem.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    
-    location / {
-        proxy_pass http://unix:/tmp/inventarsystem.sock;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+# Detect which MongoDB service is actually available on this system
+MONGODB_SERVICE=""
+for SERVICE in mongodb mongod; do
+    if systemctl list-unit-files | grep -q $SERVICE; then
+        MONGODB_SERVICE="$SERVICE"
+        echo "✓ Detected MongoDB service: $MONGODB_SERVICE.service"
+        break
+    fi
+done
 
-    location /static {
-        alias $PROJECT_ROOT/Web/static;
-    }
-}
+if [ -z "$MONGODB_SERVICE" ]; then
+    echo "Warning: Could not detect MongoDB service. Configuring services without MongoDB dependency."
+    
+    # Create the gunicorn service file without MongoDB dependency
+    sudo tee /etc/systemd/system/inventarsystem-gunicorn.service > /dev/null << EOF
+[Unit]
+Description=Inventarsystem Gunicorn daemon
+After=network.target
+
+[Service]
+User=$(whoami)
+Group=$(id -gn)
+WorkingDirectory=$PROJECT_ROOT/Web
+Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$VENV_DIR/bin/gunicorn app:app --bind unix:/tmp/inventarsystem.sock --workers 1 --access-logfile $PROJECT_ROOT/logs/access.log --error-logfile $PROJECT_ROOT/logs/error.log
+Restart=always
+RestartSec=5
+SyslogIdentifier=inventarsystem-gunicorn
+
+[Install]
+WantedBy=multi-user.target
 EOF
+else
+    # Create the gunicorn service file with correct MongoDB service
+    sudo tee /etc/systemd/system/inventarsystem-gunicorn.service > /dev/null << EOF
+[Unit]
+Description=Inventarsystem Gunicorn daemon
+After=network.target $MONGODB_SERVICE.service
+Requires=$MONGODB_SERVICE.service
 
-# Create symbolic link to enable the site
-if [ ! -f /etc/nginx/sites-enabled/inventarsystem.conf ]; then
-    sudo ln -s /etc/nginx/sites-available/inventarsystem.conf /etc/nginx/sites-enabled/
+[Service]
+User=$(whoami)
+Group=$(id -gn)
+WorkingDirectory=$PROJECT_ROOT/Web
+Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$VENV_DIR/bin/gunicorn app:app --bind unix:/tmp/inventarsystem.sock --workers 1 --access-logfile $PROJECT_ROOT/logs/access.log --error-logfile $PROJECT_ROOT/logs/error.log
+Restart=always
+RestartSec=5
+SyslogIdentifier=inventarsystem-gunicorn
+
+[Install]
+WantedBy=multi-user.target
+EOF
 fi
 
-# Check Nginx configuration
-sudo nginx -t || {
-    echo "ERROR: Nginx configuration is invalid."
-    exit 1
-}
+# Create the nginx service file
+sudo tee /etc/systemd/system/inventarsystem-nginx.service > /dev/null << EOF
+[Unit]
+Description=Nginx for Inventarsystem
+After=network.target inventarsystem-gunicorn.service
+Requires=inventarsystem-gunicorn.service
 
-# Remove inventarsystem.sock if it exists from previous runs
-rm -f /tmp/inventarsystem.sock
+[Service]
+Type=forking
+ExecStartPre=/usr/sbin/nginx -t
+ExecStart=/usr/sbin/nginx
+ExecReload=/usr/sbin/nginx -s reload
+Restart=always
+RestartSec=5
+KillMode=process
 
-# Start Nginx using the appropriate command
-$NGINX_START_CMD || {
-    echo "ERROR: Failed to start Nginx. Continuing anyway..."
-}
-echo "✓ Nginx configured and started"
+[Install]
+WantedBy=multi-user.target
+EOF
 
-echo "========================================================"
-echo "           STARTING APPLICATION                         "
-echo "========================================================"
+# Make sure socket directory has correct permissions
+sudo mkdir -p /tmp
+sudo chmod 1777 /tmp
 
-# Show access information
+# Reload systemd configuration
+sudo systemctl daemon-reload
+
+# Enable and start the services
+sudo systemctl enable inventarsystem-gunicorn.service
+sudo systemctl enable inventarsystem-nginx.service
+sudo systemctl start inventarsystem-gunicorn.service
+sudo systemctl start inventarsystem-nginx.service
+
+echo "✓ Services configured and started"
+echo "To check status: sudo systemctl status inventarsystem-gunicorn.service"
+echo "To view logs: sudo journalctl -u inventarsystem-gunicorn.service -f"
+
 echo "========================================================"
 echo "Access Information:"
 echo "========================================================"
@@ -367,55 +401,6 @@ echo "Web Interface: https://$NETWORK_IP"
 echo "Web Interface (Unix Socket): http://unix:/tmp/inventarsystem.sock"
 echo "MongoDB: mongodb://localhost:27017"
 echo "========================================================"
-
-# Add autostart functionality
-echo "========================================================"
-echo "           CONFIGURING AUTOSTART                        "
-echo "========================================================"
-
-# Create systemd service file
-SERVICE_FILE="$HOME/.config/systemd/user/inventarsystem.service"
-mkdir -p "$HOME/.config/systemd/user"
-
-cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=Inventarsystem Service
-After=network.target mongodb.service
-
-[Service]
-Type=simple
-ExecStart=$PROJECT_ROOT/start.sh
-WorkingDirectory=$PROJECT_ROOT
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-EOF
-
-# Enable the service for autostart
-systemctl --user enable inventarsystem.service
-
-# Enable lingering for the user to allow the service to start on boot
-sudo loginctl enable-linger $(whoami)
-
-echo "✓ Autostart enabled. Inventarsystem will start automatically on system boot."
-
-echo "========================================================"
-echo "NOTE: Your browser may show a security warning because"
-echo "      we're using a self-signed certificate."
-echo "      This is normal and you can safely proceed."
-echo "========================================================"
-
-# Start main application with Gunicorn
-echo "Starting Inventarsystem main application with Gunicorn..."
-cd $PROJECT_ROOT/Web
-gunicorn app:app --bind $WEB_BINDING --workers 1 --access-logfile ../logs/access.log --error-logfile ../logs/error.log
-
-# Stop Nginx when done
-$NGINX_STOP_CMD
-
-cd $PROJECT_ROOT
 
 # Deactivate virtual environment
 deactivate

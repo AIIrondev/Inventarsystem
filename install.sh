@@ -10,17 +10,17 @@ git clone https://github.com/AIIrondev/Inventarsystem.git /var/Inventarsystem ||
     exit 1
 }
 
-REPO_DIR = /var/Inventarsystem
+REPO_DIR = "$(pwd)"
 
 cd $REPO_DIR
-# Check if the start-codespace.sh script exists
-if [ ! -f "./start-codespace.sh" ]; then
-    echo "start-codespace.sh script not found in $REPO_DIR"
+# Check if the start.sh script exists
+if [ ! -f "./start.sh" ]; then
+    echo "start.sh script not found in $REPO_DIR"
     exit 1
 fi
 
 # Make the script executable
-chmod +x ./start-codespace.sh
+chmod +x ./start.sh
 
  "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
@@ -30,7 +30,7 @@ cd $REPO_DIR
 # Run the script
 # Ask the user if they want to run the script now
 echo "Running the script now..."
-./start-codespace.sh
+./start.sh
 if [ $? -ne 0 ]; then
     echo "Failed to run the script. Please check the logs for more details."
     exit 1
