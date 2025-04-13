@@ -66,18 +66,10 @@ Als erstes müssen sie in die Website Direktion navigieren.
 Anschließend führen sie den folgenden Comand aus:
 
 ```bash
-sudo ./start-codespace.sh
+sudo ./start.sh
 ```
 
-### Optionale Autostart funktion(not finisched)
-
-** Warnung nicht Fertig, mögliche Fehler die zu System Fehlern führen können ** 
-
-Starten sie mit dem folgenden Comand den automatischen prozess:
-
-```bash
-sudo ./update.sh
-```
+** Dies ist nur notwendig falls der Server nicht automatisch Hochfährt nach einem Neustart. **
 
 ## Benutzerhandbuch
 
