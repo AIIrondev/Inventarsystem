@@ -84,7 +84,7 @@ except FileNotFoundError:
     app.debug = False
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
-    Port = 8443
+    Port = 443
     
 except json.JSONDecodeError:
     print("Error: Config file contains invalid JSON. Using default values.")
@@ -93,7 +93,7 @@ except json.JSONDecodeError:
     app.debug = False
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
-    Port = 8443
+    Port = 443
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
@@ -217,6 +217,16 @@ def login():
             get_flashed_messages()
     return render_template('login.html')
 
+
+@app.route('/impressum')
+def impressum():
+    """
+    Impressum route.
+
+    Returns:
+        flask.Response: Redirect to impressum
+    """
+    return render_template('impressum.html')
 
 @app.route('/logout')
 def logout():
