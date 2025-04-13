@@ -480,7 +480,7 @@ def create_qr_code(id):
     base_url = urlunparse((scheme, parsed_url.netloc, '', '', '', ''))
     
     # URL that will open this item directly
-    item_url = f"{base_url}/item/{id}"
+    item_url = f"{base_url}:{Port}/item/{id}"
     qr.add_data(item_url)
     qr.make(fit=True)
 
