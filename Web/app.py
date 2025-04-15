@@ -54,6 +54,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
+app.config['STATIC_FOLDER'] = os.path.join(BASE_DIR, 'static')  # Explicitly set static folder
 __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
 Port = 8080
