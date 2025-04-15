@@ -416,7 +416,7 @@ function openItemModal(itemData) {
             </button>
         `;
     }
-    
+        
     // Build modal content
     modalContent.innerHTML = `
         <h2>${itemData.Name}</h2>
@@ -471,7 +471,7 @@ function openItemModal(itemData) {
             :
                 `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
             }
-            ${borrowingDetailsButton}
+                        ${borrowingDetailsButton}
             <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
             <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
         </div>
@@ -488,18 +488,86 @@ function viewBorrowingDetails(itemId, itemName, borrowedBy) {
     
     // Fetch borrowing details from the server
     fetch(`/get_ausleihung_by_item/${itemId}`)
-        .then(response => response.json())
+        .then(response => {
+            // First check if the response is ok
+            if (!response.ok && response.status !== 200) {
+                if (response.status === 403) {
+                    throw new Error('Sie sind nicht berechtigt, diese Ausleihungsdaten einzusehen.');
+                } else {
+                    throw new Error('Ein Serverfehler ist aufgetreten.');
+                }
+            }
+            return response.json();
+        })
         .then(data => {
             if (data && data.ausleihung) {
                 showBorrowingDetailsModal(data.ausleihung, itemName);
             } else {
-                alert('Keine Ausleihungsdaten gefunden');
+                // More descriptive error message based on the response
+                let message = 'Keine aktiven Ausleihungsdaten gefunden.';
+                if (data.error) {
+                    message = data.error;
+                }
+                
+                // Create a simple alert or show a more user-friendly modal
+                showInfoModal(message, itemName);
             }
         })
         .catch(error => {
             console.error('Error fetching borrowing details:', error);
-            alert('Fehler beim Laden der Ausleihungsdaten');
+            alert(error.message || 'Fehler beim Laden der Ausleihungsdaten');
         });
+}
+
+// Add a simple info modal function for displaying informational messages
+function showInfoModal(message, itemName) {
+    // You can reuse the borrowing details modal structure
+    let infoModal = document.getElementById('info-modal');
+    
+    // Create the modal if it doesn't exist yet
+    if (!infoModal) {
+        infoModal = document.createElement('div');
+        infoModal.id = 'info-modal';
+        infoModal.className = 'item-modal';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const closeButton = document.createElement('span');
+        closeButton.className = 'close-modal';
+        closeButton.innerHTML = '&times;';
+        closeButton.onclick = function() {
+            infoModal.style.display = 'none';
+        };
+        
+        const contentWrapper = document.createElement('div');
+        contentWrapper.id = 'info-content-wrapper';
+        
+        modalContent.appendChild(closeButton);
+        modalContent.appendChild(contentWrapper);
+        infoModal.appendChild(modalContent);
+        
+        document.body.appendChild(infoModal);
+        
+        // Close when clicking outside the modal
+        infoModal.onclick = function(event) {
+            if (event.target === infoModal) {
+                infoModal.style.display = 'none';
+            }
+        };
+    }
+    
+    // Fill modal with the message
+    const contentWrapper = document.getElementById('info-content-wrapper');
+    contentWrapper.innerHTML = `
+        <h2>Information zu ${itemName}</h2>
+        <div class="info-message">
+            <p>${message}</p>
+        </div>
+    `;
+    
+    // Display the modal
+    infoModal.style.display = 'block';
 }
 
 // Function to show borrowing details modal

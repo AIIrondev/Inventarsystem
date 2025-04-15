@@ -423,15 +423,16 @@ def zurueckgeben(id):
                 au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
                 
                 # Then update the item status (only once)
-                it.update_item_status(id, True)
+                return_it = it.update_item_status(id, True, original_user)
                 flash('Item returned successfully', 'success')
+                flash(f'Borrowing record updated: {user} borrowed from {start} to {end_date} {return_it}', 'info')
             else:
                 # Only create a new record if we absolutely can't find an existing one
                 # This should rarely happen
                 start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
                 
                 # Update the item status first
-                it.update_item_status(id, True)
+                it.update_item_status(id, True, original_user)
                 
                 # Log a warning about missing record
                 print(f"Warning: No borrowing record found for item {id} when returning. Creating new record.")
@@ -441,7 +442,7 @@ def zurueckgeben(id):
                 flash('Item returned successfully (new record created)', 'success')
         except Exception as e:
             # If there's an error in record keeping, still make the item available
-            it.update_item_status(id, True)
+            it.update_item_status(id, True, user=original_user)
             flash('Item returned but encountered an error in record-keeping', 'warning')
             print(f"Error updating borrowing record: {e}")
     else:
@@ -475,7 +476,7 @@ def get_ausleihung_by_item_route(id):
         dict: Borrowing details for the item
     """
     if 'username' not in session:
-        return {'error': 'Not authorized'}, 403
+        return {'error': 'Not authorized', 'status': 'forbidden'}, 403
     
     # Get the borrowing record
     ausleihung = au.get_ausleihung_by_item(id, include_history=False)
@@ -483,9 +484,18 @@ def get_ausleihung_by_item_route(id):
     # Admin users can see all borrowing details
     # Regular users can only see their own borrowings
     if ausleihung and (us.check_admin(session['username']) or ausleihung.get('User') == session['username']):
-        return {'ausleihung': ausleihung}
+        return {'ausleihung': ausleihung, 'status': 'success'}
     
-    return {'error': 'No borrowing record found or not authorized to view'}, 404
+    # Get item name for better error message
+    item = it.get_item(id)
+    item_name = item.get('Name', 'Unknown') if item else 'Unknown'
+    
+    # Return a more informative error
+    return {
+        'error': 'No active borrowing record found for this item',
+        'item_name': item_name,
+        'status': 'not_found'
+    }, 200  # Return 200 instead of 404 to allow processing of the error message
 
 
 def create_qr_code(id):
