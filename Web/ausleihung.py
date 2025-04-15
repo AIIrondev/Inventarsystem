@@ -437,7 +437,7 @@ def get_ausleihung_by_item(item_id, status=None, include_history=False):
                 else:
                     query['Status'] = status
                     
-            results = list(ausleihungen.find(query))
+            results = list(ausleihungen.find(query).sort('Start', -1))  # Sort by start date, newest first
             client.close()
             return results
         else:
@@ -449,14 +449,20 @@ def get_ausleihung_by_item(item_id, status=None, include_history=False):
                 else:
                     query['Status'] = status
             else:
-                # Standardmäßig aktive oder geplante Ausleihungen
-                query['Status'] = {'$in': ['active', 'planned']}
+                # Prioritize finding active borrowings first
+                query['Status'] = 'active'
                 
             ausleihung = ausleihungen.find_one(query)
+            
+            # If no active borrowing found, try planned
+            if not ausleihung:
+                query['Status'] = 'planned'
+                ausleihung = ausleihungen.find_one(query)
+            
             client.close()
             return ausleihung
     except Exception as e:
-        # print(f"Error retrieving ausleihungen for item {item_id}: {e}") # Log the error
+        print(f"Error retrieving ausleihungen for item {item_id}: {e}")  # Log the error
         return [] if include_history else None
 
 
@@ -655,8 +661,34 @@ def get_completed_bookings(start=None, end=None):
     return get_completed_ausleihungen(start, end)
 
 def mark_booking_active(booking_id, ausleihung_id=None):
-    """Kompatibilitätsfunktion - markiert eine Ausleihe als aktiv"""
-    return activate_ausleihung(booking_id)
+    """Kompatibilitätsfunktion - markiert eine Ausleihe als aktiv und verknüpft optional eine Ausleihungs-ID"""
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Basisupdate-Daten mit Status-Änderung
+        update_data = {
+            'Status': 'active',
+            'LastUpdated': datetime.datetime.now()
+        }
+        
+        # Wenn eine Ausleihungs-ID angegeben wurde, diese auch verknüpfen
+        if ausleihung_id:
+            update_data['AusleihungId'] = ausleihung_id
+            
+        # Update durchführen
+        result = ausleihungen.update_one(
+            {'_id': ObjectId(booking_id)},
+            {'$set': update_data}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error activating booking: {e}")
+        # Fallback zur alten Methode bei Fehlern
+        return activate_ausleihung(booking_id)
 
 def mark_booking_completed(booking_id):
     """Kompatibilitätsfunktion - markiert eine Ausleihe als abgeschlossen"""

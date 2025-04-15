@@ -404,29 +404,46 @@ def zurueckgeben(id):
         if not us.check_admin(session['username']) and item['User'] != session['username']:
             flash('You are not authorized to return this item', 'error')
             return redirect(url_for('home'))
-        it.update_item_status(id, True)
         
         try:
-            # Get existing borrowing record
+            # Get existing borrowing record BEFORE updating the item status
             ausleihung_data = au.get_ausleihung_by_item(id)
-            
             end_date = datetime.datetime.now()
+            
+            # Store the borrower's username before updating item status
+            original_user = item.get('User', session['username'])
             
             if ausleihung_data and '_id' in ausleihung_data:
                 # Update existing record
                 ausleihung_id = str(ausleihung_data['_id'])
-                user = ausleihung_data.get('User', session['username'])
+                user = ausleihung_data.get('User', original_user)
                 start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                 
-                update_result = au.update_ausleihung(ausleihung_id, id, user, start, end_date)
+                # Update the ausleihung first
+                au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
+                
+                # Then update the item status (only once)
+                it.update_item_status(id, True)
                 flash('Item returned successfully', 'success')
             else:
-                # Create new record with default values
+                # Only create a new record if we absolutely can't find an existing one
+                # This should rarely happen
                 start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
-                au.add_ausleihung(id, session['username'], start_time, end_date)
+                
+                # Update the item status first
+                it.update_item_status(id, True)
+                
+                # Log a warning about missing record
+                print(f"Warning: No borrowing record found for item {id} when returning. Creating new record.")
+                
+                # Create a historical record
+                au.add_ausleihung(id, original_user, start_time, end_date, notes="Auto-generated return record", status="completed")
                 flash('Item returned successfully (new record created)', 'success')
         except Exception as e:
+            # If there's an error in record keeping, still make the item available
+            it.update_item_status(id, True)
             flash('Item returned but encountered an error in record-keeping', 'warning')
+            print(f"Error updating borrowing record: {e}")
     else:
         flash('Item is already available or does not exist', 'error')
     
@@ -445,6 +462,31 @@ def get_filter():
     """
     return it.get_filter()
     
+
+@app.route('/get_ausleihung_by_item/<id>')
+def get_ausleihung_by_item_route(id):
+    """
+    API endpoint to retrieve borrowing details for a specific item.
+    
+    Args:
+        id (str): ID of the item
+        
+    Returns:
+        dict: Borrowing details for the item
+    """
+    if 'username' not in session:
+        return {'error': 'Not authorized'}, 403
+    
+    # Get the borrowing record
+    ausleihung = au.get_ausleihung_by_item(id, include_history=False)
+    
+    # Admin users can see all borrowing details
+    # Regular users can only see their own borrowings
+    if ausleihung and (us.check_admin(session['username']) or ausleihung.get('User') == session['username']):
+        return {'ausleihung': ausleihung}
+    
+    return {'error': 'No borrowing record found or not authorized to view'}, 404
+
 
 def create_qr_code(id):
     """
@@ -856,9 +898,7 @@ def terminplan():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     """
-    User registration route.
-    Creates new user accounts (admin access required).
-    
+    User registration route.false
     Returns:
         flask.Response: Rendered template or redirect
     """
@@ -1084,28 +1124,34 @@ def process_bookings():
             end_date = booking.get('End')
             notes = booking.get('Notes', '')
             
-            # Create an ausleihung record first
-            ausleihung_id = au.add_ausleihung(
-                item_id,
-                user,
-                start_date,
-                end_date,
-                notes
-            )
+            # Check if an ausleihung record already exists for this booking
+            existing_ausleihung = au.get_ausleihung_by_item(item_id, status='active')
             
-            if ausleihung_id:
-                
-                # Mark the booking as active and link it to the ausleihung
-                au.mark_booking_active(booking_id, str(ausleihung_id))
-                
-                # Update item status
-                it.update_item_status(item_id, False, user)
+            if existing_ausleihung:
+                # Just mark the booking as active and link to existing ausleihung
+                au.mark_booking_active(booking_id, str(existing_ausleihung.get('_id')))
+                print(f"Booking {booking_id} linked to existing ausleihung {existing_ausleihung.get('_id')}")
             else:
-                pass # add logging here
-                #print(f"Failed to create ausleihung for booking {booking_id}")
+                # No existing ausleihung, create a new one
+                ausleihung_id = au.add_ausleihung(
+                    item_id,
+                    user,
+                    start_date,
+                    end_date,
+                    notes
+                )
+                
+                if ausleihung_id:
+                    # Mark the booking as active and link it to the ausleihung
+                    au.mark_booking_active(booking_id, str(ausleihung_id))
+                    
+                    # Update item status
+                    it.update_item_status(item_id, False, user)
+                    print(f"Created new ausleihung {ausleihung_id} for booking {booking_id}")
+                else:
+                    print(f"Failed to create ausleihung for booking {booking_id}")
         except Exception as e:
-            pass # add logging here
-            # print(f"Error processing booking: {e}")
+            print(f"Error processing booking: {e}")
     
     # Also check for bookings that should end now
     ending_bookings = au.get_bookings_ending_now(current_time)

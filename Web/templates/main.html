@@ -108,6 +108,26 @@
 </script>
 
 <script>    
+// Add this variable to store the current username
+let currentUsername = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch user status to get current username
+    fetch('/user_status')
+        .then(response => response.json())
+        .then(data => {
+            console.log('User status:', data);
+            currentUsername = data.username;
+            // Now load items with username information
+            loadItems();
+        })
+        .catch(error => {
+            console.error('Error fetching user status:', error);
+            loadItems(); // Load items anyway in case of error
+        });
+});
+
+function loadItems() {
     fetch("{{ url_for('get_items') }}")
         .then(response => response.json())
         .then(data => {
@@ -129,7 +149,7 @@
                 }
                 
                 // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
-                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
+                const filter1Value = Array.isArray(item.Filter1) && item.Filter1.length > 0 ? item.Filter1[0] : (item.Filter1 || '');
                 const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
                 
                 card.dataset.filter1 = filter1Value;
@@ -144,6 +164,10 @@
                 }
 
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                
+                // Check if item is borrowed by current user
+                const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+
                 card.innerHTML = `
                     <h3>${item.Name}</h3>
                     <p><strong>Ort:</strong> ${item.Ort}</p>
@@ -155,30 +179,21 @@
                         <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
                     </div>
                     <div class="actions">
-                        ${item.Verfuegbar ? `
-                            <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                        ${item.Verfuegbar ? 
+                            `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                 <button class="ausleihen" type="submit">Ausleihen</button>
-                            </form>
-                        ` : `
-                            <form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                            </form>` 
+                        : isBorrowedByMe ?
+                            `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
                                 <button class="ausleihen" type="submit">Zurückgeben</button>
-                            </form>
-                        `}
-                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
+                            </form>`
+                        :
+                            `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                        }
                     </div>
                 `;
                 itemsContainer.appendChild(card);
 
-                // Add QR code download link to each card
-                const qrLink = document.createElement('a');
-                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
-                qrLink.className = 'qr-download-button';
-                qrLink.textContent = 'QR-Code';
-                
-                // Add the QR code link to the actions div
-                const actionsDiv = card.querySelector('.actions');
-                actionsDiv.appendChild(qrLink);
-                
                 // Add click event to open the modal with item details
                 card.addEventListener('click', function(e) {
                     // Prevent modal from opening when clicking buttons or links
@@ -226,211 +241,187 @@
             applyFilters();
         })
         .catch(error => console.error('Error fetching items:', error));
+}
 
-    // Verbesserte Filter-Anwendungsfunktion
-    function applyFilters() {
-        const filter1Value = document.querySelector('#filter1').value;
-        const filter2Value = document.querySelector('#filter2').value;
-        
-        const itemsContainer = document.querySelector('#items-container');
-        const items = itemsContainer.querySelectorAll('.item-card');
-        
-        let visibleCount = 0;
-        items.forEach(item => {
-            const itemFilter1 = item.dataset.filter1;
-            const itemFilter2 = item.dataset.filter2;
-            
-            const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
-            const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
-            
-            // Beide Filter müssen übereinstimmen (UND-Operation)
-            if (matchesFilter1 && matchesFilter2) {
-                item.style.display = 'block';
-                visibleCount++;
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        
-        // Informationen zur Anzahl der sichtbaren Elemente
-        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
-        
-        // After filtering, reset scroll position to show the first visible card
-        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
-        if (firstVisibleCard) {
-            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-        }
-    }
-
-    function prevImage(event) {
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function nextImage(event) {
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function scrollPrev() {
-        const itemsContainer = document.querySelector('#items-container');
-        // Better selector to find visible cards
-        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
-            .filter(card => window.getComputedStyle(card).display !== 'none');
-        
-        if (visibleCards.length > 0) {
-            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
-            itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
-        }
-    }
-
-    function scrollNext() {
-        const itemsContainer = document.querySelector('#items-container');
-        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
-            .filter(card => window.getComputedStyle(card).display !== 'none');
-        
-        if (visibleCards.length > 0) {
-            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
-            itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
-        }
-    }
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Instead, we'll fetch user status just to keep the user info available
-    fetch('/user_status')
-        .then(response => response.json())
-        .then(data => {
-            console.log('User status:', data);
-            // No action needed - users can borrow multiple items
-        })
-        .catch(error => {
-            console.error('Error fetching user status:', error);
-        });
-});
-</script>
-<script>
-    // Modal functionality
-    const modal = document.getElementById('item-modal');
-    const closeModal = document.querySelector('.close-modal');
+// Verbesserte Filter-Anwendungsfunktion
+function applyFilters() {
+    const filter1Value = document.querySelector('#filter1').value;
+    const filter2Value = document.querySelector('#filter2').value;
     
-    // Close modal when clicking the X button
-    closeModal.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
+    const itemsContainer = document.querySelector('#items-container');
+    const items = itemsContainer.querySelectorAll('.item-card');
     
-    // Close modal when clicking outside the modal content
-    window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
+    let visibleCount = 0;
+    items.forEach(item => {
+        const itemFilter1 = item.dataset.filter1;
+        const itemFilter2 = item.dataset.filter2;
+        
+        const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
+        const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
+        
+        // Beide Filter müssen übereinstimmen (UND-Operation)
+        if (matchesFilter1 && matchesFilter2) {
+            item.style.display = 'block';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
         }
     });
     
-    // Function to open modal with item details
-    function openItemModal(itemData) {
-        const modalContent = document.getElementById('modal-content-wrapper');
-        
-        // Create image gallery
-        let imagesHtml = '';
-        if (itemData.Images && itemData.Images.length > 0) {
-            imagesHtml = `
-                <div class="modal-image-container">
-                    ${itemData.Images.map((image, index) => 
-                        `<img src="${image}" alt="${itemData.Name}" class="modal-image" 
-                         data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`
-                    ).join('')}
-                    <button class="modal-image-nav modal-prev-image" onclick="prevModalImage()">&#10094;</button>
-                    <button class="modal-image-nav modal-next-image" onclick="nextModalImage()">&#10095;</button>
-                </div>
-            `;
-        }
-        
-        // Build modal content
-        modalContent.innerHTML = `
-            <h2>${itemData.Name}</h2>
-            ${imagesHtml}
-            <div class="modal-details">
-                <div class="detail-section">
-                    <div class="detail-group">
-                        <div class="detail-label">Ort:</div>
-                        <div class="detail-value">${itemData.Ort || '-'}</div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Kategorie 1:</div>
-                        <div class="detail-value">${itemData.Filter || '-'}</div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Kategorie 2:</div>
-                        <div class="detail-value">${itemData.Filter2 || '-'}</div>
-                    </div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-group">
-                        <div class="detail-label">Anschaffungsjahr:</div>
-                        <div class="detail-value">${itemData.Anschaffungsjahr || '-'}</div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Anschaffungskosten:</div>
-                        <div class="detail-value">${itemData.Anschaffungskosten ? itemData.Anschaffungskosten + ' €' : '-'}</div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Status:</div>
-                        <div class="detail-value">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
-                    </div>
-                    <div class="detail-group">
-                        <div class="detail-label">Code:</div>
-                        <div class="detail-value">${itemData.code_4 || '-'}</div>
-                    </div>
-                </div>
-            </div>
-            <div class="detail-group full-width">
-                <div class="detail-label">Beschreibung:</div>
-                <div class="detail-value">${itemData.Beschreibung || '-'}</div>
-            </div>
-            <div class="modal-actions">
-                ${itemData.Verfuegbar ? 
-                    `<form method="POST" action="/ausleihen/${itemData._id}">
-                        <button class="ausleihen" type="submit">Ausleihen</button>
-                    </form>` : 
-                    `<form method="POST" action="/zurueckgeben/${itemData._id}">
-                        <button class="ausleihen" type="submit">Zurückgeben</button>
-                    </form>`
-                }
-                <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
-                <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
+    // Informationen zur Anzahl der sichtbaren Elemente
+    console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+    
+    // After filtering, reset scroll position to show the first visible card
+    const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+    if (firstVisibleCard) {
+        firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+    }
+}
+
+function prevImage(event) {
+    const container = event.target.closest('.image-container');
+    const images = container.querySelectorAll('.item-image');
+    let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+    images[currentIndex].style.display = 'none';
+    currentIndex = (currentIndex - 1 + images.length) % images.length;
+    images[currentIndex].style.display = 'block';
+}
+
+function nextImage(event) {
+    const container = event.target.closest('.image-container');
+    const images = container.querySelectorAll('.item-image');
+    let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
+    images[currentIndex].style.display = 'none';
+    currentIndex = (currentIndex + 1) % images.length;
+    images[currentIndex].style.display = 'block';
+}
+
+function scrollPrev() {
+    const itemsContainer = document.querySelector('#items-container');
+    // Better selector to find visible cards
+    const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+        .filter(card => window.getComputedStyle(card).display !== 'none');
+    
+    if (visibleCards.length > 0) {
+        const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+        itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+    }
+}
+
+function scrollNext() {
+    const itemsContainer = document.querySelector('#items-container');
+    const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
+        .filter(card => window.getComputedStyle(card).display !== 'none');
+    
+    if (visibleCards.length > 0) {
+        const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
+        itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
+    }
+}
+
+// Function to open modal with item details
+function openItemModal(itemData) {
+    const modalContent = document.getElementById('modal-content-wrapper');
+    
+    // Create image gallery
+    let imagesHtml = '';
+    if (itemData.Images && itemData.Images.length > 0) {
+        imagesHtml = `
+            <div class="modal-image-container">
+                ${itemData.Images.map((image, index) => 
+                    `<img src="${image}" alt="${itemData.Name}" class="modal-image" 
+                     data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`
+                ).join('')}
+                <button class="modal-image-nav modal-prev-image" onclick="prevModalImage()">&#10094;</button>
+                <button class="modal-image-nav modal-next-image" onclick="nextModalImage()">&#10095;</button>
             </div>
         `;
-        
-        // Show the modal
-        modal.style.display = 'block';
     }
     
-    // Image navigation in modal
-    function prevModalImage() {
-        const images = document.querySelectorAll('.modal-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
-        
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
+    // Check if item is borrowed by current user
+    const isBorrowedByMe = !itemData.Verfuegbar && itemData.User === currentUsername;
     
-    function nextModalImage() {
-        const images = document.querySelectorAll('.modal-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
-        
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
+    // Build modal content
+    modalContent.innerHTML = `
+        <h2>${itemData.Name}</h2>
+        ${imagesHtml}
+        <div class="modal-details">
+            <div class="detail-section">
+                <div class="detail-group">
+                    <div class="detail-label">Ort:</div>
+                    <div class="detail-value">${itemData.Ort || '-'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Kategorie 1:</div>
+                    <div class="detail-value">${itemData.Filter || '-'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Kategorie 2:</div>
+                    <div class="detail-value">${itemData.Filter2 || '-'}</div>
+                </div>
+            </div>
+            <div class="detail-section">
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungsjahr:</div>
+                    <div class="detail-value">${itemData.Anschaffungsjahr || '-'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungskosten:</div>
+                    <div class="detail-value">${itemData.Anschaffungskosten ? itemData.Anschaffungskosten + ' €' : '-'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Code:</div>
+                    <div class="detail-value">${itemData.code_4 || '-'}</div>
+                </div>
+            </div>
+        </div>
+        <div class="detail-group full-width">
+            <div class="detail-label">Beschreibung:</div>
+            <div class="detail-value">${itemData.Beschreibung || '-'}</div>
+        </div>
+        <div class="modal-actions">
+            ${itemData.Verfuegbar ? 
+                `<form method="POST" action="/ausleihen/${itemData._id}">
+                    <button class="ausleihen" type="submit">Ausleihen</button>
+                </form>` 
+            : isBorrowedByMe ?
+                `<form method="POST" action="/zurueckgeben/${itemData._id}">
+                    <button class="ausleihen" type="submit">Zurückgeben</button>
+                </form>`
+            :
+                `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+            }
+            <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
+            <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
+        </div>
+    `;
+    
+    // Show the modal
+    modal.style.display = 'block';
+}
+
+// Image navigation in modal
+function prevModalImage() {
+    const images = document.querySelectorAll('.modal-image');
+    let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+    
+    images[currentIndex].style.display = 'none';
+    currentIndex = (currentIndex - 1 + images.length) % images.length;
+    images[currentIndex].style.display = 'block';
+}
+
+function nextModalImage() {
+    const images = document.querySelectorAll('.modal-image');
+    let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+    
+    images[currentIndex].style.display = 'none';
+    currentIndex = (currentIndex + 1) % images.length;
+    images[currentIndex].style.display = 'block';
+}
 </script>
 <style>
 body {
@@ -735,6 +726,7 @@ input[type="file"] {
 .disabled-button {
     background-color: #6c757d;
     cursor: not-allowed;
+    opacity: 0.65;
 }
 
 .borrow-limit-banner {
