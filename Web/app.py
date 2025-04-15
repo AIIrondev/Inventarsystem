@@ -425,7 +425,6 @@ def zurueckgeben(id):
                 # Then update the item status (only once)
                 return_it = it.update_item_status(id, True, original_user)
                 flash('Item returned successfully', 'success')
-                flash(f'Borrowing record updated: {user} borrowed from {start} to {end_date} {return_it}', 'info')
             else:
                 # Only create a new record if we absolutely can't find an existing one
                 # This should rarely happen
