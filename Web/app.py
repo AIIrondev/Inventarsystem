@@ -311,6 +311,7 @@ def upload_item():
     images = request.files.getlist('images')
     filter_upload = request.form.getlist('filter')
     filter_upload2 = request.form.getlist('filter2')
+    filter_upload3 = request.form.getlist('filter3')
     anschaffungs_jahr = request.form.getlist('anschaffungsjahr')
     anschaffungs_kosten = request.form.getlist('anschaffungskosten')
     code_4 = request.form.getlist('code_4')
@@ -329,7 +330,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, anschaffungs_jahr, anschaffungs_kosten, code_4)
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, filter_upload3, anschaffungs_jahr, anschaffungs_kosten, code_4)
     flash('Item uploaded successfully', 'success')
     
     # Get the item ID and create QR code
@@ -388,6 +389,7 @@ def edit_item(id):
     beschreibung = request.form.get('beschreibung')
     filter1 = request.form.get('filter')
     filter2 = request.form.get('filter2')
+    filter3 = request.form.get('filter3')
     anschaffungs_jahr = request.form.get('anschaffungsjahr')
     anschaffungs_kosten = request.form.get('anschaffungskosten')
     code_4 = request.form.get('code_4')
@@ -407,7 +409,7 @@ def edit_item(id):
     # Update the item
     result = it.update_item(
         id, name, ort, beschreibung, 
-        images, verfuegbar, filter1, filter2,
+        images, verfuegbar, filter1, filter2, filter3,
         anschaffungs_jahr, anschaffungs_kosten, code_4
     )
     

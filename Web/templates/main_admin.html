@@ -36,6 +36,13 @@
                     <option value="all">All</option>
                 </select>
             </div>
+            <div class="filter">
+                <label for="filter3">Filter 3:</label>
+                <select id="filter3" name="filter3" onchange="applyFilters()">
+                    <!-- Filter options will be dynamically loaded here -->
+                    <option value="all">All</option>
+                </select>
+            </div>
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button">QR-Code scannen</button>
@@ -71,6 +78,10 @@
             <div class="form-group">
                 <label for="filter2-upload">Filter 2:</label>
                 <input type="text" id="filter2-upload" name="filter2" required>
+            </div>
+            <div class="form-group">
+                <label for="filter3-upload">Filter 3:</label>
+                <input type="text" id="filter3-upload" name="filter3" required>
             </div>
             <div class="form-group">
                 <label for="anschaffungsjahr">Anschaffungsdatum</label>
@@ -129,6 +140,12 @@
                     <div class="form-group">
                         <label for="edit-filter2">Filter 2:</label>
                         <input type="text" id="edit-filter2" name="filter2">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-filter3">Filter 3:</label>
+                        <input type="text" id="edit-filter3" name="filter3">
                     </div>
                 </div>
                 <div class="form-row">
@@ -238,6 +255,7 @@ function loadItems() {
             // Creating a Set to store unique filter values
             const filter1Values = new Set();
             const filter2Values = new Set();
+            const filter3Values = new Set();
             
             data.items.forEach(item => {
                 const card = document.createElement('div');
@@ -254,9 +272,11 @@ function loadItems() {
                 // Fix: Use the correct property names (Filter instead of Filter1)
                 const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
                 const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                const filter3Value = Array.isArray(item.Filter3) && item.Filter3.length > 0 ? item.Filter3[0] : (item.Filter3 || '');
                 
                 card.dataset.filter1 = filter1Value;
                 card.dataset.filter2 = filter2Value;
+                card.dataset.filter3 = filter3Value;
                 
                 // Add filter values to their respective sets
                 if (filter1Value && filter1Value.trim() !== '') {
@@ -264,6 +284,9 @@ function loadItems() {
                 }
                 if (filter2Value && filter2Value.trim() !== '') {
                     filter2Values.add(filter2Value);
+                }
+                if (filter3Value && filter3Value.trim() !== '') {
+                    filter3Values.add(filter3Value);
                 }
 
                 const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
@@ -276,6 +299,7 @@ function loadItems() {
                     <p><strong>Ort:</strong> ${item.Ort}</p>
                     <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
                     <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
+                    <p><strong>Filter 3:</strong> ${card.dataset.filter3}</p>
                     <div class="image-container">
                         ${imagesHtml}
                         <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -331,6 +355,7 @@ function loadItems() {
             // Now populate the filter dropdowns with the collected unique values
             const filter1 = document.querySelector('#filter1');
             const filter2 = document.querySelector('#filter2');
+            const filter3 = document.querySelector('#filter3');
             
             // Sort and populate filter1 dropdown
             [...filter1Values].sort().forEach(filterName => {
@@ -346,6 +371,14 @@ function loadItems() {
                 option.value = filterName;
                 option.textContent = filterName;
                 filter2.appendChild(option);
+            });
+            
+            // Sort and populate filter3 dropdown
+            [...filter3Values].sort().forEach(filterName => {
+                const option = document.createElement('option');
+                option.value = filterName;
+                option.textContent = filterName;
+                filter3.appendChild(option);
             });
             
             // Center the first card
@@ -364,6 +397,7 @@ function loadItems() {
 function applyFilters() {
     const filter1Value = document.querySelector('#filter1').value;
     const filter2Value = document.querySelector('#filter2').value;
+    const filter3Value = document.querySelector('#filter3').value;
     
     const itemsContainer = document.querySelector('#items-container');
     const items = itemsContainer.querySelectorAll('.item-card');
@@ -372,12 +406,14 @@ function applyFilters() {
     items.forEach(item => {
         const itemFilter1 = item.dataset.filter1;
         const itemFilter2 = item.dataset.filter2;
+        const itemFilter3 = item.dataset.filter3;
         
         const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
         const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
+        const matchesFilter3 = filter3Value === 'all' || itemFilter3 === filter3Value;
         
-        // Beide Filter müssen übereinstimmen (UND-Operation)
-        if (matchesFilter1 && matchesFilter2) {
+        // All three filters must match (AND operation)
+        if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
             item.style.display = 'block';
             visibleCount++;
         } else {
@@ -488,6 +524,10 @@ function openItemModal(itemData) {
                 <div class="detail-group">
                     <div class="detail-label">Kategorie 2:</div>
                     <div class="detail-value">${itemData.Filter2 || '-'}</div>
+                </div>
+                <div class="detail-group">
+                    <div class="detail-label">Kategorie 3:</div>
+                    <div class="detail-value">${itemData.Filter3 || '-'}</div>
                 </div>
             </div>
             <div class="detail-section">
@@ -820,6 +860,14 @@ function nextModalImage() {
             filter2 = itemData.Filter2;
         }
         document.getElementById('edit-filter2').value = filter2;
+        
+        let filter3 = '';
+        if (Array.isArray(itemData.Filter3) && itemData.Filter3.length > 0) {
+            filter3 = itemData.Filter3[0];
+        } else if (itemData.Filter3) {
+            filter3 = itemData.Filter3;
+        }
+        document.getElementById('edit-filter3').value = filter3;
         
         // Handle date - needs to be in YYYY-MM-DD format for input[type=date]
         if (itemData.Anschaffungsjahr) {
