@@ -99,6 +99,59 @@
             </div>
         </div>
     </div>
+
+    <!-- Add the edit modal form -->
+    <div id="edit-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeEditModal()">&times;</span>
+            <h2>Objekt bearbeiten</h2>
+            <form id="edit-item-form" method="POST">
+                <input type="hidden" id="edit-item-id" name="id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-name">Name:</label>
+                        <input type="text" id="edit-name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-ort">Ort:</label>
+                        <input type="text" id="edit-ort" name="ort" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-beschreibung">Beschreibung:</label>
+                    <textarea id="edit-beschreibung" name="beschreibung" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-filter1">Filter 1:</label>
+                        <input type="text" id="edit-filter1" name="filter">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-filter2">Filter 2:</label>
+                        <input type="text" id="edit-filter2" name="filter2">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-anschaffungsjahr">Anschaffungsjahr:</label>
+                        <input type="date" id="edit-anschaffungsjahr" name="anschaffungsjahr">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-anschaffungskosten">Anschaffungskosten:</label>
+                        <input type="number" id="edit-anschaffungskosten" name="anschaffungskosten">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-code4">Code:</label>
+                    <input type="number" id="edit-code4" name="code_4">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="save-button">Speichern</button>
+                    <button type="button" class="cancel-button" onclick="closeEditModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
@@ -198,8 +251,8 @@ function loadItems() {
                     }, 500);
                 }
                 
-                // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
-                const filter1Value = Array.isArray(item.Filter1) && item.Filter1.length > 0 ? item.Filter1[0] : (item.Filter1 || '');
+                // Fix: Use the correct property names (Filter instead of Filter1)
+                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
                 const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
                 
                 card.dataset.filter1 = filter1Value;
@@ -240,6 +293,7 @@ function loadItems() {
                         :
                             `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                         }
+                        <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
                         <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
                     </div>
                 `;
@@ -471,15 +525,47 @@ function openItemModal(itemData) {
             :
                 `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
             }
-                        ${borrowingDetailsButton}
+            <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
+            ${borrowingDetailsButton}
             <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
             <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
         </div>
     `;
     
+    // Ensure the close button is wired up for this specific modal instance
+    const closeBtn = modal.querySelector('.close-modal');
+    if (closeBtn) {
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        };
+    }
+    
     // Show the modal
     modal.style.display = 'block';
 }
+
+// Update the global modal event handlers to be more robust
+document.addEventListener('DOMContentLoaded', function() {
+    // Close modals when clicking outside
+    window.addEventListener('click', function(event) {
+        const modals = document.querySelectorAll('.item-modal');
+        modals.forEach(function(modal) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+
+    // Handle close buttons for all modals that exist at page load
+    document.querySelectorAll('.close-modal').forEach(function(closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            const modal = this.closest('.item-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+});
 
 // Function to view borrowing details
 function viewBorrowingDetails(itemId, itemName, borrowedBy) {
@@ -677,24 +763,90 @@ function nextModalImage() {
     images[currentIndex].style.display = 'block';
 }
 
-// Add a global click event for closing the modal when clicked outside
-window.addEventListener('click', function(event) {
-    const modal = document.getElementById('item-modal');
-    if (event.target === modal) {
-        modal.style.display = 'none';
+// Add this function to handle the edit button click
+    function editItem(itemId, event) {
+        // Prevent the event from propagating to parent elements
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Close any open modal
+        document.getElementById('item-modal').style.display = 'none';
+        
+        // Fetch the item data
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load item data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Open edit form with the item data
+                showEditItemForm(data.item);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Laden der Objektdaten');
+            });
     }
-});
 
-// Add a click handler for the close button
-document.addEventListener('DOMContentLoaded', function() {
-    const closeModal = document.querySelector('.close-modal');
-    if (closeModal) {
-        closeModal.addEventListener('click', function() {
-            document.getElementById('item-modal').style.display = 'none';
-        });
+    // Implement the edit form display function
+    function showEditItemForm(itemData) {
+        console.log('Showing edit form with data:', itemData);
+        
+        // Set form action
+        const form = document.getElementById('edit-item-form');
+        form.action = `/edit_item/${itemData._id}`;
+        
+        // Populate form fields
+        document.getElementById('edit-item-id').value = itemData._id;
+        document.getElementById('edit-name').value = itemData.Name || '';
+        document.getElementById('edit-ort').value = itemData.Ort || '';
+        document.getElementById('edit-beschreibung').value = itemData.Beschreibung || '';
+        
+        // Handle filter values which could be arrays or strings
+        let filter1 = '';
+        if (Array.isArray(itemData.Filter) && itemData.Filter.length > 0) {
+            filter1 = itemData.Filter[0];
+        } else if (itemData.Filter) {
+            filter1 = itemData.Filter;
+        }
+        document.getElementById('edit-filter1').value = filter1;
+        
+        let filter2 = '';
+        if (Array.isArray(itemData.Filter2) && itemData.Filter2.length > 0) {
+            filter2 = itemData.Filter2[0];
+        } else if (itemData.Filter2) {
+            filter2 = itemData.Filter2;
+        }
+        document.getElementById('edit-filter2').value = filter2;
+        
+        // Handle date - needs to be in YYYY-MM-DD format for input[type=date]
+        if (itemData.Anschaffungsjahr) {
+            // If it's already a date string, use it; otherwise format it
+            if (typeof itemData.Anschaffungsjahr === 'string' && itemData.Anschaffungsjahr.includes('-')) {
+                document.getElementById('edit-anschaffungsjahr').value = itemData.Anschaffungsjahr.substring(0, 10);
+            } else {
+                // Assuming Anschaffungsjahr might be just a year
+                document.getElementById('edit-anschaffungsjahr').value = `${itemData.Anschaffungsjahr}-01-01`;
+            }
+        } else {
+            document.getElementById('edit-anschaffungsjahr').value = '';
+        }
+        
+        document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
+        document.getElementById('edit-code4').value = itemData.Code_4 || '';
+        
+        // Show the modal
+        document.getElementById('edit-modal').style.display = 'block';
     }
-});
+
+    // Function to close the edit modal
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
 </script>
+
 <style>
 body {
     font-family: Arial, sans-serif;
@@ -805,8 +957,23 @@ h1, h2 {
 
 .actions {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 5px;
     margin-top: 10px;
+}
+
+.actions form, 
+.actions a {
+    flex: 1 1 calc(33% - 5px);
+    min-width: fit-content;
+}
+
+.actions form button,
+.actions a {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 8px 5px;
+    text-align: center;
 }
 
 button.ausleihen {
@@ -1147,6 +1314,80 @@ input[type="file"] {
 
 .borrowing-details-btn:hover {
     background-color: #138496;
+}
+
+/* Add this CSS for the edit button */
+.edit-button {
+    flex: 1;
+    padding: 10px;
+    background-color: #ffc107;
+    color: #212529;
+    text-align: center;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.edit-button:hover {
+    background-color: #e0a800;
+}
+
+/* Edit form modal styles */
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.save-button {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.save-button:hover {
+    background-color: #218838;
+}
+
+.cancel-button {
+    padding: 10px 20px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.cancel-button:hover {
+    background-color: #5a6268;
+}
+
+/* Modal improvements for better responsiveness */
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 15px;
+    }
 }
 </style>
 {% endblock %}

@@ -267,6 +267,28 @@ def get_items():
     return {'items': items}
 
 
+@app.route('/get_item/<id>')
+def get_item_json(id):
+    """
+    API endpoint to retrieve a specific item by ID.
+    
+    Args:
+        id (str): ID of the item to retrieve
+        
+    Returns:
+        dict: The item data or an error message
+    """
+    if 'username' not in session:
+        return {'error': 'Not authorized', 'status': 'forbidden'}, 403
+        
+    item = it.get_item(id)
+    if item:
+        item['_id'] = str(item['_id'])  # Convert ObjectId to string
+        return {'item': item, 'status': 'success'}
+    else:
+        return {'error': 'Item not found', 'status': 'not_found'}, 404
+
+
 @app.route('/upload_item', methods=['POST'])
 def upload_item():
     """
@@ -339,6 +361,61 @@ def delete_item(id):
     
     it.remove_item(id)
     flash('Item deleted successfully', 'success')
+    return redirect(url_for('home_admin'))
+
+
+@app.route('/edit_item/<id>', methods=['POST'])
+def edit_item(id):
+    """
+    Route for editing an existing inventory item.
+    
+    Args:
+        id (str): ID of the item to edit
+        
+    Returns:
+        flask.Response: Redirect to admin homepage with status message
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    # Get form data
+    name = request.form.get('name')
+    ort = request.form.get('ort')
+    beschreibung = request.form.get('beschreibung')
+    filter1 = request.form.get('filter')
+    filter2 = request.form.get('filter2')
+    anschaffungs_jahr = request.form.get('anschaffungsjahr')
+    anschaffungs_kosten = request.form.get('anschaffungskosten')
+    code_4 = request.form.get('code_4')
+    
+    # Get current item to check availability status
+    current_item = it.get_item(id)
+    if not current_item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home_admin'))
+    
+    # Preserve current availability status
+    verfuegbar = current_item.get('Verfuegbar', True)
+    
+    # Get current images
+    images = current_item.get('Images', [])
+    
+    # Update the item
+    result = it.update_item(
+        id, name, ort, beschreibung, 
+        images, verfuegbar, filter1, filter2,
+        anschaffungs_jahr, anschaffungs_kosten, code_4
+    )
+    
+    if result:
+        flash('Item updated successfully', 'success')
+    else:
+        flash('Error updating item', 'error')
+    
     return redirect(url_for('home_admin'))
 
 
