@@ -22,19 +22,46 @@
     <div class="content">
         <h1>Inventar Objekte</h1>
         <div class="filter-container">
-            <div class="filter">
-                <label for="filter1">Filter 1:</label>
-                <select id="filter1" name="filter1" onchange="applyFilters()">
-                    <!-- Filter options will be dynamically loaded here -->
-                    <option value="all">All</option>
-                </select>
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Filter 1:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter1-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(1)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter1"></div>
+                <div class="filter-dropdown" id="filter1-dropdown">
+                    <div class="filter-options" id="filter1-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
             </div>
-            <div class="filter">
-                <label for="filter2">Filter 2:</label>
-                <select id="filter2" name="filter2" onchange="applyFilters()">
-                    <!-- Filter options will be dynamically loaded here -->
-                    <option value="all">All</option>
-                </select>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Filter 2:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter2-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(2)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter2"></div>
+                <div class="filter-dropdown" id="filter2-dropdown">
+                    <div class="filter-options" id="filter2-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <div class="filter-header">
+                    <label>Filter 3:</label>
+                    <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
+                    <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
+                </div>
+                <div class="selected-filters" id="selected-filter3"></div>
+                <div class="filter-dropdown" id="filter3-dropdown">
+                    <div class="filter-options" id="filter3-options">
+                        <!-- Filter options will be dynamically loaded here -->
+                    </div>
+                </div>
             </div>
         </div>
         <div class="qr-container">
@@ -47,6 +74,71 @@
         <div class="navigation-buttons">
             <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
             <button class="next-button" onclick="scrollNext()">&#10095;</button>
+        </div>
+    </div>
+    <div id="item-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="modal-content-wrapper">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+    <div id="edit-modal" class="item-modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeEditModal()">&times;</span>
+            <h2>Objekt bearbeiten</h2>
+            <form id="edit-item-form" method="POST">
+                <input type="hidden" id="edit-item-id" name="id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-name">Name:</label>
+                        <input type="text" id="edit-name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-ort">Ort:</label>
+                        <input type="text" id="edit-ort" name="ort" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-beschreibung">Beschreibung:</label>
+                    <textarea id="edit-beschreibung" name="beschreibung" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-filter1">Filter 1:</label>
+                        <input type="text" id="edit-filter1" name="filter">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-filter2">Filter 2:</label>
+                        <input type="text" id="edit-filter2" name="filter2">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-filter3">Filter 3:</label>
+                        <input type="text" id="edit-filter3" name="filter3">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-anschaffungsjahr">Anschaffungsjahr:</label>
+                        <input type="date" id="edit-anschaffungsjahr" name="anschaffungsjahr">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-anschaffungskosten">Anschaffungskosten:</label>
+                        <input type="number" id="edit-anschaffungskosten" name="anschaffungskosten">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-code4">Code:</label>
+                    <input type="number" id="edit-code4" name="code_4">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="save-button">Speichern</button>
+                    <button type="button" class="cancel-button" onclick="closeEditModal()">Abbrechen</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -105,133 +197,253 @@
             setTimeout(() => notification.remove(), 1000);
         }, 10000);
     }
-</script>
 
-<script>    
-    fetch("{{ url_for('get_items') }}")
-        .then(response => response.json())
-        .then(data => {
-            const itemsContainer = document.querySelector('#items-container');
-            // Creating a Set to store unique filter values
-            const filter1Values = new Set();
-            const filter2Values = new Set();
-            
-            data.items.forEach(item => {
-                const card = document.createElement('div');
-                card.classList.add('item-card');
-                
-                // Add highlight class if this is the item we're looking for
-                if (item._id === highlightItemId) {
-                    card.classList.add('highlight-item');
-                    setTimeout(() => {
-                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 500);
-                }
-                
-                // Korrekte Zuweisung der Filter-Werte als Daten-Attribute
-                const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
-                const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
-                
-                card.dataset.filter1 = filter1Value;
-                card.dataset.filter2 = filter2Value;
-                
-                // Add filter values to their respective sets
-                if (filter1Value && filter1Value.trim() !== '') {
-                    filter1Values.add(filter1Value);
-                }
-                if (filter2Value && filter2Value.trim() !== '') {
-                    filter2Values.add(filter2Value);
-                }
+    // Add this variable to store the current username
+    let currentUsername = '';
 
-                const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
-                card.innerHTML = `
-                    <h3>${item.Name}</h3>
-                    <p><strong>Ort:</strong> ${item.Ort}</p>
-                    <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
-                    <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
-                    <div class="image-container">
-                        ${imagesHtml}
-                        <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
-                        <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
-                    </div>
-                    <div class="actions">
-                        ${item.Verfuegbar ? `
-                            <form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
-                                <button class="ausleihen" type="submit">Ausleihen</button>
-                            </form>
-                        ` : `
-                            <form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
-                                <button class="ausleihen" type="submit">Zurückgeben</button>
-                            </form>
-                        `}
-                        <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
-                    </div>
-                `;
-                itemsContainer.appendChild(card);
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fetch user status to get current username
+        fetch('/user_status')
+            .then(response => response.json())
+            .then(data => {
+                console.log('User status:', data);
+                currentUsername = data.username;
+                // Now load items with username information
+                loadItems();
+            })
+            .catch(error => {
+                console.error('Error fetching user status:', error);
+                loadItems(); // Load items anyway in case of error
+            });
+    });
 
-                // Add QR code download link to each card
-                const qrLink = document.createElement('a');
-                qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
-                qrLink.className = 'qr-download-button';
-                qrLink.textContent = 'QR-Code';
+    // Global variables to store active filters
+    let activeFilters = {
+        filter1: [],
+        filter2: [],
+        filter3: []
+    };
+
+    function loadItems() {
+        fetch("{{ url_for('get_items') }}")
+            .then(response => response.json())
+            .then(data => {
+                const itemsContainer = document.querySelector('#items-container');
+                // Creating a Set to store unique filter values
+                const filter1Values = new Set();
+                const filter2Values = new Set();
+                const filter3Values = new Set();
                 
-                // Add the QR code link to the actions div
-                const actionsDiv = card.querySelector('.actions');
-                actionsDiv.appendChild(qrLink);
-                
-                // Add click event to open the modal with item details
-                card.addEventListener('click', function(e) {
-                    // Prevent modal from opening when clicking buttons or links
-                    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || 
-                        e.target.closest('button') || e.target.closest('a')) {
-                        return;
+                data.items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.classList.add('item-card');
+                    
+                    // Add highlight class if this is the item we're looking for
+                    if (item._id === highlightItemId) {
+                        card.classList.add('highlight-item');
+                        setTimeout(() => {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 500);
                     }
                     
-                    // Prepare the item data with correct image paths
-                    const itemData = {...item};
-                    itemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
+                    // Fix: Use the correct property names (Filter instead of Filter1)
+                    const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
+                    const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
+                    const filter3Value = Array.isArray(item.Filter3) && item.Filter3.length > 0 ? item.Filter3[0] : (item.Filter3 || '');
                     
-                    // Open the modal
-                    openItemModal(itemData);
-                });
-            });
-            
-            // Now populate the filter dropdowns with the collected unique values
-            const filter1 = document.querySelector('#filter1');
-            const filter2 = document.querySelector('#filter2');
-            
-            // Sort and populate filter1 dropdown
-            [...filter1Values].sort().forEach(filterName => {
-                const option = document.createElement('option');
-                option.value = filterName;
-                option.textContent = filterName;
-                filter1.appendChild(option);
-            });
-            
-            // Sort and populate filter2 dropdown
-            [...filter2Values].sort().forEach(filterName => {
-                const option = document.createElement('option');
-                option.value = filterName;
-                option.textContent = filterName;
-                filter2.appendChild(option);
-            });
-            
-            // Center the first card
-            const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
-            if (cardWidth > 0) {
-                itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
-            }
-            
-            // Nach dem Laden der Items Filter anwenden
-            applyFilters();
-        })
-        .catch(error => console.error('Error fetching items:', error));
+                    card.dataset.filter1 = filter1Value;
+                    card.dataset.filter2 = filter2Value;
+                    card.dataset.filter3 = filter3Value;
+                    
+                    // Add filter values to their respective sets
+                    if (filter1Value && filter1Value.trim() !== '') {
+                        filter1Values.add(filter1Value);
+                    }
+                    if (filter2Value && filter2Value.trim() !== '') {
+                        filter2Values.add(filter2Value);
+                    }
+                    if (filter3Value && filter3Value.trim() !== '') {
+                        filter3Values.add(filter3Value);
+                    }
 
-    // Verbesserte Filter-Anwendungsfunktion
-    function applyFilters() {
-        const filter1Value = document.querySelector('#filter1').value;
-        const filter2Value = document.querySelector('#filter2').value;
+                    const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                    
+                    // Check if item is borrowed by current user
+                    const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+
+                    card.innerHTML = `
+                        <h3>${item.Name}</h3>
+                        <p><strong>Ort:</strong> ${item.Ort}</p>
+                        <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
+                        <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
+                        <p><strong>Filter 3:</strong> ${card.dataset.filter3}</p>
+                        <div class="image-container">
+                            ${imagesHtml}
+                            <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
+                            <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
+                        </div>
+                        <div class="actions">
+                            ${item.Verfuegbar ? 
+                                `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                    <button class="ausleihen" type="submit">Ausleihen</button>
+                                </form>` 
+                            : isBorrowedByMe ?
+                                `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                                    <button class="ausleihen" type="submit">Zurückgeben</button>
+                                </form>`
+                            :
+                                `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                            }
+                        </div>
+                    `;
+                    itemsContainer.appendChild(card);
+                    
+                    // Add click event to open the modal with item details - making this more robust
+                    card.addEventListener('click', function(e) {
+                        // Prevent modal from opening when clicking buttons or links
+                        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || 
+                            e.target.closest('button') || e.target.closest('a')) {
+                            return;
+                        }
+                        
+                        console.log("Opening modal for item:", item.Name); // Debug log
+                        
+                        // Prepare the item data with correct image paths
+                        const itemData = {...item};
+                        itemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
+                        
+                        // Open the modal
+                        openItemModal(itemData);
+                    });
+                });
+                
+                // Now populate the filter checkboxes with the collected unique values
+                populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
+                populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
+                populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
+                
+                // Center the first card
+                const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
+                if (cardWidth > 0) {
+                    itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
+                }
+                
+                // Nach dem Laden der Items Filter anwenden
+                applyFilters();
+            })
+            .catch(error => console.error('Error fetching items:', error));
+    }
+
+    // Function to populate filter options with checkboxes
+    function populateFilterOptions(containerId, filterValues, filterNum) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; // Clear previous options
         
+        filterValues.forEach(filterName => {
+            if (!filterName) return; // Skip empty values
+            
+            const option = document.createElement('div');
+            option.className = 'filter-option';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `filter${filterNum}-${filterName.replace(/\s+/g, '-')}`;
+            checkbox.value = filterName;
+            checkbox.onchange = () => updateFilter(filterNum, filterName, checkbox.checked);
+            
+            const label = document.createElement('label');
+            label.htmlFor = checkbox.id;
+            label.textContent = filterName;
+            
+            option.appendChild(checkbox);
+            option.appendChild(label);
+            container.appendChild(option);
+        });
+    }
+
+    // Function to toggle filter dropdown visibility
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        
+        // Update toggle button text
+        const button = event.currentTarget;
+        button.textContent = dropdown.style.display === 'block' ? '▲' : '▼';
+    }
+
+    // Function to update filters when checkbox state changes
+    function updateFilter(filterNum, value, isChecked) {
+        const filterKey = `filter${filterNum}`;
+        
+        if (isChecked) {
+            // Add to active filters if not already present
+            if (!activeFilters[filterKey].includes(value)) {
+                activeFilters[filterKey].push(value);
+            }
+        } else {
+            // Remove from active filters
+            activeFilters[filterKey] = activeFilters[filterKey].filter(val => val !== value);
+        }
+        
+        // Update the selected filters display
+        updateSelectedFiltersDisplay(filterNum);
+        
+        // Apply the filters to show/hide items
+        applyFilters();
+    }
+
+    // Function to update the display of selected filters
+    function updateSelectedFiltersDisplay(filterNum) {
+        const filterKey = `filter${filterNum}`;
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
+        
+        activeFilters[filterKey].forEach(value => {
+            const tag = document.createElement('span');
+            tag.className = 'filter-tag';
+            tag.textContent = value;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'filter-tag-remove';
+            removeBtn.textContent = '×';
+            removeBtn.onclick = () => {
+                // Remove from active filters
+                activeFilters[filterKey] = activeFilters[filterKey].filter(val => val !== value);
+                
+                // Uncheck the corresponding checkbox
+                const checkbox = document.getElementById(`filter${filterNum}-${value.replace(/\s+/g, '-')}`);
+                if (checkbox) checkbox.checked = false;
+                
+                // Update display and apply filters
+                updateSelectedFiltersDisplay(filterNum);
+                applyFilters();
+            };
+            
+            tag.appendChild(removeBtn);
+            container.appendChild(tag);
+        });
+    }
+
+    // Function to clear all filter selections for a specific filter
+    function clearFilter(filterNum) {
+        const filterKey = `filter${filterNum}`;
+        
+        // Uncheck all checkboxes for this filter
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Clear active filters
+        activeFilters[filterKey] = [];
+        
+        // Update display and apply filters
+        updateSelectedFiltersDisplay(filterNum);
+        applyFilters();
+    }
+
+    // Updated filter application function to handle multiple selections
+    function applyFilters() {
         const itemsContainer = document.querySelector('#items-container');
         const items = itemsContainer.querySelectorAll('.item-card');
         
@@ -239,12 +451,50 @@
         items.forEach(item => {
             const itemFilter1 = item.dataset.filter1;
             const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
             
-            const matchesFilter1 = filter1Value === 'all' || itemFilter1 === filter1Value;
-            const matchesFilter2 = filter2Value === 'all' || itemFilter2 === filter2Value;
+            // Check if item matches the active filters
+            // If no filters are selected for a category, all items pass that filter
+            const matchesFilter1 = activeFilters.filter1.length === 0 || activeFilters.filter1.includes(itemFilter1);
+            const matchesFilter2 = activeFilters.filter2.length === 0 || activeFilters.filter2.includes(itemFilter2);
+            const matchesFilter3 = activeFilters.filter3.length === 0 || activeFilters.filter3.includes(itemFilter3);
             
-            // Beide Filter müssen übereinstimmen (UND-Operation)
-            if (matchesFilter1 && matchesFilter2) {
+            // All three filter categories must match (AND operation between categories)
+            if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
+                item.style.display = 'block';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Informationen zur Anzahl der sichtbaren Elemente
+        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+        
+        // After filtering, reset scroll position to show the first visible card
+        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+        if (firstVisibleCard) {
+            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }
+    }
+
+    // Verbesserte Filter-Anwendungsfunktion
+    function applyFilters() {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            
+            const matchesFilter1 = activeFilters.filter1.length === 0 || activeFilters.filter1.includes(itemFilter1);
+            const matchesFilter2 = activeFilters.filter2.length === 0 || activeFilters.filter2.includes(itemFilter2);
+            const matchesFilter3 = activeFilters.filter3.length === 0 || activeFilters.filter3.includes(itemFilter3);
+            
+            // All three filters must match (AND operation)
+            if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
                 item.style.display = 'block';
                 visibleCount++;
             } else {
@@ -302,41 +552,13 @@
             itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
         }
     }
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Instead, we'll fetch user status just to keep the user info available
-    fetch('/user_status')
-        .then(response => response.json())
-        .then(data => {
-            console.log('User status:', data);
-            // No action needed - users can borrow multiple items
-        })
-        .catch(error => {
-            console.error('Error fetching user status:', error);
-        });
-});
-</script>
-<script>
-    // Modal functionality
-    const modal = document.getElementById('item-modal');
-    const closeModal = document.querySelector('.close-modal');
-    
-    // Close modal when clicking the X button
-    closeModal.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
-    
-    // Close modal when clicking outside the modal content
-    window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-    
+
     // Function to open modal with item details
     function openItemModal(itemData) {
+        console.log("Modal opening with data:", itemData);
+        
         const modalContent = document.getElementById('modal-content-wrapper');
+        const modal = document.getElementById('item-modal');
         
         // Create image gallery
         let imagesHtml = '';
@@ -353,6 +575,19 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
         
+        // Check if item is borrowed by current user
+        const isBorrowedByMe = !itemData.Verfuegbar && itemData.User === currentUsername;
+        
+        // Add a "View Borrowing Details" button if the item is borrowed
+        let borrowingDetailsButton = '';
+        if (!itemData.Verfuegbar) {
+            borrowingDetailsButton = `
+                <button class="borrowing-details-btn" onclick="viewBorrowingDetails('${itemData._id}', '${itemData.Name}', '${itemData.User}')">
+                    Ausleihungs Details
+                </button>
+            `;
+        }
+            
         // Build modal content
         modalContent.innerHTML = `
             <h2>${itemData.Name}</h2>
@@ -370,6 +605,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="detail-group">
                         <div class="detail-label">Kategorie 2:</div>
                         <div class="detail-value">${itemData.Filter2 || '-'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <div class="detail-label">Kategorie 3:</div>
+                        <div class="detail-value">${itemData.Filter3 || '-'}</div>
                     </div>
                 </div>
                 <div class="detail-section">
@@ -399,20 +638,233 @@ document.addEventListener('DOMContentLoaded', function() {
                 ${itemData.Verfuegbar ? 
                     `<form method="POST" action="/ausleihen/${itemData._id}">
                         <button class="ausleihen" type="submit">Ausleihen</button>
-                    </form>` : 
+                    </form>` 
+                : isBorrowedByMe ?
                     `<form method="POST" action="/zurueckgeben/${itemData._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`
+                :
+                    `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
+                <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
+                ${borrowingDetailsButton}
                 <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
                 <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
             </div>
         `;
         
+        // Ensure the close button is wired up for this specific modal instance
+        const closeBtn = modal.querySelector('.close-modal');
+        if (closeBtn) {
+            closeBtn.onclick = function() {
+                modal.style.display = 'none';
+            };
+        }
+        
         // Show the modal
         modal.style.display = 'block';
     }
-    
+
+    // Update the global modal event handlers to be more robust
+    document.addEventListener('DOMContentLoaded', function() {
+        // Close modals when clicking outside
+        window.addEventListener('click', function(event) {
+            const modals = document.querySelectorAll('.item-modal');
+            modals.forEach(function(modal) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+
+        // Handle close buttons for all modals that exist at page load
+        document.querySelectorAll('.close-modal').forEach(function(closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                const modal = this.closest('.item-modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // Function to view borrowing details
+    function viewBorrowingDetails(itemId, itemName, borrowedBy) {
+        // Close the item modal
+        document.getElementById('item-modal').style.display = 'none';
+        
+        // Fetch borrowing details from the server
+        fetch(`/get_ausleihung_by_item/${itemId}`)
+            .then(response => {
+                // First check if the response is ok
+                if (!response.ok && response.status !== 200) {
+                    if (response.status === 403) {
+                        throw new Error('Sie sind nicht berechtigt, diese Ausleihungsdaten einzusehen.');
+                    } else {
+                        throw new Error('Ein Serverfehler ist aufgetreten.');
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.ausleihung) {
+                    showBorrowingDetailsModal(data.ausleihung, itemName);
+                } else {
+                    // More descriptive error message based on the response
+                    let message = 'Keine aktiven Ausleihungsdaten gefunden.';
+                    if (data.error) {
+                        message = data.error;
+                    }
+                    
+                    // Create a simple alert or show a more user-friendly modal
+                    showInfoModal(message, itemName);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching borrowing details:', error);
+                alert(error.message || 'Fehler beim Laden der Ausleihungsdaten');
+            });
+    }
+
+    // Add a simple info modal function for displaying informational messages
+    function showInfoModal(message, itemName) {
+        // You can reuse the borrowing details modal structure
+        let infoModal = document.getElementById('info-modal');
+        
+        // Create the modal if it doesn't exist yet
+        if (!infoModal) {
+            infoModal = document.createElement('div');
+            infoModal.id = 'info-modal';
+            infoModal.className = 'item-modal';
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            
+            const closeButton = document.createElement('span');
+            closeButton.className = 'close-modal';
+            closeButton.innerHTML = '&times;';
+            closeButton.onclick = function() {
+                infoModal.style.display = 'none';
+            };
+            
+            const contentWrapper = document.createElement('div');
+            contentWrapper.id = 'info-content-wrapper';
+            
+            modalContent.appendChild(closeButton);
+            modalContent.appendChild(contentWrapper);
+            infoModal.appendChild(modalContent);
+            
+            document.body.appendChild(infoModal);
+            
+            // Close when clicking outside the modal
+            infoModal.onclick = function(event) {
+                if (event.target === infoModal) {
+                    infoModal.style.display = 'none';
+                }
+            };
+        }
+        
+        // Fill modal with the message
+        const contentWrapper = document.getElementById('info-content-wrapper');
+        contentWrapper.innerHTML = `
+            <h2>Information zu ${itemName}</h2>
+            <div class="info-message">
+                <p>${message}</p>
+            </div>
+        `;
+        
+        // Display the modal
+        infoModal.style.display = 'block';
+    }
+
+    // Function to show borrowing details modal
+    function showBorrowingDetailsModal(ausleihung, itemName) {
+        // Create modal container if it doesn't exist
+        let borrowingModal = document.getElementById('borrowing-details-modal');
+        if (!borrowingModal) {
+            borrowingModal = document.createElement('div');
+            borrowingModal.id = 'borrowing-details-modal';
+            borrowingModal.className = 'item-modal';
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            
+            const closeButton = document.createElement('span');
+            closeButton.className = 'close-modal';
+            closeButton.innerHTML = '&times;';
+            closeButton.onclick = function() {
+                borrowingModal.style.display = 'none';
+            };
+            
+            const contentWrapper = document.createElement('div');
+            contentWrapper.id = 'borrowing-content-wrapper';
+            
+            modalContent.appendChild(closeButton);
+            modalContent.appendChild(contentWrapper);
+            borrowingModal.appendChild(modalContent);
+            
+            document.body.appendChild(borrowingModal);
+            
+            // Close when clicking outside
+            borrowingModal.onclick = function(event) {
+                if (event.target === borrowingModal) {
+                    borrowingModal.style.display = 'none';
+                }
+            };
+        }
+        
+        // Format dates properly
+        const startDate = new Date(ausleihung.Start);
+        
+        // Handle end date - use placeholder for active borrowings
+        let endDateStr = 'Aktiv - Kein Enddatum';
+        if (ausleihung.End) {
+            const endDate = new Date(ausleihung.End);
+            // Check if this is the Unix epoch date (indicates a null date problem)
+            if (endDate.getFullYear() > 1970) {
+                endDateStr = formatDate(endDate);
+            }
+        }
+        
+        // Fill modal with borrowing details
+        const contentWrapper = document.getElementById('borrowing-content-wrapper');
+        contentWrapper.innerHTML = `
+            <h2>Ausleihungs Details</h2>
+            <div class="borrowing-details">
+                <p><strong>Objekt:</strong> ${itemName}</p>
+                <p><strong>Von:</strong> ${formatDate(startDate)}</p>
+                <p><strong>Bis:</strong> ${endDateStr}</p>
+                <p><strong>Ausgeliehen von:</strong> ${ausleihung.User}</p>
+                <p><strong>Notizen:</strong> ${ausleihung.Notes || '-'}</p>
+                <p><strong>Status:</strong> ${getBorrowingStatusText(ausleihung.Status)}</p>
+            </div>
+        `;
+        
+        // Show the modal
+        borrowingModal.style.display = 'block';
+    }
+
+    // Helper function to format dates
+    function formatDate(date) {
+        return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}, ${padZero(date.getHours())}:${padZero(date.getMinutes())}:${padZero(date.getSeconds())}`;
+    }
+
+    // Helper function to pad numbers with leading zeros
+    function padZero(num) {
+        return num.toString().padStart(2, '0');
+    }
+
+    // Helper function to get status text in German
+    function getBorrowingStatusText(status) {
+        switch(status) {
+            case 'active': return 'Aktuell ausgeliehen';
+            case 'completed': return 'Zurückgegeben';
+            case 'planned': return 'Geplant';
+            case 'cancelled': return 'Storniert';
+            default: return status;
+        }
+    }
+
     // Image navigation in modal
     function prevModalImage() {
         const images = document.querySelectorAll('.modal-image');
@@ -422,7 +874,7 @@ document.addEventListener('DOMContentLoaded', function() {
         currentIndex = (currentIndex - 1 + images.length) % images.length;
         images[currentIndex].style.display = 'block';
     }
-    
+
     function nextModalImage() {
         const images = document.querySelectorAll('.modal-image');
         let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
@@ -431,7 +883,99 @@ document.addEventListener('DOMContentLoaded', function() {
         currentIndex = (currentIndex + 1) % images.length;
         images[currentIndex].style.display = 'block';
     }
+
+    // Add this function to handle the edit button click
+    function editItem(itemId, event) {
+        // Prevent the event from propagating to parent elements
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Close any open modal
+        document.getElementById('item-modal').style.display = 'none';
+        
+        // Fetch the item data
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load item data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Open edit form with the item data
+                showEditItemForm(data.item);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Laden der Objektdaten');
+            });
+    }
+
+    // Implement the edit form display function
+    function showEditItemForm(itemData) {
+        console.log('Showing edit form with data:', itemData);
+        
+        // Set form action
+        const form = document.getElementById('edit-item-form');
+        form.action = `/edit_item/${itemData._id}`;
+        
+        // Populate form fields
+        document.getElementById('edit-item-id').value = itemData._id;
+        document.getElementById('edit-name').value = itemData.Name || '';
+        document.getElementById('edit-ort').value = itemData.Ort || '';
+        document.getElementById('edit-beschreibung').value = itemData.Beschreibung || '';
+        
+        // Handle filter values which could be arrays or strings
+        let filter1 = '';
+        if (Array.isArray(itemData.Filter) && itemData.Filter.length > 0) {
+            filter1 = itemData.Filter[0];
+        } else if (itemData.Filter) {
+            filter1 = itemData.Filter;
+        }
+        document.getElementById('edit-filter1').value = filter1;
+        
+        let filter2 = '';
+        if (Array.isArray(itemData.Filter2) && itemData.Filter2.length > 0) {
+            filter2 = itemData.Filter2[0];
+        } else if (itemData.Filter2) {
+            filter2 = itemData.Filter2;
+        }
+        document.getElementById('edit-filter2').value = filter2;
+        
+        let filter3 = '';
+        if (Array.isArray(itemData.Filter3) && itemData.Filter3.length > 0) {
+            filter3 = itemData.Filter3[0];
+        } else if (itemData.Filter3) {
+            filter3 = itemData.Filter3;
+        }
+        document.getElementById('edit-filter3').value = filter3;
+        
+        // Handle date - needs to be in YYYY-MM-DD format for input[type=date]
+        if (itemData.Anschaffungsjahr) {
+            // If it's already a date string, use it; otherwise format it
+            if (typeof itemData.Anschaffungsjahr === 'string' && itemData.Anschaffungsjahr.includes('-')) {
+                document.getElementById('edit-anschaffungsjahr').value = itemData.Anschaffungsjahr.substring(0, 10);
+            } else {
+                // Assuming Anschaffungsjahr might be just a year
+                document.getElementById('edit-anschaffungsjahr').value = `${itemData.Anschaffungsjahr}-01-01`;
+            }
+        } else {
+            document.getElementById('edit-anschaffungsjahr').value = '';
+        }
+        
+        document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
+        document.getElementById('edit-code4').value = itemData.Code_4 || '';
+        
+        // Show the modal
+        document.getElementById('edit-modal').style.display = 'block';
+    }
+
+    // Function to close the edit modal
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
 </script>
+
 <style>
 body {
     font-family: Arial, sans-serif;
@@ -456,15 +1000,94 @@ h1, h2 {
 
 .filter-container {
     display: flex;
+    flex-wrap: wrap;
     gap: 20px;
     justify-content: center;
     margin-bottom: 20px;
 }
 
-.filter {
+.filter-group {
+    position: relative;
+    min-width: 200px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px;
+}
+
+.filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.filter-toggle, .clear-filter {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+
+.clear-filter {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.filter-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+}
+
+.filter-options {
+    padding: 10px;
+}
+
+.filter-option {
+    margin-bottom: 5px;
     display: flex;
     align-items: center;
-    gap: 10px;
+}
+
+.filter-option label {
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+.selected-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 30px;
+}
+
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: #e9ecef;
+    border-radius: 15px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+}
+
+.filter-tag-remove {
+    background: none;
+    border: none;
+    color: #6c757d;
+    margin-left: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .items-container {
@@ -542,8 +1165,23 @@ h1, h2 {
 
 .actions {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 5px;
     margin-top: 10px;
+}
+
+.actions form, 
+.actions a {
+    flex: 1 1 calc(33% - 5px);
+    min-width: fit-content;
+}
+
+.actions form button,
+.actions a {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 8px 5px;
+    text-align: center;
 }
 
 button.ausleihen {
@@ -735,6 +1373,7 @@ input[type="file"] {
 .disabled-button {
     background-color: #6c757d;
     cursor: not-allowed;
+    opacity: 0.65;
 }
 
 .borrow-limit-banner {
@@ -855,6 +1494,108 @@ input[type="file"] {
 
 .full-width {
     grid-column: 1 / -1;
+}
+
+/* Borrowing details modal styles */
+#borrowing-details-modal .modal-content {
+    max-width: 600px;
+}
+
+.borrowing-details {
+    padding: 20px 0;
+    line-height: 1.6;
+}
+
+.borrowing-details p {
+    margin: 10px 0;
+}
+
+.borrowing-details-btn {
+    padding: 10px 20px;
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.borrowing-details-btn:hover {
+    background-color: #138496;
+}
+
+/* Add this CSS for the edit button */
+.edit-button {
+    flex: 1;
+    padding: 10px;
+    background-color: #ffc107;
+    color: #212529;
+    text-align: center;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.edit-button:hover {
+    background-color: #e0a800;
+}
+
+/* Edit form modal styles */
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.save-button {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.save-button:hover {
+    background-color: #218838;
+}
+
+.cancel-button {
+    padding: 10px 20px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.cancel-button:hover {
+    background-color: #5a6268;
+}
+
+/* Modal improvements for better responsiveness */
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 15px;
+    }
 }
 </style>
 {% endblock %}

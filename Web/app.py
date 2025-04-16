@@ -29,6 +29,7 @@ Features:
 - QR code generation for items
 - Administrative functions
 - History logging of item usage
+- Booking and reservation of items
 """
 
 import os
@@ -37,7 +38,6 @@ from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
-import bookings as bo
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import json
@@ -54,6 +54,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
+app.config['STATIC_FOLDER'] = os.path.join(BASE_DIR, 'static')  # Explicitly set static folder
 __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
 Port = 8080
@@ -266,6 +267,28 @@ def get_items():
     return {'items': items}
 
 
+@app.route('/get_item/<id>')
+def get_item_json(id):
+    """
+    API endpoint to retrieve a specific item by ID.
+    
+    Args:
+        id (str): ID of the item to retrieve
+        
+    Returns:
+        dict: The item data or an error message
+    """
+    if 'username' not in session:
+        return {'error': 'Not authorized', 'status': 'forbidden'}, 403
+        
+    item = it.get_item(id)
+    if item:
+        item['_id'] = str(item['_id'])  # Convert ObjectId to string
+        return {'item': item, 'status': 'success'}
+    else:
+        return {'error': 'Item not found', 'status': 'not_found'}, 404
+
+
 @app.route('/upload_item', methods=['POST'])
 def upload_item():
     """
@@ -288,6 +311,7 @@ def upload_item():
     images = request.files.getlist('images')
     filter_upload = request.form.getlist('filter')
     filter_upload2 = request.form.getlist('filter2')
+    filter_upload3 = request.form.getlist('filter3')
     anschaffungs_jahr = request.form.getlist('anschaffungsjahr')
     anschaffungs_kosten = request.form.getlist('anschaffungskosten')
     code_4 = request.form.getlist('code_4')
@@ -306,7 +330,7 @@ def upload_item():
             flash('Invalid file type', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, anschaffungs_jahr, anschaffungs_kosten, code_4)
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, filter_upload3, anschaffungs_jahr, anschaffungs_kosten, code_4)
     flash('Item uploaded successfully', 'success')
     
     # Get the item ID and create QR code
@@ -338,6 +362,62 @@ def delete_item(id):
     
     it.remove_item(id)
     flash('Item deleted successfully', 'success')
+    return redirect(url_for('home_admin'))
+
+
+@app.route('/edit_item/<id>', methods=['POST'])
+def edit_item(id):
+    """
+    Route for editing an existing inventory item.
+    
+    Args:
+        id (str): ID of the item to edit
+        
+    Returns:
+        flask.Response: Redirect to admin homepage with status message
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    # Get form data
+    name = request.form.get('name')
+    ort = request.form.get('ort')
+    beschreibung = request.form.get('beschreibung')
+    filter1 = request.form.get('filter')
+    filter2 = request.form.get('filter2')
+    filter3 = request.form.get('filter3')
+    anschaffungs_jahr = request.form.get('anschaffungsjahr')
+    anschaffungs_kosten = request.form.get('anschaffungskosten')
+    code_4 = request.form.get('code_4')
+    
+    # Get current item to check availability status
+    current_item = it.get_item(id)
+    if not current_item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home_admin'))
+    
+    # Preserve current availability status
+    verfuegbar = current_item.get('Verfuegbar', True)
+    
+    # Get current images
+    images = current_item.get('Images', [])
+    
+    # Update the item
+    result = it.update_item(
+        id, name, ort, beschreibung, 
+        images, verfuegbar, filter1, filter2, filter3,
+        anschaffungs_jahr, anschaffungs_kosten, code_4
+    )
+    
+    if result:
+        flash('Item updated successfully', 'success')
+    else:
+        flash('Error updating item', 'error')
+    
     return redirect(url_for('home_admin'))
 
 
@@ -404,29 +484,46 @@ def zurueckgeben(id):
         if not us.check_admin(session['username']) and item['User'] != session['username']:
             flash('You are not authorized to return this item', 'error')
             return redirect(url_for('home'))
-        it.update_item_status(id, True)
         
         try:
-            # Get existing borrowing record
+            # Get existing borrowing record BEFORE updating the item status
             ausleihung_data = au.get_ausleihung_by_item(id)
-            
             end_date = datetime.datetime.now()
+            
+            # Store the borrower's username before updating item status
+            original_user = item.get('User', session['username'])
             
             if ausleihung_data and '_id' in ausleihung_data:
                 # Update existing record
                 ausleihung_id = str(ausleihung_data['_id'])
-                user = ausleihung_data.get('User', session['username'])
+                user = ausleihung_data.get('User', original_user)
                 start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                 
-                update_result = au.update_ausleihung(ausleihung_id, id, user, start, end_date)
+                # Update the ausleihung first
+                au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
+                
+                # Then update the item status (only once)
+                return_it = it.update_item_status(id, True, original_user)
                 flash('Item returned successfully', 'success')
             else:
-                # Create new record with default values
+                # Only create a new record if we absolutely can't find an existing one
+                # This should rarely happen
                 start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
-                au.add_ausleihung(id, session['username'], start_time, end_date)
+                
+                # Update the item status first
+                it.update_item_status(id, True, original_user)
+                
+                # Log a warning about missing record
+                print(f"Warning: No borrowing record found for item {id} when returning. Creating new record.")
+                
+                # Create a historical record
+                au.add_ausleihung(id, original_user, start_time, end_date, notes="Auto-generated return record", status="completed")
                 flash('Item returned successfully (new record created)', 'success')
         except Exception as e:
+            # If there's an error in record keeping, still make the item available
+            it.update_item_status(id, True, user=original_user)
             flash('Item returned but encountered an error in record-keeping', 'warning')
+            print(f"Error updating borrowing record: {e}")
     else:
         flash('Item is already available or does not exist', 'error')
     
@@ -445,6 +542,40 @@ def get_filter():
     """
     return it.get_filter()
     
+
+@app.route('/get_ausleihung_by_item/<id>')
+def get_ausleihung_by_item_route(id):
+    """
+    API endpoint to retrieve borrowing details for a specific item.
+    
+    Args:
+        id (str): ID of the item
+        
+    Returns:
+        dict: Borrowing details for the item
+    """
+    if 'username' not in session:
+        return {'error': 'Not authorized', 'status': 'forbidden'}, 403
+    
+    # Get the borrowing record
+    ausleihung = au.get_ausleihung_by_item(id, include_history=False)
+    
+    # Admin users can see all borrowing details
+    # Regular users can only see their own borrowings
+    if ausleihung and (us.check_admin(session['username']) or ausleihung.get('User') == session['username']):
+        return {'ausleihung': ausleihung, 'status': 'success'}
+    
+    # Get item name for better error message
+    item = it.get_item(id)
+    item_name = item.get('Name', 'Unknown') if item else 'Unknown'
+    
+    # Return a more informative error
+    return {
+        'error': 'No active borrowing record found for this item',
+        'item_name': item_name,
+        'status': 'not_found'
+    }, 200  # Return 200 instead of 404 to allow processing of the error message
+
 
 def create_qr_code(id):
     """
@@ -633,7 +764,7 @@ def get_bookings():
     
     # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
     # We process these first as they are the most current
-    active_bookings = bo.get_active_bookings(start, end)
+    active_bookings = au.get_active_bookings(start, end)
     for booking in active_bookings:
         item = it.get_item(booking.get('Item'))
         if not item:
@@ -710,7 +841,7 @@ def get_bookings():
         })
     
     # 3. Get planned bookings (from planned_bookings collection with status="planned")
-    planned_bookings = bo.get_planned_bookings(start, end)
+    planned_bookings = au.get_planned_bookings(start, end)
     for booking in planned_bookings:
         item_id = booking.get('Item')
         
@@ -742,7 +873,7 @@ def get_bookings():
         })
     
     # 4. Add completed bookings (from planned_bookings with status="completed")
-    completed_bookings = bo.get_completed_bookings(start, end)
+    completed_bookings = au.get_completed_bookings(start, end)
     for booking in completed_bookings:
         item_id = booking.get('Item')
         item = it.get_item(item_id)
@@ -806,11 +937,11 @@ def plan_booking():
         return {"success": False, "error": "Dieses Objekt ist aktuell nicht verfügbar"}, 409
     
     # Check for date conflicts with other bookings
-    if bo.check_booking_conflict(item_id, start_date, end_date):
+    if au.check_booking_conflict(item_id, start_date, end_date):
         return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
     
     # Create the planned booking
-    booking_id = bo.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
+    booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
     
     return {"success": True, "booking_id": str(booking_id)}
 
@@ -824,7 +955,7 @@ def cancel_booking(id):
         return redirect(url_for('login'))
     
     # Get the booking
-    booking = bo.get_booking(id)
+    booking = au.get_booking(id)
     if not booking:
         return {"success": False, "error": "Booking not found"}, 404
         
@@ -833,7 +964,7 @@ def cancel_booking(id):
         return {"success": False, "error": "Not authorized to cancel this booking"}, 403
     
     # Cancel the booking
-    result = bo.cancel_booking(id)
+    result = au.cancel_booking(id)
     
     if result:
         return {"success": True}
@@ -856,9 +987,7 @@ def terminplan():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     """
-    User registration route.
-    Creates new user accounts (admin access required).
-    
+    User registration route.false
     Returns:
         flask.Response: Rendered template or redirect
     """
@@ -1072,7 +1201,7 @@ def process_bookings():
     # Create a proper datetime object
     current_time = datetime.datetime.now()
     # Pass the datetime object to the function
-    bookings = bo.get_bookings_starting_now(current_time)
+    bookings = au.get_bookings_starting_now(current_time)
     
     # Process the bookings (implement your booking activation logic here)
     for booking in bookings:
@@ -1084,31 +1213,37 @@ def process_bookings():
             end_date = booking.get('End')
             notes = booking.get('Notes', '')
             
-            # Create an ausleihung record first
-            ausleihung_id = au.add_ausleihung(
-                item_id,
-                user,
-                start_date,
-                end_date,
-                notes
-            )
+            # Check if an ausleihung record already exists for this booking
+            existing_ausleihung = au.get_ausleihung_by_item(item_id, status='active')
             
-            if ausleihung_id:
-                
-                # Mark the booking as active and link it to the ausleihung
-                bo.mark_booking_active(booking_id, str(ausleihung_id))
-                
-                # Update item status
-                it.update_item_status(item_id, False, user)
+            if existing_ausleihung:
+                # Just mark the booking as active and link to existing ausleihung
+                au.mark_booking_active(booking_id, str(existing_ausleihung.get('_id')))
+                print(f"Booking {booking_id} linked to existing ausleihung {existing_ausleihung.get('_id')}")
             else:
-                pass # add logging here
-                #print(f"Failed to create ausleihung for booking {booking_id}")
+                # No existing ausleihung, create a new one
+                ausleihung_id = au.add_ausleihung(
+                    item_id,
+                    user,
+                    start_date,
+                    end_date,
+                    notes
+                )
+                
+                if ausleihung_id:
+                    # Mark the booking as active and link it to the ausleihung
+                    au.mark_booking_active(booking_id, str(ausleihung_id))
+                    
+                    # Update item status
+                    it.update_item_status(item_id, False, user)
+                    print(f"Created new ausleihung {ausleihung_id} for booking {booking_id}")
+                else:
+                    print(f"Failed to create ausleihung for booking {booking_id}")
         except Exception as e:
-            pass # add logging here
-            # print(f"Error processing booking: {e}")
+            print(f"Error processing booking: {e}")
     
     # Also check for bookings that should end now
-    ending_bookings = bo.get_bookings_ending_now(current_time)
+    ending_bookings = au.get_bookings_ending_now(current_time)
     
     for booking in ending_bookings:
         try:
@@ -1120,7 +1255,7 @@ def process_bookings():
             it.update_item_status(item_id, True)
             
             # Update booking status to completed
-            bo.mark_booking_completed(booking_id)
+            au.mark_booking_completed(booking_id)
             
             # Update the ausleihung record to set end date if it exists
             if ausleihung_id:

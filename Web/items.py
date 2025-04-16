@@ -15,7 +15,7 @@ Key Features:
 Collection Structure:
 - items: Stores all inventory item records with their metadata
   - Required fields: Name, Ort, Beschreibung
-  - Optional fields: Images, Filter, Filter2, Anschaffungsjahr, Anschaffungskosten, Code_4
+  - Optional fields: Images, Filter, Filter2, Filter3, Anschaffungsjahr, Anschaffungskosten, Code_4
   - Status fields: Verfuegbar, User (if currently borrowed)
 """
 '''
@@ -40,7 +40,7 @@ import datetime
 
 # === ITEM MANAGEMENT ===
 
-def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, 
+def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, filter3=None,
              ansch_jahr=None, ansch_kost=None, code_4=None):
     """
     Add a new item to the inventory.
@@ -52,6 +52,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None,
         images (list, optional): List of image filenames for the item
         filter (str, optional): Primary filter/category for the item
         filter2 (str, optional): Secondary filter/category for the item
+        filter3 (str, optional): Tertiary filter/category for the item
         ansch_jahr (int, optional): Year of acquisition
         ansch_kost (float, optional): Cost of acquisition
         code_4 (str, optional): 4-digit identification code
@@ -76,6 +77,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None,
             'Verfuegbar': True,
             'Filter': filter,
             'Filter2': filter2,
+            'Filter3': filter3,
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
@@ -115,7 +117,7 @@ def remove_item(id):
 
 
 def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True, 
-                filter=None, filter2=None, ansch_jahr=None, ansch_kost=None, code_4=None):
+                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None):
     """
     Update an existing inventory item.
     
@@ -128,6 +130,7 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
         verfuegbar (bool, optional): Availability status of the item
         filter (str, optional): Primary filter/category for the item
         filter2 (str, optional): Secondary filter/category for the item
+        filter3 (str, optional): Tertiary filter/category for the item
         ansch_jahr (int, optional): Year of acquisition
         ansch_kost (float, optional): Cost of acquisition
         code_4 (str, optional): 4-digit identification code
@@ -152,6 +155,7 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
             'Verfuegbar': verfuegbar,
             'Filter': filter,
             'Filter2': filter2,
+            'Filter3': filter3,
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
@@ -333,18 +337,19 @@ def get_items_by_filter(filter_value):
         filter_value (str): Filter value to search for
         
     Returns:
-        list: List of items matching the filter in primary or secondary category
+        list: List of items matching the filter in primary, secondary, or tertiary category
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         items = db['items']
         
-        # Use $or to find matches in either filter field
+        # Use $or to find matches in any filter field
         query = {
             '$or': [
                 {'Filter': filter_value},
-                {'Filter2': filter_value}
+                {'Filter2': filter_value},
+                {'Filter3': filter_value}
             ]
         }
         
@@ -366,7 +371,7 @@ def get_filters():
     Retrieve all unique filter/category values from the inventory.
     
     Returns:
-        list: Combined list of all primary and secondary filter values
+        list: Combined list of all primary, secondary and tertiary filter values
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -374,9 +379,10 @@ def get_filters():
         items = db['items']
         filters = items.distinct('Filter')
         filters2 = items.distinct('Filter2')
+        filters3 = items.distinct('Filter3')
         
         # Combine filters and remove None/empty values
-        all_filters = [f for f in filters + filters2 if f]
+        all_filters = [f for f in filters + filters2 + filters3 if f]
         
         # Remove duplicates while preserving order
         unique_filters = []
@@ -426,6 +432,25 @@ def get_secondary_filters():
         return filters
     except Exception as e:
         print(f"Error retrieving secondary filters: {e}")
+        return []
+
+
+def get_tertiary_filters():
+    """
+    Retrieve all unique tertiary filter values.
+    
+    Returns:
+        list: List of all tertiary filter values
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        filters = [f for f in items.distinct('Filter3') if f]
+        client.close()
+        return filters
+    except Exception as e:
+        print(f"Error retrieving tertiary filters: {e}")
         return []
 
 

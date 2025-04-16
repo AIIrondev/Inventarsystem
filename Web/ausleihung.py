@@ -1,21 +1,21 @@
 """
-Borrowing Records Management (Ausleihung)
-========================================
+Ausleihungssystem (Borrowing System)
+====================================
 
-This module manages borrowing records in the inventory system database.
-It provides the core functionality for tracking item borrowings, returns,
-and borrowing history.
+Dieses Modul verwaltet sämtliche Ausleihungen im Inventarsystem.
+Es bietet alle Funktionen, um Ausleihungen zu planen, zu aktivieren,
+zu beenden und zu stornieren.
 
-Key Features:
-- Creating new borrowing records when items are checked out
-- Updating records when items are returned
-- Retrieving borrowing history for reporting
-- Searching borrowing records by user, item, or status
+Hauptfunktionen:
+- Erstellen neuer Ausleihungen (geplant oder sofort aktiv)
+- Aktualisieren von Ausleihungsdaten
+- Abschließen von Ausleihungen (Rückgabe)
+- Suchen und Abrufen von Ausleihungen nach verschiedenen Kriterien
+- Verwaltung des Ausleihungs-Lebenszyklus
 
-Collection Structure:
-- ausleihungen: Stores all borrowing records
-  - Active borrowings have End=None
-  - Completed borrowings have a valid End date/time
+Sammlungsstruktur:
+- ausleihungen: Speichert alle Ausleihungsdatensätze mit ihrem Status
+  - Status-Werte: 'planned' (geplant), 'active' (aktiv), 'completed' (abgeschlossen), 'cancelled' (storniert)
 """
 '''
    Copyright 2025 Maximilian Gründinger
@@ -37,21 +37,23 @@ from bson.objectid import ObjectId
 import datetime
 
 
-# === BORROWING RECORD MANAGEMENT ===
+# === AUSLEIHUNG MANAGEMENT ===
 
-def add_ausleihung(item_id, user_id, start, end=None, notes=""):
+def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active"):
     """
-    Create a new borrowing record in the database.
+    Erstellt einen neuen Ausleihungsdatensatz in der Datenbank.
+    Je nach Status wird eine aktive Ausleihe oder eine geplante Reservierung erstellt.
     
     Args:
-        item_id (str): ID of the borrowed item
-        user_id (str): ID or username of the borrower
-        start (datetime): Start date/time of the borrowing period
-        end (datetime, optional): End date/time of the borrowing period
-        notes (str, optional): Additional notes about this borrowing
+        item_id (str): ID des auszuleihenden Gegenstands
+        user_id (str): ID oder Benutzername des Ausleihers
+        start (datetime): Startdatum/-zeit der Ausleihperiode
+        end (datetime, optional): Enddatum/-zeit der Ausleihperiode
+        notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
+        status (str, optional): Status der Ausleihe ('planned', 'active', 'completed', 'cancelled')
         
     Returns:
-        ObjectId: ID of the new borrowing record
+        ObjectId: ID des neuen Ausleihungsdatensatzes
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -64,6 +66,7 @@ def add_ausleihung(item_id, user_id, start, end=None, notes=""):
             'Start': start,
             'End': end,
             'Notes': notes,
+            'Status': status,
             'Created': datetime.datetime.now(),
             'LastUpdated': datetime.datetime.now()
         }
@@ -78,37 +81,43 @@ def add_ausleihung(item_id, user_id, start, end=None, notes=""):
         return None
 
 
-def update_ausleihung(id, item_id, user_id, start, end, notes=None):
+def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None):
     """
-    Update an existing borrowing record.
+    Aktualisiert einen bestehenden Ausleihungsdatensatz.
+    Nur die angegebenen Felder werden aktualisiert.
     
     Args:
-        id (str): ID of the borrowing record to update
-        item_id (str): ID of the borrowed item
-        user_id (str): ID or username of the borrower
-        start (datetime): Start date/time of the borrowing period
-        end (datetime): End date/time of the borrowing period
-        notes (str, optional): Additional notes about this borrowing
+        id (str): ID des zu aktualisierenden Ausleihungsdatensatzes
+        item_id (str, optional): ID des ausgeliehenen Gegenstands
+        user_id (str, optional): ID oder Benutzername des Ausleihers
+        start (datetime, optional): Startdatum/-zeit der Ausleihperiode
+        end (datetime, optional): Enddatum/-zeit der Ausleihperiode
+        notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
+        status (str, optional): Status der Ausleihe
         
     Returns:
-        bool: True if successful, False otherwise
+        bool: True bei Erfolg, sonst False
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        update_data = {
-            'Item': item_id, 
-            'User': user_id, 
-            'Start': start, 
-            'End': end,
-            'LastUpdated': datetime.datetime.now()
-        }
+        update_data = {'LastUpdated': datetime.datetime.now()}
         
-        # Only update notes if provided
+        # Nur angegebene Felder aktualisieren
+        if item_id is not None:
+            update_data['Item'] = item_id
+        if user_id is not None:
+            update_data['User'] = user_id
+        if start is not None:
+            update_data['Start'] = start
+        if end is not None:
+            update_data['End'] = end
         if notes is not None:
             update_data['Notes'] = notes
+        if status is not None:
+            update_data['Status'] = status
             
         result = ausleihungen.update_one(
             {'_id': ObjectId(id)}, 
@@ -124,14 +133,15 @@ def update_ausleihung(id, item_id, user_id, start, end, notes=None):
 
 def complete_ausleihung(id, end_time=None):
     """
-    Mark a borrowing record as complete by setting its end date.
+    Markiert eine Ausleihe als abgeschlossen, indem das Enddatum gesetzt 
+    und der Status auf 'completed' geändert wird.
     
     Args:
-        id (str): ID of the borrowing record to complete
-        end_time (datetime, optional): End time to set (defaults to current time)
+        id (str): ID des abzuschließenden Ausleihungsdatensatzes
+        end_time (datetime, optional): Endzeitpunkt (Standard: aktuelle Zeit)
         
     Returns:
-        bool: True if successful, False otherwise
+        bool: True bei Erfolg, sonst False
     """
     try:
         if end_time is None:
@@ -145,6 +155,7 @@ def complete_ausleihung(id, end_time=None):
             {'_id': ObjectId(id)},
             {'$set': {
                 'End': end_time,
+                'Status': 'completed',
                 'LastUpdated': datetime.datetime.now()
             }}
         )
@@ -156,16 +167,46 @@ def complete_ausleihung(id, end_time=None):
         return False
 
 
-def remove_ausleihung(id):
+def cancel_ausleihung(id):
     """
-    Remove a borrowing record from the database.
-    Note: Generally, it's better to mark records as complete rather than delete them.
+    Storniert eine geplante Ausleihe durch Änderung des Status auf 'cancelled'.
     
     Args:
-        id (str): ID of the borrowing record to remove
+        id (str): ID der zu stornierenden Ausleihe
         
     Returns:
-        bool: True if successful, False otherwise
+        bool: True bei Erfolg, sonst False
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        result = ausleihungen.update_one(
+            {'_id': ObjectId(id)},
+            {'$set': {
+                'Status': 'cancelled',
+                'LastUpdated': datetime.datetime.now()
+            }}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        # print(f"Error cancelling ausleihung: {e}") # Log the error
+        return False
+
+
+def remove_ausleihung(id):
+    """
+    Entfernt einen Ausleihungsdatensatz aus der Datenbank.
+    Hinweis: Normalerweise ist es besser, Datensätze zu markieren als sie zu löschen.
+    
+    Args:
+        id (str): ID des zu entfernenden Ausleihungsdatensatzes
+        
+    Returns:
+        bool: True bei Erfolg, sonst False
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -179,17 +220,17 @@ def remove_ausleihung(id):
         return False
 
 
-# === BORROWING RECORD RETRIEVAL ===
+# === AUSLEIHUNG RETRIEVAL ===
 
 def get_ausleihung(id):
     """
-    Retrieve a specific borrowing record by its ID.
+    Ruft einen bestimmten Ausleihungsdatensatz anhand seiner ID ab.
     
     Args:
-        id (str): ID of the borrowing record to retrieve
+        id (str): ID des abzurufenden Ausleihungsdatensatzes
         
     Returns:
-        dict: The borrowing record document or None if not found
+        dict: Der Ausleihungsdatensatz oder None, wenn nicht gefunden
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -203,25 +244,75 @@ def get_ausleihung(id):
         return None
 
 
-def get_ausleihungen(include_completed=True):
+def get_ausleihungen(status=None, start=None, end=None, date_filter='overlap'):
     """
-    Retrieve borrowing records from the database.
+    Ruft Ausleihungen nach verschiedenen Kriterien ab.
     
     Args:
-        include_completed (bool): Whether to include completed borrowings
+        status (str/list, optional): Status(se) der Ausleihungen ('planned', 'active', 'completed', 'cancelled')
+        start (str/datetime, optional): Startdatum für Datumsfilterung
+        end (str/datetime, optional): Enddatum für Datumsfilterung
+        date_filter (str, optional): Art des Datumsfilters ('overlap', 'start_in', 'end_in', 'contained')
         
     Returns:
-        list: List of borrowing records
+        list: Liste von Ausleihungsdatensätzen
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         collection = db['ausleihungen']
         
-        # If we don't want completed borrowings, filter them out
-        query = {} if include_completed else {'End': None}
-        results = list(collection.find(query))
+        # Query erstellen
+        query = {}
         
+        # Status-Filter hinzufügen
+        if status is not None:
+            if isinstance(status, list):
+                query['Status'] = {'$in': status}
+            else:
+                query['Status'] = status
+        
+        # Datum parsen, wenn als String angegeben
+        if start is not None and isinstance(start, str):
+            try:
+                from dateutil import parser
+                start = parser.parse(start)
+            except:
+                start = None
+                
+        if end is not None and isinstance(end, str):
+            try:
+                from dateutil import parser
+                end = parser.parse(end)
+            except:
+                end = None
+        
+        # Datumsfilter hinzufügen
+        if start is not None and end is not None:
+            if date_filter == 'overlap':
+                # Überlappende Ausleihungen (Standard)
+                query['$or'] = [
+                    # Ausleihe beginnt im Bereich
+                    {'Start': {'$gte': start, '$lte': end}},
+                    # Ausleihe endet im Bereich
+                    {'End': {'$gte': start, '$lte': end}},
+                    # Ausleihe umfasst den gesamten Bereich
+                    {'Start': {'$lte': start}, 'End': {'$gte': end}},
+                    # Aktive Ausleihungen ohne Ende, die vor dem Ende beginnen
+                    {'Start': {'$lte': end}, 'End': None}
+                ]
+            elif date_filter == 'start_in':
+                # Nur Ausleihungen, die im Bereich beginnen
+                query['Start'] = {'$gte': start, '$lte': end}
+            elif date_filter == 'end_in':
+                # Nur Ausleihungen, die im Bereich enden
+                query['End'] = {'$gte': start, '$lte': end}
+            elif date_filter == 'contained':
+                # Nur Ausleihungen, die vollständig im Bereich liegen
+                query['Start'] = {'$gte': start}
+                query['End'] = {'$lte': end}
+        
+        results = list(collection.find(query))
         client.close()
         return results
     except Exception as e:
@@ -229,56 +320,74 @@ def get_ausleihungen(include_completed=True):
         return []
 
 
-def get_active_ausleihungen():
+def get_active_ausleihungen(start=None, end=None):
     """
-    Retrieve all active (not returned) borrowing records.
+    Ruft alle aktiven (laufenden) Ausleihungen ab.
     
+    Args:
+        start (str/datetime, optional): Startdatum für Datumsfilterung
+        end (str/datetime, optional): Enddatum für Datumsfilterung
+        
     Returns:
-        list: List of active borrowing records
+        list: Liste aktiver Ausleihungsdatensätze
     """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        collection = db['ausleihungen']
-        results = list(collection.find({'End': None}))
-        client.close()
-        return results
-    except Exception as e:
-        # print(f"Error retrieving active ausleihungen: {e}") # Log the error
-        return []
+    return get_ausleihungen(status='active', start=start, end=end)
 
 
-def get_completed_ausleihungen():
+def get_planned_ausleihungen(start=None, end=None):
     """
-    Retrieve all completed (returned) borrowing records.
+    Ruft alle geplanten Ausleihungen (Reservierungen) ab.
     
+    Args:
+        start (str/datetime, optional): Startdatum für Datumsfilterung
+        end (str/datetime, optional): Enddatum für Datumsfilterung
+        
     Returns:
-        list: List of completed borrowing records
+        list: Liste geplanter Ausleihungsdatensätze
     """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        collection = db['ausleihungen']
-        results = list(collection.find({'End': {'$ne': None}}))
-        client.close()
-        return results
-    except Exception as e:
-        # print(f"Error retrieving completed ausleihungen: {e}") # Log the error
-        return []
+    return get_ausleihungen(status='planned', start=start, end=end)
+
+
+def get_completed_ausleihungen(start=None, end=None):
+    """
+    Ruft alle abgeschlossenen Ausleihungen ab.
+    
+    Args:
+        start (str/datetime, optional): Startdatum für Datumsfilterung
+        end (str/datetime, optional): Enddatum für Datumsfilterung
+        
+    Returns:
+        list: Liste abgeschlossener Ausleihungsdatensätze
+    """
+    return get_ausleihungen(status='completed', start=start, end=end)
+
+
+def get_cancelled_ausleihungen(start=None, end=None):
+    """
+    Ruft alle stornierten Ausleihungen ab.
+    
+    Args:
+        start (str/datetime, optional): Startdatum für Datumsfilterung
+        end (str/datetime, optional): Enddatum für Datumsfilterung
+        
+    Returns:
+        list: Liste stornierter Ausleihungsdatensätze
+    """
+    return get_ausleihungen(status='cancelled', start=start, end=end)
 
 
 # === SEARCH FUNCTIONS ===
 
-def get_ausleihung_by_user(user_id, active_only=False):
+def get_ausleihung_by_user(user_id, status=None):
     """
-    Retrieve borrowing records for a specific user.
+    Ruft Ausleihungen für einen bestimmten Benutzer ab.
     
     Args:
-        user_id (str): ID or username of the user
-        active_only (bool): If True, only return active borrowings
+        user_id (str): ID oder Benutzername des Benutzers
+        status (str/list, optional): Status(se) der Ausleihungen
         
     Returns:
-        list: List of borrowing records for the user
+        list: Liste von Ausleihungsdatensätzen des Benutzers
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -286,8 +395,11 @@ def get_ausleihung_by_user(user_id, active_only=False):
         ausleihungen = db['ausleihungen']
         
         query = {'User': user_id}
-        if active_only:
-            query['End'] = None
+        if status is not None:
+            if isinstance(status, list):
+                query['Status'] = {'$in': status}
+            else:
+                query['Status'] = status
             
         results = list(ausleihungen.find(query))
         client.close()
@@ -297,17 +409,19 @@ def get_ausleihung_by_user(user_id, active_only=False):
         return []
 
 
-def get_ausleihung_by_item(item_id, include_history=False):
+def get_ausleihung_by_item(item_id, status=None, include_history=False):
     """
-    Retrieve borrowing records for a specific item.
+    Ruft Ausleihungen für einen bestimmten Gegenstand ab.
     
     Args:
-        item_id (str): ID of the item
-        include_history (bool): If True, include all past borrowings
+        item_id (str): ID des Gegenstands
+        status (str/list, optional): Status(se) der Ausleihungen
+        include_history (bool): Bei True werden alle Ausleihungen zurückgegeben,
+                               bei False nur die aktive/geplante
         
     Returns:
-        dict or list: The active borrowing record (if include_history=False) 
-                    or all borrowing records for this item (if include_history=True)
+        dict/list: Die aktive Ausleihe (wenn include_history=False) 
+                 oder alle Ausleihungen für diesen Gegenstand (wenn include_history=True)
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -315,53 +429,275 @@ def get_ausleihung_by_item(item_id, include_history=False):
         ausleihungen = db['ausleihungen']
         
         if include_history:
-            # Get all borrowings for this item
-            results = list(ausleihungen.find({'Item': item_id}))
+            # Alle Ausleihungen für diesen Gegenstand abrufen
+            query = {'Item': item_id}
+            if status is not None:
+                if isinstance(status, list):
+                    query['Status'] = {'$in': status}
+                else:
+                    query['Status'] = status
+                    
+            results = list(ausleihungen.find(query).sort('Start', -1))  # Sort by start date, newest first
             client.close()
             return results
         else:
-            # Get just the active borrowing
-            ausleihung = ausleihungen.find_one({'Item': item_id, 'End': None})
+            # Nur die aktive Ausleihe oder geplante Reservierung abrufen
+            query = {'Item': item_id}
+            if status is not None:
+                if isinstance(status, list):
+                    query['Status'] = {'$in': status}
+                else:
+                    query['Status'] = status
+            else:
+                # Prioritize finding active borrowings first
+                query['Status'] = 'active'
+                
+            ausleihung = ausleihungen.find_one(query)
+            
+            # If no active borrowing found, try planned
             if not ausleihung:
-                ausleihung = ausleihungen.find_one({'item_id': item_id, 'End': None})
+                query['Status'] = 'planned'
+                ausleihung = ausleihungen.find_one(query)
             
             client.close()
             return ausleihung
     except Exception as e:
-        # print(f"Error retrieving ausleihungen for item {item_id}: {e}") # Log the error
+        print(f"Error retrieving ausleihungen for item {item_id}: {e}")  # Log the error
         return [] if include_history else None
 
 
-def get_ausleihungen_by_date_range(start_date, end_date):
+def get_ausleihungen_by_date_range(start_date, end_date, status=None):
     """
-    Retrieve borrowings that were active during a specific date range.
+    Ruft Ausleihungen ab, die in einem bestimmten Zeitraum aktiv waren.
     
     Args:
-        start_date (datetime): Start of date range
-        end_date (datetime): End of date range
+        start_date (datetime): Beginn des Zeitraums
+        end_date (datetime): Ende des Zeitraums
+        status (str/list, optional): Status(se) der Ausleihungen
         
     Returns:
-        list: List of borrowing records active during the date range
+        list: Liste von Ausleihungsdatensätzen im Zeitraum
+    """
+    return get_ausleihungen(status=status, start=start_date, end=end_date)
+
+
+def check_ausleihung_conflict(item_id, start_date, end_date):
+    """
+    Prüft, ob es Konflikte mit bestehenden Ausleihungen oder aktiven Ausleihen gibt.
+    
+    Args:
+        item_id (str): ID des zu prüfenden Gegenstands
+        start_date (datetime): Vorgeschlagenes Startdatum
+        end_date (datetime): Vorgeschlagenes Enddatum
+
+    Returns:
+        bool: True, wenn ein Konflikt besteht, sonst False
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        # Find borrowings that:
-        # 1. Started before end_date AND
-        # 2. Either ended after start_date OR haven't ended yet
-        query = {
-            'Start': {'$lte': end_date},
+        # Nach überlappenden Ausleihungen suchen
+        overlapping = ausleihungen.find_one({
+            'Item': item_id,
+            'Status': {'$in': ['planned', 'active']},
             '$or': [
-                {'End': {'$gte': start_date}},
-                {'End': None}
+                # Neue Ausleihe beginnt während bestehender Ausleihe
+                {'Start': {'$lte': start_date}, 'End': {'$gte': start_date}},
+                # Neue Ausleihe endet während bestehender Ausleihe
+                {'Start': {'$lte': end_date}, 'End': {'$gte': end_date}},
+                # Neue Ausleihe enthält bestehende Ausleihe
+                {'Start': {'$gte': start_date}, 'End': {'$lte': end_date}},
+                # Aktive Ausleihe ohne Ende, die vor dem Start beginnt
+                {'Start': {'$lte': start_date}, 'End': None}
             ]
+        })
+        
+        client.close()
+        return overlapping is not None
+    except Exception as e:
+        return True  # Bei Fehler Konflikt annehmen, um auf Nummer sicher zu gehen
+
+
+# === AUTOMATISIERTE VERARBEITUNG ===
+
+def get_ausleihungen_starting_now(current_time):
+    """
+    Ruft Ausleihungen ab, die jetzt beginnen sollen (innerhalb eines Zeitfensters).
+    
+    Args:
+        current_time (datetime): Aktuelle Zeit für den Vergleich
+    
+    Returns:
+        list: Liste von Ausleihungen, die jetzt beginnen sollen
+    """
+    try:
+        # Zeitfenster definieren (1 Stunde vor und nach jetzt)
+        h_1 = datetime.timedelta(hours=1)
+        start_time = current_time - h_1
+        end_time = current_time + h_1
+        
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        query = {
+            'Status': 'planned',
+            'Start': {
+                '$lte': end_time,
+                '$gte': start_time
+            }
         }
         
-        results = list(ausleihungen.find(query))
+        bookings = list(ausleihungen.find(query))
         client.close()
-        return results
+        return bookings
     except Exception as e:
-        # print(f"Error retrieving ausleihungen by date range: {e}") # Log the error
         return []
+
+
+def get_ausleihungen_ending_now(current_time):
+    """
+    Ruft Ausleihungen ab, die jetzt enden sollen (innerhalb eines Zeitfensters).
+    
+    Args:
+        current_time (datetime): Aktuelle Zeit für den Vergleich
+    
+    Returns:
+        list: Liste von Ausleihungen, die jetzt enden sollen
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Zeitfenster erstellen (5 Minuten vor und nach)
+        window = datetime.timedelta(minutes=5)
+        start_time = current_time - window
+        end_time = current_time + window
+        
+        # Ausleihungen finden, die:
+        # 1. Den Status 'active' haben
+        # 2. Ein Enddatum innerhalb dieses Zeitfensters haben
+        query = {
+            'Status': 'active',
+            'End': {'$gte': start_time, '$lte': end_time}
+        }
+        
+        bookings = list(ausleihungen.find(query))
+        client.close()
+        return bookings
+    except Exception as e:
+        return []
+
+
+def activate_ausleihung(id):
+    """
+    Aktiviert eine geplante Ausleihe.
+    
+    Args:
+        id (str): ID der zu aktivierenden Ausleihe
+        
+    Returns:
+        bool: True bei Erfolg, sonst False
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Zuerst prüfen, ob die Ausleihe existiert und den Status 'planned' hat
+        ausleihung = ausleihungen.find_one({'_id': ObjectId(id)})
+        if not ausleihung or ausleihung.get('Status') != 'planned':
+            client.close()
+            return False
+            
+        # Ausleihe aktivieren
+        result = ausleihungen.update_one(
+            {'_id': ObjectId(id)},
+            {'$set': {
+                'Status': 'active',
+                'LastUpdated': datetime.datetime.now()
+            }}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        return False
+
+
+# === KOMPATIBILITÄTSFUNKTIONEN ===
+
+# Hilfsmethoden für alte Funktionsaufrufe, um Abwärtskompatibilität zu gewährleisten
+
+def add_planned_booking(item_id, user, start_date, end_date, notes=""):
+    """Kompatibilitätsfunktion - erstellt eine geplante Ausleihe"""
+    return add_ausleihung(item_id, user, start_date, end_date, notes, status='planned')
+
+def check_booking_conflict(item_id, start_date, end_date):
+    """Kompatibilitätsfunktion - prüft auf Ausleihungskonflikte"""
+    return check_ausleihung_conflict(item_id, start_date, end_date)
+
+def cancel_booking(booking_id):
+    """Kompatibilitätsfunktion - storniert eine Ausleihe"""
+    return cancel_ausleihung(booking_id)
+
+def get_booking(booking_id):
+    """Kompatibilitätsfunktion - ruft eine einzelne Ausleihe ab"""
+    return get_ausleihung(booking_id)
+
+def get_active_bookings(start=None, end=None):
+    """Kompatibilitätsfunktion - ruft aktive Ausleihungen ab"""
+    return get_active_ausleihungen(start, end)
+
+def get_planned_bookings(start=None, end=None):
+    """Kompatibilitätsfunktion - ruft geplante Ausleihungen ab"""
+    return get_planned_ausleihungen(start, end)
+
+def get_completed_bookings(start=None, end=None):
+    """Kompatibilitätsfunktion - ruft abgeschlossene Ausleihungen ab"""
+    return get_completed_ausleihungen(start, end)
+
+def mark_booking_active(booking_id, ausleihung_id=None):
+    """Kompatibilitätsfunktion - markiert eine Ausleihe als aktiv und verknüpft optional eine Ausleihungs-ID"""
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Basisupdate-Daten mit Status-Änderung
+        update_data = {
+            'Status': 'active',
+            'LastUpdated': datetime.datetime.now()
+        }
+        
+        # Wenn eine Ausleihungs-ID angegeben wurde, diese auch verknüpfen
+        if ausleihung_id:
+            update_data['AusleihungId'] = ausleihung_id
+            
+        # Update durchführen
+        result = ausleihungen.update_one(
+            {'_id': ObjectId(booking_id)},
+            {'$set': update_data}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error activating booking: {e}")
+        # Fallback zur alten Methode bei Fehlern
+        return activate_ausleihung(booking_id)
+
+def mark_booking_completed(booking_id):
+    """Kompatibilitätsfunktion - markiert eine Ausleihe als abgeschlossen"""
+    return complete_ausleihung(booking_id)
+
+def get_bookings_starting_now(current_time):
+    """Kompatibilitätsfunktion - ruft startende Ausleihungen ab"""
+    return get_ausleihungen_starting_now(current_time)
+
+def get_bookings_ending_now(current_time):
+    """Kompatibilitätsfunktion - ruft endende Ausleihungen ab"""
+    return get_ausleihungen_ending_now(current_time)

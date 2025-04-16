@@ -356,6 +356,64 @@ WantedBy=multi-user.target
 EOF
 fi
 
+echo "========================================================"
+echo "           CONFIGURING NGINX SERVER                     "
+echo "========================================================"
+
+# Create Nginx server configuration file
+sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
+server {
+    listen 80;
+    server_name $NETWORK_IP;
+    
+    # Redirect all HTTP requests to HTTPS
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name $NETWORK_IP;
+    
+    # SSL configuration
+    ssl_certificate $CERT_PATH;
+    ssl_certificate_key $KEY_PATH;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';
+    
+    # Proxy settings
+    location / {
+        proxy_pass http://unix:/tmp/inventarsystem.sock;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # Static files
+    location /static {
+        alias $PROJECT_ROOT/Web/static;
+    }
+}
+EOF
+
+# Remove default site if it exists
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Enable the Inventarsystem site
+sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/
+
+# Test Nginx configuration
+echo "Testing Nginx configuration..."
+sudo nginx -t || {
+    echo "ERROR: Nginx configuration test failed. Check the error message above."
+    exit 1
+}
+
+echo "✓ Nginx configuration created and tested"
+
 # Create the nginx service file
 sudo tee /etc/systemd/system/inventarsystem-nginx.service > /dev/null << EOF
 [Unit]
@@ -375,6 +433,50 @@ KillMode=process
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Make sure socket directory has correct permissions
+sudo mkdir -p /tmp
+sudo chmod 1777 /tmp
+
+# Stop the standard nginx service first to avoid conflicts
+echo "Stopping standard nginx service if running..."
+sudo systemctl stop nginx 2>/dev/null || true
+
+# Reload systemd configuration
+echo "Reloading systemd configuration..."
+sudo systemctl daemon-reload
+
+# Enable and start the services
+echo "Enabling and starting services..."
+sudo systemctl enable inventarsystem-gunicorn.service
+sudo systemctl enable inventarsystem-nginx.service
+
+# Start gunicorn first
+sudo systemctl start inventarsystem-gunicorn.service || {
+    echo "ERROR: Failed to start gunicorn service. Check status with: sudo systemctl status inventarsystem-gunicorn.service"
+    exit 1
+}
+
+# Then start nginx 
+sudo systemctl start inventarsystem-nginx.service || {
+    echo "ERROR: Failed to start nginx service. Checking status..."
+    sudo systemctl status inventarsystem-nginx.service
+    echo "For more details run: sudo journalctl -xeu inventarsystem-nginx.service"
+    
+    # Try to start standard nginx as fallback
+    echo "Attempting to start standard nginx as fallback..."
+    sudo systemctl start nginx
+    exit 1
+}
+
+echo "✓ Services configured and started successfully"
+echo "To check status: sudo systemctl status inventarsystem-nginx.service"
+echo "To view logs: sudo journalctl -u inventarsystem-nginx.service -f"
+
+# Restart Nginx service
+sudo systemctl restart inventarsystem-nginx.service
+
+echo "✓ Nginx service restarted"
 
 # Make sure socket directory has correct permissions
 sudo mkdir -p /tmp

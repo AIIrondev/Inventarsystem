@@ -10,20 +10,20 @@
             <button id="prev-month">Vorheriger Monat</button>
             <span id="current-month-display"></span>
             <button id="next-month">Nächster Monat</button>
-            <button id="new-booking" class="primary-button">Neue Ausleihe planen</button>
+            <button id="new-booking" class="primary-button">Neue Reservierung</button>
         </div>
         <div class="calendar-legend">
-            <span class="legend-item"><span class="legend-color current"></span> Aktuelle Ausleihen</span>
-            <span class="legend-item"><span class="legend-color planned"></span> Geplante Ausleihen</span>
-            <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Ausleihen</span>
-            <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Ausleihen</span>
+            <span class="legend-item"><span class="legend-color current"></span> Aktuelle Ausleihungen</span>
+            <span class="legend-item"><span class="legend-color planned"></span> Geplante Ausleihungen</span>
+            <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Ausleihungen</span>
+            <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Ausleihungen</span>
         </div>
     </div>
     
     <div class="calendar-options">
         <label class="checkbox-container">
             <input type="checkbox" id="show-completed-bookings"> 
-            Abgeschlossene Ausleihen anzeigen
+            Abgeschlossene Ausleihungen anzeigen
         </label>
     </div>
     
@@ -33,7 +33,7 @@
     <div id="booking-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h2>Ausleihe planen</h2>
+            <h2>Neue Reservierung</h2>
             <form id="booking-form">
                 <div class="form-group">
                     <label for="item-select">Objekt:</label>
@@ -54,7 +54,7 @@
                     <label for="booking-notes">Notizen:</label>
                     <textarea id="booking-notes" name="notes"></textarea>
                 </div>
-                <button type="submit" class="primary-button">Ausleihe speichern</button>
+                <button type="submit" class="primary-button">Ausleihung speichern</button>
             </form>
         </div>
     </div>
@@ -63,12 +63,12 @@
     <div id="event-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
-            <h2>Ausleihe Details</h2>
+            <h2>Ausleihungs Details</h2>
             <div id="event-details">
                 <!-- Event details will be loaded dynamically -->
             </div>
             <div id="event-actions">
-                <button id="cancel-booking" class="danger-button">Ausleihe stornieren</button>
+                <button id="cancel-booking" class="danger-button">Ausleihung stornieren</button>
             </div>
         </div>
     </div>
