@@ -83,64 +83,6 @@
                 <!-- Content will be dynamically inserted here -->
             </div>
         </div>
-    </div>
-    <div id="edit-modal" class="item-modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeEditModal()">&times;</span>
-            <h2>Objekt bearbeiten</h2>
-            <form id="edit-item-form" method="POST">
-                <input type="hidden" id="edit-item-id" name="id">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit-name">Name:</label>
-                        <input type="text" id="edit-name" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-ort">Ort:</label>
-                        <input type="text" id="edit-ort" name="ort" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="edit-beschreibung">Beschreibung:</label>
-                    <textarea id="edit-beschreibung" name="beschreibung" required></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit-filter1">Filter 1:</label>
-                        <input type="text" id="edit-filter1" name="filter">
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-filter2">Filter 2:</label>
-                        <input type="text" id="edit-filter2" name="filter2">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit-filter3">Filter 3:</label>
-                        <input type="text" id="edit-filter3" name="filter3">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="edit-anschaffungsjahr">Anschaffungsjahr:</label>
-                        <input type="date" id="edit-anschaffungsjahr" name="anschaffungsjahr">
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-anschaffungskosten">Anschaffungskosten:</label>
-                        <input type="number" id="edit-anschaffungskosten" name="anschaffungskosten">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="edit-code4">Code:</label>
-                    <input type="number" id="edit-code4" name="code_4">
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="save-button">Speichern</button>
-                    <button type="button" class="cancel-button" onclick="closeEditModal()">Abbrechen</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
@@ -626,7 +568,7 @@
                     </div>
                     <div class="detail-group">
                         <div class="detail-label">Code:</div>
-                        <div class="detail-value">${itemData.code_4 || '-'}</div>
+                        <div class="detail-value">${itemData.Code_4 || '-'}</div>
                     </div>
                 </div>
             </div>
@@ -965,6 +907,51 @@
         
         document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
         document.getElementById('edit-code4').value = itemData.Code_4 || '';
+        
+        // Load existing images
+        const existingImagesContainer = document.getElementById('edit-existing-images');
+        existingImagesContainer.innerHTML = '';
+        
+        // Check if the item has images
+        if (itemData.Images && itemData.Images.length > 0) {
+            itemData.Images.forEach(imageName => {
+                const imageUrl = `/uploads/${imageName}`;
+                
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'existing-image-item';
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = itemData.Name;
+                img.className = 'edit-thumbnail';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'existing_images';
+                checkbox.value = imageName;
+                checkbox.id = `img-${imageName}`;
+                checkbox.checked = true; // Default to keeping the image
+                
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = 'Behalten';
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'image-keep-controls';
+                labelDiv.appendChild(checkbox);
+                labelDiv.appendChild(label);
+                
+                imageDiv.appendChild(img);
+                imageDiv.appendChild(labelDiv);
+                
+                existingImagesContainer.appendChild(imageDiv);
+            });
+        } else {
+            existingImagesContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+        }
+        
+        // Reset the file input for new images
+        document.getElementById('edit-new-images').value = '';
         
         // Show the modal
         document.getElementById('edit-modal').style.display = 'block';
@@ -1596,6 +1583,42 @@ input[type="file"] {
         width: 95%;
         padding: 15px;
     }
+}
+
+/* Styles for image management in edit form */
+.existing-images-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+
+.existing-image-item {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    text-align: center;
+    width: 150px;
+}
+
+.edit-thumbnail {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.image-keep-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.image-keep-controls label {
+    font-size: 0.9em;
 }
 </style>
 {% endblock %}
