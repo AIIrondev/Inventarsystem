@@ -403,8 +403,24 @@ def edit_item(id):
     # Preserve current availability status
     verfuegbar = current_item.get('Verfuegbar', True)
     
-    # Get current images
-    images = current_item.get('Images', [])
+    # Handle existing images - get list of images to keep
+    images_to_keep = request.form.getlist('existing_images')
+    
+    # Get the original list of images from the item
+    original_images = current_item.get('Images', [])
+    
+    # Keep only the images that weren't marked for deletion
+    images = [img for img in original_images if img in images_to_keep]
+    
+    # Handle new image uploads
+    new_images = request.files.getlist('new_images')
+    
+    # Process any new image uploads
+    for image in new_images:
+        if image and image.filename and allowed_file(image.filename):
+            filename = secure_filename(image.filename)
+            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            images.append(filename)
     
     # Update the item
     result = it.update_item(

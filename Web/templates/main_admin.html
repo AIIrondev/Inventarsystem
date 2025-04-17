@@ -136,7 +136,7 @@
         <div class="modal-content">
             <span class="close-modal" onclick="closeEditModal()">&times;</span>
             <h2>Objekt bearbeiten</h2>
-            <form id="edit-item-form" method="POST">
+            <form id="edit-item-form" method="POST" enctype="multipart/form-data">
                 <input type="hidden" id="edit-item-id" name="id">
                 <div class="form-row">
                     <div class="form-group">
@@ -182,6 +182,20 @@
                     <label for="edit-code4">Code:</label>
                     <input type="number" id="edit-code4" name="code_4">
                 </div>
+                
+                <!-- New section for managing images -->
+                <div class="form-group">
+                    <label>Vorhandene Bilder:</label>
+                    <div id="edit-existing-images" class="existing-images-container">
+                        <!-- Existing images will be added here dynamically -->
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-new-images">Neue Bilder hinzufügen:</label>
+                    <input type="file" id="edit-new-images" name="new_images" accept="image/*" multiple>
+                </div>
+                
                 <div class="form-actions">
                     <button type="submit" class="save-button">Speichern</button>
                     <button type="button" class="cancel-button" onclick="closeEditModal()">Abbrechen</button>
@@ -1026,6 +1040,51 @@
         document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
         document.getElementById('edit-code4').value = itemData.Code_4 || '';
         
+        // Load existing images
+        const existingImagesContainer = document.getElementById('edit-existing-images');
+        existingImagesContainer.innerHTML = '';
+        
+        // Check if the item has images
+        if (itemData.Images && itemData.Images.length > 0) {
+            itemData.Images.forEach(imageName => {
+                const imageUrl = `/uploads/${imageName}`;
+                
+                const imageDiv = document.createElement('div');
+                imageDiv.className = 'existing-image-item';
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = itemData.Name;
+                img.className = 'edit-thumbnail';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'existing_images';
+                checkbox.value = imageName;
+                checkbox.id = `img-${imageName}`;
+                checkbox.checked = true; // Default to keeping the image
+                
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = 'Behalten';
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'image-keep-controls';
+                labelDiv.appendChild(checkbox);
+                labelDiv.appendChild(label);
+                
+                imageDiv.appendChild(img);
+                imageDiv.appendChild(labelDiv);
+                
+                existingImagesContainer.appendChild(imageDiv);
+            });
+        } else {
+            existingImagesContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+        }
+        
+        // Reset the file input for new images
+        document.getElementById('edit-new-images').value = '';
+        
         // Show the modal
         document.getElementById('edit-modal').style.display = 'block';
     }
@@ -1656,6 +1715,42 @@ input[type="file"] {
         width: 95%;
         padding: 15px;
     }
+}
+
+/* Styles for image management in edit form */
+.existing-images-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+
+.existing-image-item {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    text-align: center;
+    width: 150px;
+}
+
+.edit-thumbnail {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.image-keep-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.image-keep-controls label {
+    font-size: 0.9em;
 }
 </style>
 {% endblock %}
