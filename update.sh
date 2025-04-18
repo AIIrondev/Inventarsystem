@@ -191,86 +191,237 @@ create_update_script() {
     echo "Creating daily reinstall script..."
     
     # Create the update script
-    tee $PROJECT_ROOT/daily-update.sh > /dev/null << EOF
+    tee $PROJECT_ROOT/daily-update.sh > /dev/null << 'EOF'
 #!/bin/bash
 trap 'echo "Script interrupted. Exiting."' SIGINT SIGTERM
 # Daily reinstall script for Inventarsystem
 
 set -e  # Exit on error
-trap 'echo "Error occurred at line \$LINENO. Command: \$BASH_COMMAND"' ERR
+trap 'echo "Error occurred at line $LINENO. Command: $BASH_COMMAND"' ERR
 
 # Set variables
 REPO_URL="https://github.com/AIIrondev/Inventarsystem.git"
 INSTALL_DIR="/var/Inventarsystem"
-LOG_FILE="$PROJECT_ROOT/logs/update.log"
+LOG_FILE="/home/max/Dokumente/repos/Inventarsystem/logs/update.log"
 BACKUP_BASE_DIR="/var/backups/Inventar_backup"
-BACKUP_DIR="\$BACKUP_BASE_DIR/\$(date +%Y-%m-%d)"
+BACKUP_DIR="$BACKUP_BASE_DIR/$(date +%Y-%m-%d)"
 
 # Create log entry
-echo "===== Daily reinstall started at \$(date) =====" >> \$LOG_FILE
+echo "===== Daily reinstall started at $(date) =====" >> $LOG_FILE
 
 # Create backup directories
-sudo mkdir -p "\$BACKUP_BASE_DIR"
-sudo chmod 777 "\$BACKUP_BASE_DIR"
-mkdir -p "\$BACKUP_DIR"
+sudo mkdir -p "$BACKUP_BASE_DIR"
+sudo chmod 777 "$BACKUP_BASE_DIR"
+mkdir -p "$BACKUP_DIR"
 
 # Backup important data
-echo "Creating backup..." >> \$LOG_FILE
-if [ -d "\$INSTALL_DIR/Web/static/images" ]; then
-    mkdir -p "\$BACKUP_DIR/images"
-    cp -r \$INSTALL_DIR/Web/static/images "\$BACKUP_DIR/" >> \$LOG_FILE 2>&1
+echo "Creating backup..." >> $LOG_FILE
+# Backup Web/upload directory specifically - use rsync for better copying
+if [ -d "$INSTALL_DIR/Web/upload" ]; then
+    echo "Backing up Web/upload directory..." >> $LOG_FILE
+    mkdir -p "$BACKUP_DIR/Web/upload"
+    rsync -av --delete $INSTALL_DIR/Web/upload/ "$BACKUP_DIR/Web/upload/" >> $LOG_FILE 2>&1 || {
+        echo "Falling back to cp command for backup..." >> $LOG_FILE
+        rm -rf "$BACKUP_DIR/Web/upload/"  # Clean destination first
+        mkdir -p "$BACKUP_DIR/Web/upload/"
+        cp -r $INSTALL_DIR/Web/upload/* "$BACKUP_DIR/Web/upload/" 2>/dev/null || true
+    }
+    # Count files to verify backup success
+    UPLOAD_FILE_COUNT=$(find "$INSTALL_DIR/Web/upload/" -type f | wc -l)
+    BACKUP_FILE_COUNT=$(find "$BACKUP_DIR/Web/upload/" -type f | wc -l)
+    echo "Original upload dir has $UPLOAD_FILE_COUNT files, backup has $BACKUP_FILE_COUNT files" >> $LOG_FILE
 fi
-if [ -d "\$INSTALL_DIR/data" ]; then
-    cp -r \$INSTALL_DIR/data \$BACKUP_DIR/ >> \$LOG_FILE 2>&1
+# Backup Web/uploads directory (with "s") if it exists
+if [ -d "$INSTALL_DIR/Web/uploads" ]; then
+    echo "Backing up Web/uploads directory..." >> $LOG_FILE
+    mkdir -p "$BACKUP_DIR/uploads"
+    cp -r $INSTALL_DIR/Web/uploads "$BACKUP_DIR/" >> $LOG_FILE 2>&1
 fi
-if [ -d "\$INSTALL_DIR/certs" ]; then
-    cp -r \$INSTALL_DIR/certs \$BACKUP_DIR/ >> \$LOG_FILE 2>&1
+if [ -d "$INSTALL_DIR/certs" ]; then
+    cp -r $INSTALL_DIR/certs $BACKUP_DIR/ >> $LOG_FILE 2>&1
 fi
-if [ -f "\$INSTALL_DIR/config.json" ]; then
-    cp \$INSTALL_DIR/config.json \$BACKUP_DIR/ >> \$LOG_FILE 2>&1
+if [ -f "$INSTALL_DIR/config.json" ]; then
+    cp $INSTALL_DIR/config.json $BACKUP_DIR/ >> $LOG_FILE 2>&1
 fi
 
 # Stop any running services related to Inventarsystem
-echo "Stopping any running services..." >> \$LOG_FILE
-pkill -f "start.sh" >> \$LOG_FILE 2>&1 || true
-pkill -f "gunicorn app:app" >> \$LOG_FILE 2>&1 || true
+echo "Stopping any running services..." >> $LOG_FILE
+pkill -f "start.sh" >> $LOG_FILE 2>&1 || true
+pkill -f "gunicorn app:app" >> $LOG_FILE 2>&1 || true
 
 # Completely remove the existing installation
-echo "Removing existing installation..." >> \$LOG_FILE
-if [ -d "\$INSTALL_DIR" ]; then
-    sudo rm -rf \$INSTALL_DIR >> \$LOG_FILE 2>&1
+echo "Removing existing installation..." >> $LOG_FILE
+if [ -d "$INSTALL_DIR" ]; then
+    sudo rm -rf $INSTALL_DIR >> $LOG_FILE 2>&1
 fi
 
-echo "Installing fresh copy..." >> \$LOG_FILE
-wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash >> \$LOG_FILE 2>&1
+echo "Installing fresh copy directly..." >> $LOG_FILE
 
-# Restore backed up files
-echo "Restoring backed up files..." >> \$LOG_FILE
+# Temporarily disable exit on error for this section
+set +e
 
-if [ -d "\$BACKUP_DIR/images" ]; then
-    mkdir -p "\$INSTALL_DIR/Web/static/"
-    cp -r "\$BACKUP_DIR/images" "\$INSTALL_DIR/Web/static/" >> \$LOG_FILE 2>&1
+# Define our own installation procedure instead of using the external script
+echo "Cloning repository..." >> $LOG_FILE
+sudo git clone "$REPO_URL" "$INSTALL_DIR" >> $LOG_FILE 2>&1
+CLONE_RESULT=$?
+
+if [ $CLONE_RESULT -ne 0 ]; then
+    echo "Failed to clone repository. Aborting installation." >> $LOG_FILE
+    exit 1
 fi
-if [ -d "\$BACKUP_DIR/data" ]; then
-    cp -r "\$BACKUP_DIR/data" "\$INSTALL_DIR/" >> \$LOG_FILE 2>&1
+
+# Set proper permissions - using more aggressive permission settings
+echo "Setting permissions..." >> $LOG_FILE
+CURRENT_USER=$(whoami)
+sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR" >> $LOG_FILE 2>&1
+sudo chmod -R 755 "$INSTALL_DIR" >> $LOG_FILE 2>&1
+
+# Make sure the virtual environment directory will be writable
+sudo mkdir -p "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+sudo chmod -R 777 "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+
+# Create necessary directories with correct permissions
+echo "Creating necessary directories with proper permissions..." >> $LOG_FILE
+for dir in "certs" "logs" "Web/upload" "Web/uploads" "Web/static/images"; do
+    sudo mkdir -p "$INSTALL_DIR/$dir" >> $LOG_FILE 2>&1
+    sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/$dir" >> $LOG_FILE 2>&1
+    sudo chmod -R 777 "$INSTALL_DIR/$dir" >> $LOG_FILE 2>&1
+done
+
+# Make scripts executable with correct permissions
+for script in "start.sh" "restart.sh" "stop.sh"; do
+    if [ -f "$INSTALL_DIR/$script" ]; then
+        sudo chmod +x "$INSTALL_DIR/$script" >> $LOG_FILE 2>&1
+        sudo chown $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/$script" >> $LOG_FILE 2>&1
+    else
+        echo "Warning: $script not found in cloned repository" >> $LOG_FILE
+    fi
+done
+
+# Create a proper Python virtual environment
+echo "Creating Python virtual environment..." >> $LOG_FILE
+cd "$INSTALL_DIR"
+
+# Ensure python3-venv is installed
+sudo apt-get update >> $LOG_FILE 2>&1
+sudo apt-get install -y python3-venv >> $LOG_FILE 2>&1
+
+# Remove any existing virtual environment
+sudo rm -rf "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+
+# Create a fresh virtual environment
+python3 -m venv "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+if [ $? -ne 0 ]; then
+    echo "Failed to create virtual environment. This may cause issues." >> $LOG_FILE
+else
+    echo "Virtual environment created successfully." >> $LOG_FILE
+    
+    # Set permissions
+    sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+    sudo chmod -R 755 "$INSTALL_DIR/.venv" >> $LOG_FILE 2>&1
+    
+    # Install basic requirements
+    echo "Installing basic Python packages..." >> $LOG_FILE
+    # Source the activate script
+    source "$INSTALL_DIR/.venv/bin/activate" >> $LOG_FILE 2>&1
+    
+    # Upgrade pip
+    "$INSTALL_DIR/.venv/bin/pip" install --upgrade pip >> $LOG_FILE 2>&1
+    
+    # Install packages if requirements.txt exists
+    if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+        "$INSTALL_DIR/.venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" >> $LOG_FILE 2>&1
+    else
+        # Install basic packages anyway
+        "$INSTALL_DIR/.venv/bin/pip" install flask gunicorn pymongo==4.6.1 >> $LOG_FILE 2>&1
+    fi
+    
+    # Deactivate the environment
+    deactivate >> $LOG_FILE 2>&1 || true
 fi
-if [ -d "\$BACKUP_DIR/certs" ]; then
-    cp -r "\$BACKUP_DIR/certs" "\$INSTALL_DIR/" >> \$LOG_FILE 2>&1
+
+# Re-enable exit on error
+set -e
+
+# Check if installation was successful
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Installation failed. Installation directory does not exist." >> $LOG_FILE
+    exit 1
+else
+    echo "Installation appears to have completed successfully." >> $LOG_FILE
 fi
-if [ -f "\$BACKUP_DIR/config.json" ]; then
-    cp "\$BACKUP_DIR/config.json" "\$INSTALL_DIR/" >> \$LOG_FILE 2>&1
+
+# Restore backed up files with explicit permissions
+echo "Restoring backed up files with correct permissions..." >> $LOG_FILE
+
+# Restore Web/upload directory with better handling
+if [ -d "$BACKUP_DIR/Web/upload" ]; then
+    echo "Restoring Web/upload directory..." >> $LOG_FILE
+    sudo mkdir -p "$INSTALL_DIR/Web/upload" >> $LOG_FILE 2>&1
+    # Use rsync for better copying, preserving permissions and timestamps
+    sudo rsync -av --delete "$BACKUP_DIR/Web/upload/" "$INSTALL_DIR/Web/upload/" >> $LOG_FILE 2>&1 || {
+        echo "Falling back to cp command for restore..." >> $LOG_FILE
+        sudo rm -rf "$INSTALL_DIR/Web/upload/"*  # Clean destination first
+        sudo cp -r "$BACKUP_DIR/Web/upload/"* "$INSTALL_DIR/Web/upload/" 2>/dev/null || true
+    }
+    # Set very permissive permissions to ensure web server can access
+    sudo chown -R $CURRENT_USER:www-data "$INSTALL_DIR/Web/upload" >> $LOG_FILE 2>&1
+    sudo chmod -R 777 "$INSTALL_DIR/Web/upload" >> $LOG_FILE 2>&1
+    
+    # Count files to verify restore success
+    BACKUP_FILE_COUNT=$(find "$BACKUP_DIR/Web/upload/" -type f | wc -l)
+    RESTORED_FILE_COUNT=$(find "$INSTALL_DIR/Web/upload/" -type f | wc -l)
+    echo "Backup has $BACKUP_FILE_COUNT files, restored upload dir has $RESTORED_FILE_COUNT files" >> $LOG_FILE
+    
+    # If counts don't match, try different approach
+    if [ $BACKUP_FILE_COUNT -ne $RESTORED_FILE_COUNT ]; then
+        echo "File count mismatch! Trying alternative restore approach..." >> $LOG_FILE
+        sudo rm -rf "$INSTALL_DIR/Web/upload"
+        sudo cp -rp "$BACKUP_DIR/Web/upload" "$INSTALL_DIR/Web/" >> $LOG_FILE 2>&1
+        sudo chown -R $CURRENT_USER:www-data "$INSTALL_DIR/Web/upload" >> $LOG_FILE 2>&1
+        sudo chmod -R 777 "$INSTALL_DIR/Web/upload" >> $LOG_FILE 2>&1
+    fi
+fi
+# Restore Web/uploads directory (with "s")
+if [ -d "$BACKUP_DIR/uploads" ]; then
+    echo "Restoring Web/uploads directory..." >> $LOG_FILE
+    sudo mkdir -p "$INSTALL_DIR/Web/" >> $LOG_FILE 2>&1
+    sudo cp -r "$BACKUP_DIR/uploads" "$INSTALL_DIR/Web/" >> $LOG_FILE 2>&1
+    sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/Web/uploads" >> $LOG_FILE 2>&1
+    sudo chmod -R 777 "$INSTALL_DIR/Web/uploads" >> $LOG_FILE 2>&1
+fi
+if [ -d "$BACKUP_DIR/certs" ]; then
+    sudo cp -r "$BACKUP_DIR/certs" "$INSTALL_DIR/" >> $LOG_FILE 2>&1
+    sudo chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/certs" >> $LOG_FILE 2>&1
+    sudo chmod -R 600 "$INSTALL_DIR/certs"/*.key >> $LOG_FILE 2>&1
+    sudo chmod -R 644 "$INSTALL_DIR/certs"/*.crt >> $LOG_FILE 2>&1
+fi
+if [ -f "$BACKUP_DIR/config.json" ]; then
+    sudo cp "$BACKUP_DIR/config.json" "$INSTALL_DIR/" >> $LOG_FILE 2>&1
+    sudo chown $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR/config.json" >> $LOG_FILE 2>&1
+    sudo chmod 666 "$INSTALL_DIR/config.json" >> $LOG_FILE 2>&1
 fi
 
 # Verify installation
-echo "Verifying installation..." >> \$LOG_FILE
-$PROJECT_ROOT/verify-installation.sh >> \$LOG_FILE 2>&1
+echo "Verifying installation..." >> $LOG_FILE
+/home/max/Dokumente/repos/Inventarsystem/verify-installation.sh >> $LOG_FILE 2>&1
 
 # Clean up old backups
-echo "Cleaning up old backups..." >> \$LOG_FILE
-$PROJECT_ROOT/backup-cleanup.sh >> \$LOG_FILE 2>&1
+echo "Cleaning up old backups..." >> $LOG_FILE
+/home/max/Dokumente/repos/Inventarsystem/backup-cleanup.sh >> $LOG_FILE 2>&1
 
-echo "Script executed successfully!" >> \$LOG_FILE
-echo "===== Daily reinstall completed at \$(date) =====" >> \$LOG_FILE
+/home/max/Dokumente/repos/Inventarsystem/restart.sh >> $LOG_FILE 2>&1
+# Check if restart was successful
+if [ $? -ne 0 ]; then
+    echo "Failed to restart the service. Please check the logs." >> $LOG_FILE
+    exit 1
+else
+    echo "Service restarted successfully." >> $LOG_FILE
+fi
+
+echo "Script executed successfully!" >> $LOG_FILE
+echo "===== Daily reinstall completed at $(date) =====" >> $LOG_FILE
 EOF
 
     # Make the update script executable
