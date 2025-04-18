@@ -503,8 +503,3 @@ echo "Web Interface: https://$NETWORK_IP"
 echo "Web Interface (Unix Socket): http://unix:/tmp/inventarsystem.sock"
 echo "MongoDB: mongodb://localhost:27017"
 echo "========================================================"
-
-# Deactivate virtual environment
-deactivate
-
-echo "All services stopped."
