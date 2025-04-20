@@ -36,3 +36,17 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "Script executed successfully!"
+
+echo "========================================================"
+echo "                   AUTOSTART INSTALLATION                   "
+echo "========================================================"
+
+./update.sh --restart-server
+if [ $? -ne 0 ]; then
+    echo "Failed to set up autostart. Please check the logs for more details."
+    exit 1
+fi
+echo "Autostart setup successfully!"
+echo "========================================================"
+echo "              AUTOSTART INSTALLATION COMPLETED          "
+echo "========================================================"
