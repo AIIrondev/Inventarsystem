@@ -503,48 +503,84 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
         bool: True, wenn ein Konflikt besteht, sonst False
     """
     try:
+        print(f"Checking booking conflict for item {item_id}, period {period}, start {start_date}, end {end_date}")
+        
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        # Query erstellen
-        query = {
+        # Get the date component for filtering
+        booking_date = start_date.date()
+        
+        # First, get all active and planned bookings for this item
+        all_bookings = list(ausleihungen.find({
             'Item': item_id,
             'Status': {'$in': ['planned', 'active']}
-        }
+        }))
         
-        # Priorität auf Periodenprüfung wenn angegeben
+        # Print all relevant bookings for debugging
+        print(f"Found {len(all_bookings)} existing bookings for this item")
+        for bk in all_bookings:
+            bk_id = str(bk.get('_id'))
+            bk_status = bk.get('Status')
+            bk_period = bk.get('Period', 'None')
+            bk_start = bk.get('Start')
+            bk_user = bk.get('User')
+            print(f"  - Booking {bk_id}: Status={bk_status}, Period={bk_period}, Start={bk_start}, User={bk_user}")
+
+        # If we're booking by period, check for period conflicts
         if period is not None:
-            # Prüfen, ob eine Ausleihung in der gleichen Periode bereits existiert
-            query['Period'] = int(period)
+            period_int = int(period)
             
-            # Prüfe auch das Datum (gleicher Tag)
-            start_date_only = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date_only = start_date_only + datetime.timedelta(days=1)
-            
-            query['$or'] = [
-                # Ausleihe am gleichen Tag
-                {'Start': {'$gte': start_date_only, '$lt': end_date_only}}
-            ]
+            # Check bookings on the same day with the same period
+            for booking in all_bookings:
+                booking_start = booking.get('Start')
+                if not booking_start:
+                    continue
+                    
+                # Compare just the date part
+                existing_date = booking_start.date()
+                if existing_date == booking_date:
+                    # If this booking has the same period, it's a conflict
+                    if booking.get('Period') == period_int:
+                        print(f"CONFLICT: Same day, same period. Period: {period_int}, Date: {booking_date}")
+                        client.close()
+                        return True
+        
+        # If no period specified, check for time overlaps
         else:
-            # Zeitbasierte Prüfung, wenn keine Periode angegeben ist
-            query['$or'] = [
-                # Neue Ausleihe beginnt während bestehender Ausleihe
-                {'Start': {'$lte': start_date}, 'End': {'$gte': start_date}},
-                # Neue Ausleihe endet während bestehender Ausleihe
-                {'Start': {'$lte': end_date}, 'End': {'$gte': end_date}},
-                # Neue Ausleihe enthält bestehende Ausleihe
-                {'Start': {'$gte': start_date}, 'End': {'$lte': end_date}},
-                # Aktive Ausleihe ohne Ende, die vor dem Start beginnt
-                {'Start': {'$lte': start_date}, 'End': None}
-            ]
+            for booking in all_bookings:
+                booking_start = booking.get('Start')
+                booking_end = booking.get('End')
+                
+                if not booking_start:
+                    continue
+                
+                # Set default end time if not specified
+                if not booking_end:
+                    booking_end = booking_start + datetime.timedelta(hours=1)
+                
+                # Check for overlap
+                # 1. New booking starts during existing booking
+                # 2. New booking ends during existing booking
+                # 3. New booking completely contains existing booking
+                # 4. Existing booking completely contains new booking
+                if ((start_date >= booking_start and start_date < booking_end) or
+                    (end_date > booking_start and end_date <= booking_end) or
+                    (start_date <= booking_start and end_date >= booking_end) or
+                    (start_date >= booking_start and end_date <= booking_end)):
+                    print(f"CONFLICT: Time overlap. New booking: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
+                    client.close()
+                    return True
         
-        overlapping = ausleihungen.find_one(query)
-        
+        print("No conflicts found!")
         client.close()
-        return overlapping is not None
+        return False
+        
     except Exception as e:
         print(f"Error checking booking conflicts: {e}")
+        import traceback
+        traceback.print_exc()
         return True  # Bei Fehler Konflikt annehmen, um auf Nummer sicher zu gehen
 
 

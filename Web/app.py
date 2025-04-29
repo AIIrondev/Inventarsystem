@@ -55,6 +55,7 @@ app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 app.config['STATIC_FOLDER'] = os.path.join(BASE_DIR, 'static')  # Explicitly set static folder
+
 __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
 Port = 8080
@@ -768,199 +769,221 @@ def get_bookings():
     """
     Get all bookings for calendar display
     """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-        
-    start = request.args.get('start')
-    end = request.args.get('end')
-    
-    bookings = []
-    processed_items_with_status = set()  # Track item_id+status combinations instead of just items
-    
-    # Define school periods
-    school_periods = {
-        1: { 'start': '08:00', 'end': '08:45' },
-        2: { 'start': '08:45', 'end': '09:30' },
-        3: { 'start': '09:45', 'end': '10:30' },
-        4: { 'start': '10:30', 'end': '11:15' },
-        5: { 'start': '11:30', 'end': '12:15' },
-        6: { 'start': '12:15', 'end': '13:00' },
-        7: { 'start': '13:30', 'end': '14:15' },
-        8: { 'start': '14:15', 'end': '15:00' },
-        9: { 'start': '15:15', 'end': '16:00' },
-        10: { 'start': '16:00', 'end': '16:45' }
-    }
-    
-    # Helper function to determine period
-    def get_period(time_obj):
-        hours = time_obj.hour
-        minutes = time_obj.minute
-        time_str = f"{hours:02d}:{minutes:02d}"
-        
-        for period, times in school_periods.items():
-            if times['start'] <= time_str <= times['end']:
-                return period
-        return None
-    
-    # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
-    active_bookings = au.get_active_bookings(start, end)
-    for booking in active_bookings:
-        item = it.get_item(booking.get('Item'))
-        if not item:
-            continue
+    try:
+        if 'username' not in session:
+            flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+            return redirect(url_for('login'))
             
-        item_id = booking.get('Item')
-        processed_items_with_status.add(f"{item_id}_active")  # Add with status
+        start = request.args.get('start')
+        end = request.args.get('end')
+        
+        print(f"Fetching bookings from {start} to {end}, requested by {session['username']}")
+        
+        bookings = []
+        processed_items_with_status = set()  # Track item_id+status combinations instead of just items
+        
+        # Define school periods
+        school_periods = {
+            1: { 'start': '08:00', 'end': '08:45' },
+            2: { 'start': '08:45', 'end': '09:30' },
+            3: { 'start': '09:45', 'end': '10:30' },
+            4: { 'start': '10:30', 'end': '11:15' },
+            5: { 'start': '11:30', 'end': '12:15' },
+            6: { 'start': '12:15', 'end': '13:00' },
+            7: { 'start': '13:30', 'end': '14:15' },
+            8: { 'start': '14:15', 'end': '15:00' },
+            9: { 'start': '15:15', 'end': '16:00' },
+            10: { 'start': '16:00', 'end': '16:45' }
+        }
+        
+        # Helper function to determine period
+        def get_period(time_obj):
+            hours = time_obj.hour
+            minutes = time_obj.minute
+            time_str = f"{hours:02d}:{minutes:02d}"
             
-        # Format dates
-        start_date = booking.get('Start') 
-        end_date = booking.get('End')
+            for period, times in school_periods.items():
+                if times['start'] <= time_str <= times['end']:
+                    return period
+            return None
         
-        # Determine period if not explicitly stored
-        period = booking.get('Period')
-        if not period and start_date:
-            period = get_period(start_date)
-        
-        # Convert to string safely
-        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-        
-        bookings.append({
-            "id": str(booking.get('_id')),
-            "title": item.get('Name', 'Unknown Item'),
-            "start": start_str,
-            "end": end_str,
-            "itemId": item_id,
-            "userName": booking.get('User'),
-            "notes": booking.get('Notes', ''),
-            "status": "current",
-            "period": period,
-            "isCurrentUser": booking.get('User') == session['username']
-        })
-    
-    # 2. Get all current borrowings (from ausleihungen collection)
-    current_borrowings = au.get_ausleihungen()
-    
-    # Format current borrowings for calendar
-    for borrowing in current_borrowings:
-        item_id = borrowing.get('Item')
-        
-        # Skip if this item already has an active booking
-        if f"{item_id}_active" in processed_items_with_status:
-            continue
+        try:
+            # 1. Get PLANNED bookings first to ensure they appear
+            planned_bookings = au.get_planned_bookings(start, end) or []
+            print(f"Found {len(planned_bookings)} planned bookings")
+            for booking in planned_bookings:
+                item_id = booking.get('Item')
+                
+                item = it.get_item(item_id)
+                if not item:
+                    continue
+                    
+                # Format dates
+                start_date = booking.get('Start')
+                end_date = booking.get('End')
+                
+                # Determine period if not explicitly stored
+                period = booking.get('Period')
+                if not period and start_date:
+                    period = get_period(start_date)
+                
+                # Convert to string safely
+                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+                
+                # Track this item+status combination
+                processed_items_with_status.add(f"{item_id}_planned")
+                    
+                bookings.append({
+                    "id": str(booking.get('_id')),
+                    "title": item.get('Name', 'Unknown Item'),
+                    "start": start_str,
+                    "end": end_str,
+                    "itemId": item_id,
+                    "userName": booking.get('User'),
+                    "notes": booking.get('Notes', ''),
+                    "status": "planned",
+                    "period": period,
+                    "isCurrentUser": booking.get('User') == session['username']
+                })
             
-        # Determine if this is current or completed
-        is_current = borrowing.get('End') is None
-        status = "current" if is_current else "completed"
-        
-        # Track this item+status combination
-        processed_items_with_status.add(f"{item_id}_{status}")
-        
-        item = it.get_item(item_id)
-        if not item:
-            continue
+            # 2. Get ACTIVE bookings 
+            active_bookings = au.get_active_bookings(start, end) or []
+            print(f"Found {len(active_bookings)} active bookings")
+            for booking in active_bookings:
+                item_id = booking.get('Item')
+                
+                # Skip if this item already has a planned booking (avoid duplicates)
+                if f"{item_id}_planned" in processed_items_with_status:
+                    continue
+                    
+                item = it.get_item(booking.get('Item'))
+                if not item:
+                    continue
+                    
+                # Format dates
+                start_date = booking.get('Start') 
+                end_date = booking.get('End')
+                
+                # Determine period if not explicitly stored
+                period = booking.get('Period')
+                if not period and start_date:
+                    period = get_period(start_date)
+                
+                # Convert to string safely
+                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+                
+                # Track this item+status combination
+                processed_items_with_status.add(f"{item_id}_active")
+                
+                bookings.append({
+                    "id": str(booking.get('_id')),
+                    "title": item.get('Name', 'Unknown Item'),
+                    "start": start_str,
+                    "end": end_str,
+                    "itemId": item_id,
+                    "userName": booking.get('User'),
+                    "notes": booking.get('Notes', ''),
+                    "status": "current",
+                    "period": period,
+                    "isCurrentUser": booking.get('User') == session['username']
+                })
             
-        # Format dates
-        start_date = borrowing.get('Start')
-        end_date = borrowing.get('End')
-        
-        # Determine period if not explicitly stored
-        period = borrowing.get('Period')
-        if not period and start_date:
-            period = get_period(start_date)
-        
-        # If end_date is None, set it to start_date + 1 hour
-        if end_date is None:
-            end_date = start_date + datetime.timedelta(minutes=45)
-        
-        # Convert to string safely
-        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-        
-        bookings.append({
-            "id": str(borrowing.get('_id')),
-            "title": item.get('Name', 'Unknown Item'),
-            "start": start_str,
-            "end": end_str,
-            "itemId": item_id,
-            "userName": borrowing.get('User'),
-            "notes": borrowing.get('Notes', ''),
-            "status": status,
-            "period": period,
-            "isCurrentUser": borrowing.get('User') == session['username']
-        })
-    
-    # 3. Get planned bookings (from planned_bookings collection with status="planned")
-    planned_bookings = au.get_planned_bookings(start, end)
-    for booking in planned_bookings:
-        item_id = booking.get('Item')
-        
-        item = it.get_item(item_id)
-        if not item:
-            continue
+            # 3. Get current borrowings from ausleihungen collection
+            current_borrowings = au.get_ausleihungen(status='active', start=start, end=end) or []
+            print(f"Found {len(current_borrowings)} current borrowings")
             
-        # Format dates
-        start_date = booking.get('Start')
-        end_date = booking.get('End')
-        
-        # Determine period if not explicitly stored
-        period = booking.get('Period')
-        if not period and start_date:
-            period = get_period(start_date)
-        
-        # Convert to string safely
-        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+            # Format current borrowings for calendar
+            for borrowing in current_borrowings:
+                item_id = borrowing.get('Item')
+                
+                # Skip if this item already has an active or planned booking
+                if (f"{item_id}_active" in processed_items_with_status or 
+                    f"{item_id}_planned" in processed_items_with_status):
+                    continue
+                    
+                item = it.get_item(item_id)
+                if not item:
+                    continue
+                    
+                # Format dates
+                start_date = borrowing.get('Start')
+                end_date = borrowing.get('End')
+                
+                # Determine period if not explicitly stored
+                period = borrowing.get('Period')
+                if not period and start_date:
+                    period = get_period(start_date)
+                
+                # If end_date is None, set it to start_date + 1 hour
+                if end_date is None:
+                    end_date = start_date + datetime.timedelta(minutes=45)
+                
+                # Convert to string safely
+                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+                
+                bookings.append({
+                    "id": str(borrowing.get('_id')),
+                    "title": item.get('Name', 'Unknown Item'),
+                    "start": start_str,
+                    "end": end_str,
+                    "itemId": item_id,
+                    "userName": borrowing.get('User'),
+                    "notes": borrowing.get('Notes', ''),
+                    "status": "current",
+                    "period": period,
+                    "isCurrentUser": borrowing.get('User') == session['username']
+                })
             
-        bookings.append({
-            "id": str(booking.get('_id')),
-            "title": item.get('Name', 'Unknown Item'),
-            "start": start_str,
-            "end": end_str,
-            "itemId": item_id,
-            "userName": booking.get('User'),
-            "notes": booking.get('Notes', ''),
-            "status": "planned",
-            "period": period,
-            "isCurrentUser": booking.get('User') == session['username']
-        })
-    
-    # 4. Add completed bookings (from planned_bookings with status="completed")
-    completed_bookings = au.get_completed_bookings(start, end)
-    for booking in completed_bookings:
-        item_id = booking.get('Item')
-        item = it.get_item(item_id)
-        if not item:
-            continue
+            # 4. Add completed bookings
+            completed_bookings = au.get_completed_bookings(start, end) or []
+            print(f"Found {len(completed_bookings)} completed bookings")
+            for booking in completed_bookings:
+                item_id = booking.get('Item')
+                item = it.get_item(item_id)
+                if not item:
+                    continue
+                    
+                # Format dates
+                start_date = booking.get('Start')
+                end_date = booking.get('End')
+                
+                # Determine period if not explicitly stored
+                period = booking.get('Period')
+                if not period and start_date:
+                    period = get_period(start_date)
+                
+                # Convert to string safely
+                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
+                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
+                    
+                bookings.append({
+                    "id": str(booking.get('_id')),
+                    "title": item.get('Name', 'Unknown Item'),
+                    "start": start_str,
+                    "end": end_str,
+                    "itemId": item_id,
+                    "userName": booking.get('User'),
+                    "notes": booking.get('Notes', ''),
+                    "status": "completed",
+                    "period": period,
+                    "isCurrentUser": booking.get('User') == session['username']
+                })
             
-        # Format dates
-        start_date = booking.get('Start')
-        end_date = booking.get('End')
+        except Exception as e:
+            print(f"Error fetching specific booking type: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Determine period if not explicitly stored
-        period = booking.get('Period')
-        if not period and start_date:
-            period = get_period(start_date)
-        
-        # Convert to string safely
-        start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-        end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-            
-        bookings.append({
-            "id": str(booking.get('_id')),
-            "title": item.get('Name', 'Unknown Item'),
-            "start": start_str,
-            "end": end_str,
-            "itemId": item_id,
-            "userName": booking.get('User'),
-            "notes": booking.get('Notes', ''),
-            "status": "completed",
-            "period": period,
-            "isCurrentUser": booking.get('User') == session['username']
-        })
-    
-    return {"bookings": bookings}
+        print(f"Returning {len(bookings)} total bookings")
+        return {"bookings": bookings}
+    except Exception as e:
+        import traceback
+        print(f"Error in get_bookings: {e}")
+        traceback.print_exc()
+        return {"bookings": [], "error": str(e)}
 
 @app.route('/plan_booking', methods=['POST'])
 def plan_booking():
@@ -971,55 +994,68 @@ def plan_booking():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
         
-    item_id = request.form.get('item_id')
-    start_date_str = request.form.get('start_date')
-    end_date_str = request.form.get('end_date')
-    period = request.form.get('period')
-    notes = request.form.get('notes', '')
-    
-    # Validate inputs
-    if not all([item_id, start_date_str, end_date_str]):
-        return {"success": False, "error": "Missing required fields"}, 400
-        
-    # Parse dates
+    # Extract form data with error handling
     try:
-        start_date = datetime.datetime.fromisoformat(start_date_str)
-        end_date = datetime.datetime.fromisoformat(end_date_str)
-    except ValueError:
-        return {"success": False, "error": "Invalid date format"}, 400
+        item_id = request.form.get('item_id')
+        start_date_str = request.form.get('start_date')
+        end_date_str = request.form.get('end_date')
+        period = request.form.get('period')
+        notes = request.form.get('notes', '')
         
-    # Check if item exists
-    item = it.get_item(item_id)
-    if not item:
-        return {"success": False, "error": "Item not found"}, 404
+        # Log the booking attempt details
+        print(f"Booking attempt: item={item_id}, period={period}")
+        print(f"  - start_date_str={start_date_str}")
+        print(f"  - end_date_str={end_date_str}")
         
-    # Check for date conflicts with other bookings - we need to consider periods now
-    if au.check_booking_conflict(item_id, start_date, end_date):
-        return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
-    
-    # Create the planned booking with period information
-    booking_data = {
-        'item_id': item_id,
-        'user': session['username'],
-        'start_date': start_date,
-        'end_date': end_date,
-        'notes': notes,
-        'period': period
-    }
-    
-    booking_id = au.add_planned_booking(
-        item_id, 
-        session['username'], 
-        start_date, 
-        end_date, 
-        notes, 
-        period=period
-    )
-    
-    if not booking_id:
-        return {"success": False, "error": "Fehler beim Erstellen der Reservierung"}, 500
-    
-    return {"success": True, "booking_id": str(booking_id)}
+        # Validate inputs
+        if not all([item_id, start_date_str, end_date_str]):
+            print("Missing required fields for booking")
+            return {"success": False, "error": "Missing required fields"}, 400
+            
+        # Parse dates with detailed logging
+        try:
+            start_date = datetime.datetime.fromisoformat(start_date_str)
+            end_date = datetime.datetime.fromisoformat(end_date_str)
+            print(f"Parsed dates: start={start_date}, end={end_date}")
+        except ValueError as e:
+            print(f"Date parsing error: {e}")
+            return {"success": False, "error": f"Invalid date format: {e}"}, 400
+            
+        # Check if item exists
+        item = it.get_item(item_id)
+        if not item:
+            print(f"Item {item_id} not found")
+            return {"success": False, "error": "Item not found"}, 404
+            
+        # Check for date conflicts
+        print(f"Checking conflicts for item {item_id} on {start_date}")
+        if au.check_booking_conflict(item_id, start_date, end_date, period):
+            print(f"Conflict detected for item {item_id}, period {period}")
+            return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
+        
+        # Create the planned booking with period information
+        print(f"Creating booking for item {item_id}, period {period}")
+        booking_id = au.add_planned_booking(
+            item_id, 
+            session['username'], 
+            start_date, 
+            end_date, 
+            notes, 
+            period=period
+        )
+        
+        if not booking_id:
+            print("Failed to create booking - null booking ID returned")
+            return {"success": False, "error": "Fehler beim Erstellen der Reservierung"}, 500
+        
+        print(f"Successfully created booking {booking_id}")
+        return {"success": True, "booking_id": str(booking_id)}
+        
+    except Exception as e:
+        import traceback
+        print(f"Error in plan_booking: {e}")
+        traceback.print_exc()
+        return {"success": False, "error": f"Server error: {str(e)}"}, 500
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):
@@ -1052,10 +1088,25 @@ def terminplan():
     """
     Route to display the booking calendar
     """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    return render_template('terminplan.html')
+    try:
+        if 'username' not in session:
+            flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+            return redirect(url_for('login'))
+        
+        # Make sure the template exists
+        template_path = os.path.join(BASE_DIR, 'templates', 'terminplan.html')
+        if not os.path.exists(template_path):
+            print(f"Template file not found: {template_path}")
+            flash('Template not found. Please contact the administrator.', 'error')
+            return redirect(url_for('home'))
+            
+        return render_template('terminplan.html')
+    except Exception as e:
+        import traceback
+        print(f"Error rendering terminplan: {e}")
+        traceback.print_exc()
+        flash('An error occurred while displaying the calendar.', 'error')
+        return redirect(url_for('home'))
 
 
 '''-------------------------------------------------------------------------------------------------------------ADMIN ROUTES------------------------------------------------------------------------------------------------------------------'''

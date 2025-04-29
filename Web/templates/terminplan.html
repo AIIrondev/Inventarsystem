@@ -12,12 +12,37 @@
             <button id="next-day">Nächster Tag</button>
             <button id="today">Heute</button>
             <button id="new-booking" class="primary-button">Neue Reservierung</button>
+            <button id="toggle-debug" class="debug-button">Debug</button>
         </div>
         <div class="calendar-legend">
             <span class="legend-item"><span class="legend-color current"></span> Aktuelle Ausleihungen</span>
             <span class="legend-item"><span class="legend-color planned"></span> Geplante Ausleihungen</span>
             <span class="legend-item"><span class="legend-color completed"></span> Abgeschlossene Ausleihungen</span>
             <span class="legend-item"><span class="legend-color your-bookings"></span> Ihre Ausleihungen</span>
+        </div>
+    </div>
+    
+    <!-- Debug panel - hidden by default -->
+    <div id="debug-panel" class="debug-panel" style="display: none;">
+        <h3>Debug Information</h3>
+        <div class="debug-tabs">
+            <button class="debug-tab-btn active" data-tab="actions">Actions</button>
+            <button class="debug-tab-btn" data-tab="events">Events</button>
+            <button class="debug-tab-btn" data-tab="network">Network</button>
+        </div>
+        <div class="debug-content">
+            <div id="debug-actions" class="debug-tab active">
+                <div class="debug-log" id="action-log"></div>
+                <button id="clear-actions" class="small-button">Clear</button>
+            </div>
+            <div id="debug-events" class="debug-tab">
+                <div class="debug-log" id="events-log"></div>
+                <button id="clear-events" class="small-button">Clear</button>
+            </div>
+            <div id="debug-network" class="debug-tab">
+                <div class="debug-log" id="network-log"></div>
+                <button id="clear-network" class="small-button">Clear</button>
+            </div>
         </div>
     </div>
     
@@ -102,9 +127,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const eventModal = document.getElementById('event-modal');
     const newBookingBtn = document.getElementById('new-booking');
     const notificationArea = document.getElementById('notification-area');
+    const debugPanel = document.getElementById('debug-panel');
+    const toggleDebugBtn = document.getElementById('toggle-debug');
+    const actionLog = document.getElementById('action-log');
+    const eventsLog = document.getElementById('events-log');
+    const networkLog = document.getElementById('network-log');
     let currentEventId = null;
     let calendar;
     let showCompletedBookings = false;
+    let isDebugMode = false;
     
     // School period times (for reference)
     const schoolPeriods = {
@@ -125,10 +156,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const periodInfo = schoolPeriods[period];
         if (!periodInfo) return null;
         
+        // Get the date part only without time
         const dateStr = date.toISOString().split('T')[0];
+        
+        // Create dates with the correct time zone handling
+        const [startHours, startMinutes] = periodInfo.start.split(':').map(Number);
+        const [endHours, endMinutes] = periodInfo.end.split(':').map(Number);
+        
+        // Create dates in the browser's local time zone
+        const startDate = new Date(date);
+        startDate.setHours(startHours, startMinutes, 0, 0);
+        
+        const endDate = new Date(date);
+        endDate.setHours(endHours, endMinutes, 0, 0);
+        
         return {
-            start: new Date(`${dateStr}T${periodInfo.start}:00`),
-            end: new Date(`${dateStr}T${periodInfo.end}:00`)
+            start: startDate,
+            end: endDate
         };
     }
     
@@ -145,25 +189,114 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return null;
     }
+
+    // Enhanced Debugging Functions
+    function logAction(message) {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit', millisecond: true });
+        console.log(`[ACTION] ${timestamp}: ${message}`);
+        
+        if (actionLog) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${timestamp}</span> ${message}`;
+            actionLog.appendChild(entry);
+            actionLog.scrollTop = actionLog.scrollHeight;
+        }
+    }
+
+    function logEvent(event, details = {}) {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        console.log(`[EVENT] ${timestamp}: ${event}`, details);
+        
+        if (eventsLog) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${timestamp}</span> <strong>${event}</strong>: ${JSON.stringify(details)}`;
+            eventsLog.appendChild(entry);
+            eventsLog.scrollTop = eventsLog.scrollHeight;
+        }
+    }
+
+    function logNetwork(method, url, status, data = {}) {
+        const now = new Date();
+        const timestamp = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        console.log(`[NETWORK] ${timestamp}: ${method} ${url} ${status}`, data);
+        
+        if (networkLog) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const statusClass = status >= 400 ? 'error' : (status >= 300 ? 'warning' : 'success');
+            entry.innerHTML = `<span class="log-time">${timestamp}</span> <span class="${statusClass}">${method} ${url} ${status}</span><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            networkLog.appendChild(entry);
+            networkLog.scrollTop = networkLog.scrollHeight;
+        }
+    }
+
+    // Toggle debug mode
+    toggleDebugBtn.addEventListener('click', function() {
+        isDebugMode = !isDebugMode;
+        debugPanel.style.display = isDebugMode ? 'block' : 'none';
+        logAction(`Debug mode ${isDebugMode ? 'enabled' : 'disabled'}`);
+    });
+
+    // Clear log buttons
+    document.getElementById('clear-actions').addEventListener('click', () => {
+        actionLog.innerHTML = '';
+    });
+    document.getElementById('clear-events').addEventListener('click', () => {
+        eventsLog.innerHTML = '';
+    });
+    document.getElementById('clear-network').addEventListener('click', () => {
+        networkLog.innerHTML = '';
+    });
+
+    // Debug tab switching
+    document.querySelectorAll('.debug-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+            
+            // Update active button
+            document.querySelectorAll('.debug-tab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show selected tab
+            document.querySelectorAll('.debug-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(`debug-${tabName}`).classList.add('active');
+            
+            logAction(`Switched to debug tab: ${tabName}`);
+        });
+    });
     
-    // Show a notification message
-    function showNotification(message, type = 'info') {
+    // Enhanced notification with debug info
+    function showNotification(message, type = 'info', debugData = null) {
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.innerHTML = message;
         
+        if (debugData && isDebugMode) {
+            const debugInfo = document.createElement('div');
+            debugInfo.className = 'debug-info';
+            debugInfo.innerHTML = `<pre>${JSON.stringify(debugData, null, 2)}</pre>`;
+            notification.appendChild(debugInfo);
+        }
+        
         notificationArea.appendChild(notification);
         
-        // Auto-remove after 5 seconds
+        // Auto-remove after 8 seconds (increased from 5)
         setTimeout(() => {
             notification.classList.add('fade-out');
             setTimeout(() => {
                 notification.remove();
             }, 500);
-        }, 5000);
+        }, 8000);
+        
+        logAction(`Notification (${type}): ${message}`);
     }
     
-    // Initialize calendar
+    // Initialize calendar with enhanced debugging
+    logAction('Initializing calendar');
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridDay',
         locale: 'de',
@@ -176,21 +309,36 @@ document.addEventListener('DOMContentLoaded', function() {
         slotMaxTime: '17:00:00',
         slotDuration: '00:45:00',
         snapDuration: '00:45:00',
-        slotLabelFormat: {
+        nowIndicator: true,
+        now: new Date(),
+        timeZone: 'local', // Use browser's local time zone
+        displayEventTime: true, // Make sure times are displayed
+        eventTimeFormat: {  // Customize the time format
             hour: '2-digit',
             minute: '2-digit',
             hour12: false
         },
-        eventClick: function(info) {
-            // When an event is clicked, show details
-            showEventDetails(info.event);
-        },
         events: function(info, successCallback, failureCallback) {
+            const startStr = info.startStr;
+            const endStr = info.endStr;
+            
+            logAction(`Fetching events from ${startStr} to ${endStr}`);
+            logNetwork('GET', '/get_bookings', 'PENDING', { start: startStr, end: endStr });
+            
             // Load events from the server
-            fetch('/get_bookings?start=' + info.startStr + '&end=' + info.endStr)
-                .then(response => response.json())
+            fetch('/get_bookings?start=' + startStr + '&end=' + endStr)
+                .then(response => {
+                    logNetwork('GET', '/get_bookings', response.status);
+                    return response.json();
+                })
                 .then(data => {
-                    // Extract bookings from response - handle both formats for compatibility
+                    // Log the raw data received
+                    logEvent('receivedEvents', { 
+                        count: data.bookings ? data.bookings.length : 0,
+                        rawData: isDebugMode ? data.bookings : 'Enable debug mode to see raw data'
+                    });
+                    
+                    // Extract bookings from response
                     const bookingsArray = Array.isArray(data) ? data : (data.bookings || []);
                     
                     // Process events to add colors based on status
@@ -207,11 +355,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             eventColor = '#2ecc71'; // Green for planned bookings
                         }
                         
+                        // Create Date objects from ISO strings with proper time zone handling
+                        const startTime = new Date(event.start);
+                        const endTime = new Date(event.end);
+                        
+                        // For debug - log both raw and processed times
+                        if (isDebugMode) {
+                            logAction(`Event: ${event.title}, Raw start: ${event.start}, Processed: ${startTime.toLocaleTimeString()}`);
+                            logAction(`Period: ${event.period}, status: ${event.status}`);
+                        }
+                        
                         return {
                             id: event.id,
                             title: event.title,
-                            start: event.start,
-                            end: event.end,
+                            start: startTime,
+                            end: endTime,
                             extendedProps: {
                                 itemId: event.itemId,
                                 userName: event.userName,
@@ -221,24 +379,38 @@ document.addEventListener('DOMContentLoaded', function() {
                                 period: event.period
                             },
                             backgroundColor: eventColor,
-                            borderColor: eventColor
+                            borderColor: eventColor,
+                            textColor: '#ffffff',
+                            display: 'block',
+                            // Add class based on status for additional styling
+                            classNames: [
+                                event.status + '-event',
+                                event.isCurrentUser ? 'user-event' : ''
+                            ]
                         };
                     });
                     
                     // Filter out completed bookings if toggle is off
-                    if (!showCompletedBookings) {
-                        processedEvents = processedEvents.filter(event => event.extendedProps.status !== 'completed');
-                    }
+                    const filteredEvents = showCompletedBookings 
+                        ? processedEvents 
+                        : processedEvents.filter(event => event.extendedProps.status !== 'completed');
                     
-                    successCallback(processedEvents);
+                    logAction(`Processed ${processedEvents.length} events, displaying ${filteredEvents.length}`);
+                    successCallback(filteredEvents);
+                    
+                    // Visual confirmation that events are loaded
+                    showNotification(`${filteredEvents.length} Ausleihungen geladen`, 'info');
                 })
                 .catch(error => {
                     console.error('Error loading bookings:', error);
+                    logNetwork('GET', '/get_bookings', 'ERROR', { error: error.toString() });
                     failureCallback(error);
+                    showNotification('Fehler beim Laden der Ausleihungen', 'error');
                 });
         }
     });
     
+    logAction('Rendering calendar');
     calendar.render();
     updateCurrentDayDisplay();
     
@@ -388,11 +560,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Booking form submission
+    // Enhanced booking form submission
     document.getElementById('booking-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
         const formData = new FormData(this);
+        
+        // Log form data for debugging
+        const formDebugData = {};
+        for (let [key, value] of formData.entries()) {
+            formDebugData[key] = value;
+        }
+        logAction('Booking form submitted');
+        logEvent('bookingFormData', formDebugData);
         
         // Add period information to the form data
         const bookingDate = new Date(formData.get('booking_date'));
@@ -401,32 +581,130 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!periodTimes) {
             showNotification('Ungültige Schulstunde ausgewählt!', 'error');
+            logEvent('invalidPeriod', { period: periodNum, date: bookingDate });
             return;
         }
+        
+        // Log raw times for debugging
+        logAction(`Time data: 
+            - Raw start: ${periodTimes.start}
+            - ISO start: ${periodTimes.start.toISOString()}
+            - Local start: ${periodTimes.start.toLocaleTimeString()}
+            - Raw end: ${periodTimes.end}
+            - ISO end: ${periodTimes.end.toISOString()}
+            - Local end: ${periodTimes.end.toLocaleTimeString()}
+        `);
         
         // Format dates for backend
         formData.set('start_date', periodTimes.start.toISOString());
         formData.set('end_date', periodTimes.end.toISOString());
         formData.set('period', periodNum);
         
+        const itemId = formData.get('item_id');
+        const notes = formData.get('notes');
+        
+        // Show loading notification
+        showNotification('Reservierung wird geprüft...', 'info', {
+            item_id: itemId,
+            period: periodNum,
+            date: bookingDate.toISOString().split('T')[0],
+            start: periodTimes.start.toISOString(),
+            end: periodTimes.end.toISOString()
+        });
+        
+        logNetwork('POST', '/plan_booking', 'PENDING', {
+            item_id: itemId,
+            period: periodNum,
+            start_date: periodTimes.start.toISOString(),
+            end_date: periodTimes.end.toISOString()
+        });
+        
         fetch('/plan_booking', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => {
+            logNetwork('POST', '/plan_booking', response.status);
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    return { 
+                        status: response.status,
+                        data: data
+                    };
+                });
+            }
+            throw new Error('Unexpected response format');
+        })
+        .then(result => {
+            const { status, data } = result;
+            
             if (data.success) {
                 // Close modal and refresh calendar
                 bookingModal.style.display = 'none';
-                calendar.refetchEvents();
-                showNotification('Ausleihe erfolgreich geplant!', 'success');
+                
+                logEvent('bookingSuccess', { 
+                    booking_id: data.booking_id,
+                    item_id: itemId, 
+                    period: periodNum
+                });
+                
+                showNotification(
+                    'Ausleihe erfolgreich geplant!', 
+                    'success',
+                    { booking_id: data.booking_id }
+                );
+                
+                // Force-refresh the calendar - use a more reliable method
+                setTimeout(() => {
+                    logAction('Refreshing calendar after successful booking');
+                    // Force a complete refetch with current dates
+                    const view = calendar.view;
+                    const startDate = view.activeStart;
+                    const endDate = view.activeEnd;
+                    
+                    // Force refetch with explicit date range
+                    calendar.refetchEvents();
+                    
+                    // Also try rerendering the current view
+                    calendar.rerenderEvents();
+                    
+                    // In rare cases, changing the view can help
+                    const currentView = calendar.view.type;
+                    calendar.changeView('listDay');
+                    setTimeout(() => calendar.changeView(currentView), 100);
+                }, 1000); // Increased timeout to ensure server data is updated
             } else {
-                showNotification('Fehler: ' + data.error, 'error');
+                const errorMsg = data.error || 'Unbekannter Fehler';
+                
+                logEvent('bookingError', { 
+                    status: status,
+                    error: errorMsg,
+                    item_id: itemId, 
+                    period: periodNum
+                });
+                
+                showNotification(
+                    'Fehler: ' + errorMsg, 
+                    'error',
+                    { status_code: status }
+                );
             }
         })
         .catch(error => {
             console.error('Error submitting booking:', error);
-            showNotification('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
+            
+            logNetwork('POST', '/plan_booking', 'ERROR', { 
+                error: error.toString() 
+            });
+            
+            showNotification(
+                'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 
+                'error',
+                { error_message: error.toString() }
+            );
         });
     });
     
@@ -479,231 +757,55 @@ document.addEventListener('DOMContentLoaded', function() {
     gap: 10px; /* Add gap between items */
 }
 
-.calendar-actions button {
-    background-color: #f0f0f0;
-    border: 1px solid #ddd;
-    padding: 5px 10px;
-    margin: 0;  /* Remove horizontal margins */
-    cursor: pointer;
-    white-space: nowrap;  /* Prevent button text from wrapping */
+/* Make booked periods more visible */
+.fc-event {
+    border-width: 2px !important;
+    font-weight: bold !important;
+    padding: 2px 4px !important;
+    min-height: 24px !important;
 }
 
-.calendar-actions .primary-button {
-    background-color: #3788d8;
-    color: white;
-    margin-left: auto;
+/* Add shadow to the current user's bookings for better visibility */
+.fc-event[data-is-current-user="true"] {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    z-index: 10 !important; /* Make sure user's events appear on top */
 }
 
-#current-day-display {
-    font-weight: bold;
-    margin: 0 15px;
-    min-width: 150px;
-    text-align: center;
-}
-
-/* Mobile responsive adjustments */
-@media (max-width: 768px) {
-    .calendar-actions {
-        justify-content: center; /* Center items on mobile */
-        flex-direction: column; /* Stack buttons vertically on very small screens */
-        margin-bottom: 15px;
-    }
-    
-    .calendar-actions button {
-        width: 100%; /* Full width buttons on mobile */
-        margin: 5px 0; /* Add vertical spacing between buttons */
-    }
-    
-    .calendar-actions .primary-button {
-        margin-left: 0; /* Reset margin on mobile */
-        order: -1; /* Place the primary button first */
-    }
-    
-    #current-day-display {
-        margin: 10px 0;
-        text-align: center;
-    }
-
-    .calendar-legend {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .legend-item {
-        margin-bottom: 8px;
-    }
-}
-
-.calendar-legend {
-    display: flex;
-    margin-top: 10px;
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin-right: 20px;
-}
-
-.legend-color {
+/* Period marker within the event */
+.fc-event-period-marker {
+    font-size: 10px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    padding: 1px 3px;
+    margin-top: 2px;
     display: inline-block;
-    width: 15px;
-    height: 15px;
-    margin-right: 5px;
-    border-radius: 50%;
 }
 
-.legend-color.current {
-    background-color: #e74c3c;
+/* Add custom colors for event types to make them more distinct */
+.fc-event.planned-event {
+    background-color: #2ecc71 !important;
+    border-color: #27ae60 !important;
 }
 
-.legend-color.planned {
-    background-color: #2ecc71;
+.fc-event.current-event {
+    background-color: #e74c3c !important;
+    border-color: #c0392b !important;
 }
 
-.legend-color.completed {
-    background-color: #7f8c8d;
+.fc-event.completed-event {
+    background-color: #7f8c8d !important;
+    border-color: #34495e !important;
+    opacity: 0.8;
 }
 
-.legend-color.your-bookings {
-    background-color: #8e44ad;
+.fc-event.user-event {
+    background-color: #8e44ad !important;
+    border-color: #9b59b6 !important;
 }
 
-/* Add to existing styles */
-.calendar-options {
-    margin: 10px 0;
-}
-
-.checkbox-container {
-    display: inline-flex;
-    align-items: center;
-    cursor: pointer;
-}
-
-.checkbox-container input {
-    margin-right: 8px;
-}
-
-/* Notification area */
-.notification-area {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-    width: 300px;
-}
-
-.notification {
-    background-color: #fff;
-    border-left: 4px solid #3788d8;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    padding: 15px;
-    margin-bottom: 10px;
-    animation: slideIn 0.3s ease-out;
-}
-
-.notification.success {
-    border-left-color: #2ecc71;
-}
-
-.notification.error {
-    border-left-color: #e74c3c;
-}
-
-.notification.warning {
-    border-left-color: #f39c12;
-}
-
-.notification.fade-out {
-    animation: fadeOut 0.5s ease-in forwards;
-}
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-/* Modal styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.4);
-}
-
-.modal-content {
-    background-color: white;
-    margin: 10% auto;
-    padding: 20px;
-    border-radius: 5px;
-    max-width: 500px;
-    position: relative;
-}
-
-.close {
-    position: absolute;
-    right: 20px;
-    top: 10px;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-}
-
-.form-group input, .form-group select, .form-group textarea {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-.danger-button {
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-/* Make the day view time slots more readable */
-.fc-timegrid-slot {
-    height: 3em !important;
-}
-
-.fc-timegrid-slot-label {
-    font-weight: bold;
-}
-
-/* Highlight the periods */
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="08:00:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="08:45:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="09:45:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="10:30:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="11:30:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="12:15:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="13:30:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="14:15:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="15:15:00"],
-.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="16:00:00"] {
-    border-top: 2px solid #3788d8;
+/* Make time slots for school periods more recognizable */
+.fc-timegrid-slot:nth-child(odd) {
+    background-color: rgba(240, 240, 245, 0.4);
 }
 </style>
 {% endblock %}
