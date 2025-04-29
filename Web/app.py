@@ -79,6 +79,20 @@ try:
     Host = conf.get('host', '0.0.0.0')
     Port = conf.get('port', 443)
     
+    # Get school periods from config or use defaults
+    SCHOOL_PERIODS = conf.get('schoolPeriods', {
+        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
+        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
+        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
+        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
+        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
+        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
+        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
+        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
+        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
+        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
+    })
+    
 except FileNotFoundError:
     print("Config file not found. Using default values.")
     # Default configuration
@@ -87,6 +101,19 @@ except FileNotFoundError:
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
     Port = 443
+    # Default school periods
+    SCHOOL_PERIODS = {
+        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
+        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
+        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
+        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
+        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
+        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
+        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
+        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
+        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
+        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
+    }
     
 except json.JSONDecodeError:
     print("Error: Config file contains invalid JSON. Using default values.")
@@ -96,6 +123,19 @@ except json.JSONDecodeError:
     app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
     Host = '0.0.0.0'
     Port = 443
+    # Default school periods
+    SCHOOL_PERIODS = {
+        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
+        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
+        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
+        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
+        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
+        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
+        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
+        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
+        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
+        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
+    }
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
@@ -105,7 +145,7 @@ def inject_version():
     """
     Makes the application version available to all templates
     """
-    return {'version': APP_VERSION}
+    return {'version': APP_VERSION, 'school_periods': SCHOOL_PERIODS}
 
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -1100,7 +1140,7 @@ def terminplan():
             flash('Template not found. Please contact the administrator.', 'error')
             return redirect(url_for('home'))
             
-        return render_template('terminplan.html')
+        return render_template('terminplan.html', school_periods=SCHOOL_PERIODS)
     except Exception as e:
         import traceback
         print(f"Error rendering terminplan: {e}")
