@@ -39,7 +39,7 @@ import datetime
 
 # === AUSLEIHUNG MANAGEMENT ===
 
-def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active"):
+def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active", period=None):
     """
     Erstellt einen neuen Ausleihungsdatensatz in der Datenbank.
     Je nach Status wird eine aktive Ausleihe oder eine geplante Reservierung erstellt.
@@ -51,6 +51,7 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active")
         end (datetime, optional): Enddatum/-zeit der Ausleihperiode
         notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
         status (str, optional): Status der Ausleihe ('planned', 'active', 'completed', 'cancelled')
+        period (int, optional): Schulstunde (1-10) der Ausleihung
         
     Returns:
         ObjectId: ID des neuen Ausleihungsdatensatzes
@@ -71,6 +72,10 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active")
             'LastUpdated': datetime.datetime.now()
         }
         
+        # Add period if provided
+        if period is not None:
+            ausleihung_data['Period'] = int(period)
+        
         result = ausleihungen.insert_one(ausleihung_data)
         ausleihung_id = result.inserted_id
         
@@ -81,7 +86,7 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active")
         return None
 
 
-def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None):
+def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None, period=None):
     """
     Aktualisiert einen bestehenden Ausleihungsdatensatz.
     Nur die angegebenen Felder werden aktualisiert.
@@ -94,6 +99,7 @@ def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, note
         end (datetime, optional): Enddatum/-zeit der Ausleihperiode
         notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
         status (str, optional): Status der Ausleihe
+        period (int, optional): Schulstunde (1-10) der Ausleihung
         
     Returns:
         bool: True bei Erfolg, sonst False
@@ -118,6 +124,8 @@ def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, note
             update_data['Notes'] = notes
         if status is not None:
             update_data['Status'] = status
+        if period is not None:
+            update_data['Period'] = int(period)
             
         result = ausleihungen.update_one(
             {'_id': ObjectId(id)}, 
@@ -481,7 +489,7 @@ def get_ausleihungen_by_date_range(start_date, end_date, status=None):
     return get_ausleihungen(status=status, start=start_date, end=end_date)
 
 
-def check_ausleihung_conflict(item_id, start_date, end_date):
+def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
     """
     Prüft, ob es Konflikte mit bestehenden Ausleihungen oder aktiven Ausleihen gibt.
     
@@ -489,6 +497,7 @@ def check_ausleihung_conflict(item_id, start_date, end_date):
         item_id (str): ID des zu prüfenden Gegenstands
         start_date (datetime): Vorgeschlagenes Startdatum
         end_date (datetime): Vorgeschlagenes Enddatum
+        period (int, optional): Schulstunde für die Prüfung
 
     Returns:
         bool: True, wenn ein Konflikt besteht, sonst False
@@ -498,11 +507,28 @@ def check_ausleihung_conflict(item_id, start_date, end_date):
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        # Nach überlappenden Ausleihungen suchen
-        overlapping = ausleihungen.find_one({
+        # Query erstellen
+        query = {
             'Item': item_id,
-            'Status': {'$in': ['planned', 'active']},
-            '$or': [
+            'Status': {'$in': ['planned', 'active']}
+        }
+        
+        # Priorität auf Periodenprüfung wenn angegeben
+        if period is not None:
+            # Prüfen, ob eine Ausleihung in der gleichen Periode bereits existiert
+            query['Period'] = int(period)
+            
+            # Prüfe auch das Datum (gleicher Tag)
+            start_date_only = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date_only = start_date_only + datetime.timedelta(days=1)
+            
+            query['$or'] = [
+                # Ausleihe am gleichen Tag
+                {'Start': {'$gte': start_date_only, '$lt': end_date_only}}
+            ]
+        else:
+            # Zeitbasierte Prüfung, wenn keine Periode angegeben ist
+            query['$or'] = [
                 # Neue Ausleihe beginnt während bestehender Ausleihe
                 {'Start': {'$lte': start_date}, 'End': {'$gte': start_date}},
                 # Neue Ausleihe endet während bestehender Ausleihe
@@ -512,11 +538,13 @@ def check_ausleihung_conflict(item_id, start_date, end_date):
                 # Aktive Ausleihe ohne Ende, die vor dem Start beginnt
                 {'Start': {'$lte': start_date}, 'End': None}
             ]
-        })
+        
+        overlapping = ausleihungen.find_one(query)
         
         client.close()
         return overlapping is not None
     except Exception as e:
+        print(f"Error checking booking conflicts: {e}")
         return True  # Bei Fehler Konflikt annehmen, um auf Nummer sicher zu gehen
 
 
@@ -632,13 +660,13 @@ def activate_ausleihung(id):
 
 # Hilfsmethoden für alte Funktionsaufrufe, um Abwärtskompatibilität zu gewährleisten
 
-def add_planned_booking(item_id, user, start_date, end_date, notes=""):
+def add_planned_booking(item_id, user, start_date, end_date, notes="", period=None):
     """Kompatibilitätsfunktion - erstellt eine geplante Ausleihe"""
-    return add_ausleihung(item_id, user, start_date, end_date, notes, status='planned')
+    return add_ausleihung(item_id, user, start_date, end_date, notes, status='planned', period=period)
 
-def check_booking_conflict(item_id, start_date, end_date):
-    """Kompatibilitätsfunktion - prüft auf Ausleihungskonflikte"""
-    return check_ausleihung_conflict(item_id, start_date, end_date)
+def check_booking_conflict(item_id, start_date, end_date, period=None):
+    """Kompatibilitätsfunktion - prüft auf Ausleihungskonflikte mit Periodenunterstützung"""
+    return check_ausleihung_conflict(item_id, start_date, end_date, period)
 
 def cancel_booking(booking_id):
     """Kompatibilitätsfunktion - storniert eine Ausleihe"""

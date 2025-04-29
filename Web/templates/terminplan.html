@@ -5,11 +5,12 @@
 {% block content %}
 <div class="calendar-container">
     <div class="calendar-header">
-        <h1>Terminplan für Ausleihen</h1>
+        <h1>Schulstunden-Terminplan für Ausleihen</h1>
         <div class="calendar-actions">
-            <button id="prev-month">Vorheriger Monat</button>
-            <span id="current-month-display"></span>
-            <button id="next-month">Nächster Monat</button>
+            <button id="prev-day">Vorheriger Tag</button>
+            <span id="current-day-display"></span>
+            <button id="next-day">Nächster Tag</button>
+            <button id="today">Heute</button>
             <button id="new-booking" class="primary-button">Neue Reservierung</button>
         </div>
         <div class="calendar-legend">
@@ -29,6 +30,9 @@
     
     <div id="calendar"></div>
     
+    <!-- Notification area for alerts -->
+    <div id="notification-area" class="notification-area"></div>
+    
     <!-- Modal for new bookings -->
     <div id="booking-modal" class="modal">
         <div class="modal-content">
@@ -36,19 +40,31 @@
             <h2>Neue Reservierung</h2>
             <form id="booking-form">
                 <div class="form-group">
+                    <label for="booking-date">Datum:</label>
+                    <input type="date" id="booking-date" name="booking_date" required>
+                </div>
+                <div class="form-group">
+                    <label for="period-select">Schulstunde:</label>
+                    <select id="period-select" name="period" required>
+                        <option value="">-- Bitte wählen --</option>
+                        <option value="1">1. Stunde (08:00 - 08:45)</option>
+                        <option value="2">2. Stunde (08:45 - 09:30)</option>
+                        <option value="3">3. Stunde (09:45 - 10:30)</option>
+                        <option value="4">4. Stunde (10:30 - 11:15)</option>
+                        <option value="5">5. Stunde (11:30 - 12:15)</option>
+                        <option value="6">6. Stunde (12:15 - 13:00)</option>
+                        <option value="7">7. Stunde (13:30 - 14:15)</option>
+                        <option value="8">8. Stunde (14:15 - 15:00)</option>
+                        <option value="9">9. Stunde (15:15 - 16:00)</option>
+                        <option value="10">10. Stunde (16:00 - 16:45)</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="item-select">Objekt:</label>
                     <select id="item-select" name="item_id" required>
                         <option value="">-- Bitte wählen --</option>
                         <!-- Items will be loaded dynamically -->
                     </select>
-                </div>
-                <div class="form-group">
-                    <label for="start-date">Von:</label>
-                    <input type="datetime-local" id="start-date" name="start_date" required>
-                </div>
-                <div class="form-group">
-                    <label for="end-date">Bis:</label>
-                    <input type="datetime-local" id="end-date" name="end_date" required>
                 </div>
                 <div class="form-group">
                     <label for="booking-notes">Notizen:</label>
@@ -85,23 +101,85 @@ document.addEventListener('DOMContentLoaded', function() {
     const bookingModal = document.getElementById('booking-modal');
     const eventModal = document.getElementById('event-modal');
     const newBookingBtn = document.getElementById('new-booking');
+    const notificationArea = document.getElementById('notification-area');
     let currentEventId = null;
     let calendar;
     let showCompletedBookings = false;
     
+    // School period times (for reference)
+    const schoolPeriods = {
+        1: { start: '08:00', end: '08:45', label: '1. Stunde (08:00 - 08:45)' },
+        2: { start: '08:45', end: '09:30', label: '2. Stunde (08:45 - 09:30)' },
+        3: { start: '09:45', end: '10:30', label: '3. Stunde (09:45 - 10:30)' },
+        4: { start: '10:30', end: '11:15', label: '4. Stunde (10:30 - 11:15)' },
+        5: { start: '11:30', end: '12:15', label: '5. Stunde (11:30 - 12:15)' },
+        6: { start: '12:15', end: '13:00', label: '6. Stunde (12:15 - 13:00)' },
+        7: { start: '13:30', end: '14:15', label: '7. Stunde (13:30 - 14:15)' },
+        8: { start: '14:15', end: '15:00', label: '8. Stunde (14:15 - 15:00)' },
+        9: { start: '15:15', end: '16:00', label: '9. Stunde (15:15 - 16:00)' },
+        10: { start: '16:00', end: '16:45', label: '10. Stunde (16:00 - 16:45)' }
+    };
+    
+    // Convert period to start/end times
+    function getPeriodTimes(date, period) {
+        const periodInfo = schoolPeriods[period];
+        if (!periodInfo) return null;
+        
+        const dateStr = date.toISOString().split('T')[0];
+        return {
+            start: new Date(`${dateStr}T${periodInfo.start}:00`),
+            end: new Date(`${dateStr}T${periodInfo.end}:00`)
+        };
+    }
+    
+    // Get period from a time
+    function getPeriodFromTime(date) {
+        const hours = date.getHours();
+        const minutes = date.getMinutes();
+        const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        
+        for (const [period, times] of Object.entries(schoolPeriods)) {
+            if (timeStr >= times.start && timeStr <= times.end) {
+                return parseInt(period);
+            }
+        }
+        return null;
+    }
+    
+    // Show a notification message
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.innerHTML = message;
+        
+        notificationArea.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => {
+                notification.remove();
+            }, 500);
+        }, 5000);
+    }
+    
     // Initialize calendar
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: 'timeGridDay',
         locale: 'de',
         headerToolbar: false, // We're using our custom header
-        selectable: true,
-        selectMirror: true,
         navLinks: true,
         editable: false,
         dayMaxEvents: true,
-        select: function(info) {
-            // When a date range is selected, open booking modal
-            openBookingModal(info.startStr, info.endStr);
+        allDaySlot: false,
+        slotMinTime: '08:00:00',
+        slotMaxTime: '17:00:00',
+        slotDuration: '00:45:00',
+        snapDuration: '00:45:00',
+        slotLabelFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
         },
         eventClick: function(info) {
             // When an event is clicked, show details
@@ -139,7 +217,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 userName: event.userName,
                                 notes: event.notes,
                                 status: event.status,
-                                isCurrentUser: event.isCurrentUser
+                                isCurrentUser: event.isCurrentUser,
+                                period: event.period
                             },
                             backgroundColor: eventColor,
                             borderColor: eventColor
@@ -161,23 +240,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     calendar.render();
-    updateCurrentMonthDisplay();
+    updateCurrentDayDisplay();
     
     // Custom navigation buttons
-    document.getElementById('prev-month').addEventListener('click', function() {
+    document.getElementById('prev-day').addEventListener('click', function() {
         calendar.prev();
-        updateCurrentMonthDisplay();
+        updateCurrentDayDisplay();
     });
     
-    document.getElementById('next-month').addEventListener('click', function() {
+    document.getElementById('next-day').addEventListener('click', function() {
         calendar.next();
-        updateCurrentMonthDisplay();
+        updateCurrentDayDisplay();
     });
     
-    // Update the current month display
-    function updateCurrentMonthDisplay() {
+    document.getElementById('today').addEventListener('click', function() {
+        calendar.today();
+        updateCurrentDayDisplay();
+    });
+    
+    // Update the current day display
+    function updateCurrentDayDisplay() {
         const dateStr = calendar.view.title;
-        document.getElementById('current-month-display').textContent = dateStr;
+        document.getElementById('current-day-display').textContent = dateStr;
     }
     
     // Load available items for the booking form
@@ -192,13 +276,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const items = data.items || [];
                 
                 items.forEach(item => {
-                    // Skip items that are not available
-                    if (!item.Verfuegbar) {
-                        return;
-                    }
-                    
+                    // Include all items, even if not immediately available
+                    // Availability will be checked when booking
                     const option = document.createElement('option');
-                    // Handle different ID formats
                     const itemId = item._id.$oid || item._id || item.id;
                     option.value = itemId;
                     option.textContent = item.Name;
@@ -206,31 +286,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 if (items.length === 0) {
-                    itemSelect.innerHTML += '<option value="" disabled>Keine verfügbaren Objekte</option>';
-                    console.log('No available items found');
+                    itemSelect.innerHTML += '<option value="" disabled>Keine Objekte gefunden</option>';
+                    console.log('No items found');
                 } else {
-                    console.log(`Loaded ${items.length} available items into dropdown`);
+                    console.log(`Loaded ${items.length} items into dropdown`);
                 }
             })
             .catch(error => console.error('Error loading items:', error));
     }
     
     // Open booking modal
-    function openBookingModal(startStr, endStr) {
-        // Format the dates for the datetime-local inputs
-        const startDate = new Date(startStr);
-        const endDate = new Date(endStr);
+    function openBookingModal(date = null) {
+        // Set date to today if not provided
+        if (!date) {
+            date = calendar.getDate();
+        }
         
-        // Adjust end date (FullCalendar uses exclusive end dates)
-        endDate.setDate(endDate.getDate() - 1);
-        
-        // Format for datetime-local input
+        // Format the date for the date picker
         const formatDate = (date) => {
-            return date.toISOString().slice(0, 16);
+            return date.toISOString().split('T')[0];
         };
         
-        document.getElementById('start-date').value = formatDate(startDate);
-        document.getElementById('end-date').value = formatDate(endDate);
+        document.getElementById('booking-date').value = formatDate(date);
         
         // Load available items
         loadAvailableItems();
@@ -257,11 +334,20 @@ document.addEventListener('DOMContentLoaded', function() {
             statusText = 'Abgeschlossen';
         }
         
+        // Get period information if available
+        let periodText = '';
+        if (event.extendedProps.period) {
+            const period = event.extendedProps.period;
+            periodText = `<p><strong>Schulstunde:</strong> ${schoolPeriods[period].label}</p>`;
+        }
+        
         // Populate details
         details.innerHTML = `
             <p><strong>Objekt:</strong> ${event.title}</p>
-            <p><strong>Von:</strong> ${new Date(event.start).toLocaleString('de-DE')}</p>
-            <p><strong>Bis:</strong> ${new Date(event.end).toLocaleString('de-DE')}</p>
+            <p><strong>Datum:</strong> ${new Date(event.start).toLocaleDateString('de-DE')}</p>
+            <p><strong>Von:</strong> ${new Date(event.start).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</p>
+            <p><strong>Bis:</strong> ${new Date(event.end).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'})}</p>
+            ${periodText}
             <p><strong>Ausgeliehen von:</strong> ${event.extendedProps.userName}</p>
             ${event.extendedProps.notes ? `<p><strong>Notizen:</strong> ${event.extendedProps.notes}</p>` : ''}
             <p><strong>Status:</strong> ${statusText}</p>
@@ -281,11 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // New booking button
     newBookingBtn.addEventListener('click', function() {
-        const now = new Date();
-        const tomorrow = new Date();
-        tomorrow.setDate(now.getDate() + 1);
-        
-        openBookingModal(now.toISOString(), tomorrow.toISOString());
+        openBookingModal();
     });
     
     // Close modals when clicking X
@@ -312,6 +394,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(this);
         
+        // Add period information to the form data
+        const bookingDate = new Date(formData.get('booking_date'));
+        const periodNum = formData.get('period');
+        const periodTimes = getPeriodTimes(bookingDate, periodNum);
+        
+        if (!periodTimes) {
+            showNotification('Ungültige Schulstunde ausgewählt!', 'error');
+            return;
+        }
+        
+        // Format dates for backend
+        formData.set('start_date', periodTimes.start.toISOString());
+        formData.set('end_date', periodTimes.end.toISOString());
+        formData.set('period', periodNum);
+        
         fetch('/plan_booking', {
             method: 'POST',
             body: formData
@@ -322,14 +419,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Close modal and refresh calendar
                 bookingModal.style.display = 'none';
                 calendar.refetchEvents();
-                alert('Ausleihe erfolgreich geplant!');
+                showNotification('Ausleihe erfolgreich geplant!', 'success');
             } else {
-                alert('Fehler: ' + data.error);
+                showNotification('Fehler: ' + data.error, 'error');
             }
         })
         .catch(error => {
             console.error('Error submitting booking:', error);
-            alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+            showNotification('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
         });
     });
     
@@ -344,14 +441,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     eventModal.style.display = 'none';
                     calendar.refetchEvents();
-                    alert('Ausleihe erfolgreich storniert!');
+                    showNotification('Ausleihe erfolgreich storniert!', 'success');
                 } else {
-                    alert('Fehler: ' + data.error);
+                    showNotification('Fehler: ' + data.error, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error canceling booking:', error);
-                alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+                showNotification('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
             });
         }
     });
@@ -397,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-left: auto;
 }
 
-#current-month-display {
+#current-day-display {
     font-weight: bold;
     margin: 0 15px;
     min-width: 150px;
@@ -422,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
         order: -1; /* Place the primary button first */
     }
     
-    #current-month-display {
+    #current-day-display {
         margin: 10px 0;
         text-align: center;
     }
@@ -487,9 +584,48 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-right: 8px;
 }
 
-/* Make sure the completed color is consistent with its legend */
-.legend-color.completed {
-    background-color: #7f8c8d;
+/* Notification area */
+.notification-area {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    width: 300px;
+}
+
+.notification {
+    background-color: #fff;
+    border-left: 4px solid #3788d8;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    padding: 15px;
+    margin-bottom: 10px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.notification.success {
+    border-left-color: #2ecc71;
+}
+
+.notification.error {
+    border-left-color: #e74c3c;
+}
+
+.notification.warning {
+    border-left-color: #f39c12;
+}
+
+.notification.fade-out {
+    animation: fadeOut 0.5s ease-in forwards;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
 }
 
 /* Modal styles */
@@ -545,6 +681,29 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 8px 15px;
     border-radius: 4px;
     cursor: pointer;
+}
+
+/* Make the day view time slots more readable */
+.fc-timegrid-slot {
+    height: 3em !important;
+}
+
+.fc-timegrid-slot-label {
+    font-weight: bold;
+}
+
+/* Highlight the periods */
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="08:00:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="08:45:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="09:45:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="10:30:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="11:30:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="12:15:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="13:30:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="14:15:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="15:15:00"],
+.fc-timegrid-slot.fc-timegrid-slot-lane[data-time="16:00:00"] {
+    border-top: 2px solid #3788d8;
 }
 </style>
 {% endblock %}

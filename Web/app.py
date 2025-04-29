@@ -778,8 +778,32 @@ def get_bookings():
     bookings = []
     processed_items_with_status = set()  # Track item_id+status combinations instead of just items
     
+    # Define school periods
+    school_periods = {
+        1: { 'start': '08:00', 'end': '08:45' },
+        2: { 'start': '08:45', 'end': '09:30' },
+        3: { 'start': '09:45', 'end': '10:30' },
+        4: { 'start': '10:30', 'end': '11:15' },
+        5: { 'start': '11:30', 'end': '12:15' },
+        6: { 'start': '12:15', 'end': '13:00' },
+        7: { 'start': '13:30', 'end': '14:15' },
+        8: { 'start': '14:15', 'end': '15:00' },
+        9: { 'start': '15:15', 'end': '16:00' },
+        10: { 'start': '16:00', 'end': '16:45' }
+    }
+    
+    # Helper function to determine period
+    def get_period(time_obj):
+        hours = time_obj.hour
+        minutes = time_obj.minute
+        time_str = f"{hours:02d}:{minutes:02d}"
+        
+        for period, times in school_periods.items():
+            if times['start'] <= time_str <= times['end']:
+                return period
+        return None
+    
     # 1. Get ACTIVE bookings (from planned_bookings collection with status="active")
-    # We process these first as they are the most current
     active_bookings = au.get_active_bookings(start, end)
     for booking in active_bookings:
         item = it.get_item(booking.get('Item'))
@@ -792,6 +816,11 @@ def get_bookings():
         # Format dates
         start_date = booking.get('Start') 
         end_date = booking.get('End')
+        
+        # Determine period if not explicitly stored
+        period = booking.get('Period')
+        if not period and start_date:
+            period = get_period(start_date)
         
         # Convert to string safely
         start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
@@ -806,11 +835,11 @@ def get_bookings():
             "userName": booking.get('User'),
             "notes": booking.get('Notes', ''),
             "status": "current",
+            "period": period,
             "isCurrentUser": booking.get('User') == session['username']
         })
     
     # 2. Get all current borrowings (from ausleihungen collection)
-    # Skip items that are already in active bookings
     current_borrowings = au.get_ausleihungen()
     
     # Format current borrowings for calendar
@@ -836,9 +865,14 @@ def get_bookings():
         start_date = borrowing.get('Start')
         end_date = borrowing.get('End')
         
-        # If end_date is None, set it to start_date + 1 day
+        # Determine period if not explicitly stored
+        period = borrowing.get('Period')
+        if not period and start_date:
+            period = get_period(start_date)
+        
+        # If end_date is None, set it to start_date + 1 hour
         if end_date is None:
-            end_date = start_date + datetime.timedelta(days=1)
+            end_date = start_date + datetime.timedelta(minutes=45)
         
         # Convert to string safely
         start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
@@ -853,6 +887,7 @@ def get_bookings():
             "userName": borrowing.get('User'),
             "notes": borrowing.get('Notes', ''),
             "status": status,
+            "period": period,
             "isCurrentUser": borrowing.get('User') == session['username']
         })
     
@@ -861,9 +896,6 @@ def get_bookings():
     for booking in planned_bookings:
         item_id = booking.get('Item')
         
-        # Remove the filter that was excluding planned bookings
-        # for items with active borrowings
-        
         item = it.get_item(item_id)
         if not item:
             continue
@@ -871,6 +903,11 @@ def get_bookings():
         # Format dates
         start_date = booking.get('Start')
         end_date = booking.get('End')
+        
+        # Determine period if not explicitly stored
+        period = booking.get('Period')
+        if not period and start_date:
+            period = get_period(start_date)
         
         # Convert to string safely
         start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
@@ -885,6 +922,7 @@ def get_bookings():
             "userName": booking.get('User'),
             "notes": booking.get('Notes', ''),
             "status": "planned",
+            "period": period,
             "isCurrentUser": booking.get('User') == session['username']
         })
     
@@ -900,6 +938,11 @@ def get_bookings():
         start_date = booking.get('Start')
         end_date = booking.get('End')
         
+        # Determine period if not explicitly stored
+        period = booking.get('Period')
+        if not period and start_date:
+            period = get_period(start_date)
+        
         # Convert to string safely
         start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
         end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
@@ -913,6 +956,7 @@ def get_bookings():
             "userName": booking.get('User'),
             "notes": booking.get('Notes', ''),
             "status": "completed",
+            "period": period,
             "isCurrentUser": booking.get('User') == session['username']
         })
     
@@ -930,6 +974,7 @@ def plan_booking():
     item_id = request.form.get('item_id')
     start_date_str = request.form.get('start_date')
     end_date_str = request.form.get('end_date')
+    period = request.form.get('period')
     notes = request.form.get('notes', '')
     
     # Validate inputs
@@ -943,21 +988,36 @@ def plan_booking():
     except ValueError:
         return {"success": False, "error": "Invalid date format"}, 400
         
-    # Check if item exists and is available
+    # Check if item exists
     item = it.get_item(item_id)
     if not item:
         return {"success": False, "error": "Item not found"}, 404
         
-    # Verify item is available (not currently borrowed)
-    if not item.get('Verfuegbar', False):
-        return {"success": False, "error": "Dieses Objekt ist aktuell nicht verfügbar"}, 409
-    
-    # Check for date conflicts with other bookings
+    # Check for date conflicts with other bookings - we need to consider periods now
     if au.check_booking_conflict(item_id, start_date, end_date):
         return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
     
-    # Create the planned booking
-    booking_id = au.add_planned_booking(item_id, session['username'], start_date, end_date, notes)
+    # Create the planned booking with period information
+    booking_data = {
+        'item_id': item_id,
+        'user': session['username'],
+        'start_date': start_date,
+        'end_date': end_date,
+        'notes': notes,
+        'period': period
+    }
+    
+    booking_id = au.add_planned_booking(
+        item_id, 
+        session['username'], 
+        start_date, 
+        end_date, 
+        notes, 
+        period=period
+    )
+    
+    if not booking_id:
+        return {"success": False, "error": "Fehler beim Erstellen der Reservierung"}, 500
     
     return {"success": True, "booking_id": str(booking_id)}
 
@@ -1216,10 +1276,37 @@ def process_bookings():
     """
     # Create a proper datetime object
     current_time = datetime.datetime.now()
+    
+    # Define school periods
+    school_periods = {
+        1: { 'start': '08:00', 'end': '08:45' },
+        2: { 'start': '08:45', 'end': '09:30' },
+        3: { 'start': '09:45', 'end': '10:30' },
+        4: { 'start': '10:30', 'end': '11:15' },
+        5: { 'start': '11:30', 'end': '12:15' },
+        6: { 'start': '12:15', 'end': '13:00' },
+        7: { 'start': '13:30', 'end': '14:15' },
+        8: { 'start': '14:15', 'end': '15:00' },
+        9: { 'start': '15:15', 'end': '16:00' },
+        10: { 'start': '16:00', 'end': '16:45' }
+    }
+    
+    # Get current hour and minute
+    current_hour = current_time.hour
+    current_minute = current_time.minute
+    current_time_str = f"{current_hour:02d}:{current_minute:02d}"
+    
+    # Determine if we're currently in a school period
+    current_period = None
+    for period, times in school_periods.items():
+        if times['start'] <= current_time_str <= times['end']:
+            current_period = period
+            break
+    
     # Pass the datetime object to the function
     bookings = au.get_bookings_starting_now(current_time)
     
-    # Process the bookings (implement your booking activation logic here)
+    # Process the bookings
     for booking in bookings:
         try:
             booking_id = str(booking.get('_id'))
@@ -1228,7 +1315,22 @@ def process_bookings():
             start_date = booking.get('Start')
             end_date = booking.get('End')
             notes = booking.get('Notes', '')
+            period = booking.get('Period')
             
+            # Only activate bookings if we're in the right period or within the booking time window
+            booking_period = period
+            should_activate = False
+            
+            if booking_period and booking_period == current_period:
+                # We're in the exact period, so activate
+                should_activate = True
+            elif start_date <= current_time <= end_date:
+                # We're within the exact booking time window
+                should_activate = True
+                
+            if not should_activate:
+                continue
+                
             # Check if an ausleihung record already exists for this booking
             existing_ausleihung = au.get_ausleihung_by_item(item_id, status='active')
             
@@ -1243,7 +1345,8 @@ def process_bookings():
                     user,
                     start_date,
                     end_date,
-                    notes
+                    notes,
+                    period=period
                 )
                 
                 if ausleihung_id:
@@ -1266,6 +1369,24 @@ def process_bookings():
             booking_id = str(booking.get('_id'))
             item_id = booking.get('Item')
             ausleihung_id = booking.get('AusleihungId')
+            period = booking.get('Period')
+            
+            # Only end bookings if we're out of the period or past the end time
+            should_end = False
+            
+            if period and period == current_period:
+                # If we're at the end of the period (within 5 minutes of the end)
+                period_end = school_periods.get(period, {}).get('end', '')
+                if period_end:
+                    period_end_hour, period_end_minute = map(int, period_end.split(':'))
+                    if current_hour == period_end_hour and abs(current_minute - period_end_minute) <= 5:
+                        should_end = True
+            elif end_date and current_time >= end_date:
+                # We're past the end time
+                should_end = True
+                
+            if not should_end:
+                continue
             
             # Mark item as available again
             it.update_item_status(item_id, True)
@@ -1287,9 +1408,8 @@ def process_bookings():
                         current_time
                     )
         except Exception as e:
-            pass # add logging here
-            # print(f"Error ending booking: {e}")
-
+            print(f"Error ending booking: {e}")
+            
 scheduler.add_job(process_bookings, 'interval', minutes=1)
 scheduler.start()
 

@@ -9,6 +9,8 @@ LOG_FILE="$PROJECT_DIR/logs/daily_update.log"
 RESTART_SERVER=false
 COMPRESSION_LEVEL=9  # Default to maximum compression
 
+
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --restart-server)
