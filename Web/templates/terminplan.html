@@ -126,11 +126,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const periodInfo = schoolPeriods[period];
         if (!periodInfo) return null;
         
-        // Create a new date object with just the date component (no time)
+        // Create a new date object with just the date component
         const newDate = new Date(date);
         newDate.setHours(0, 0, 0, 0); // Reset time to midnight
         
-        // Create dates with proper time components
+        // Extract hours and minutes from period definition
         const [startHours, startMinutes] = periodInfo.start.split(':').map(Number);
         const [endHours, endMinutes] = periodInfo.end.split(':').map(Number);
         
@@ -141,16 +141,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const endDate = new Date(newDate);
         endDate.setHours(endHours, endMinutes, 0, 0);
         
+        // Add timezone offset information for server-side handling
+        const tzOffset = startDate.getTimezoneOffset();
+        
         console.log(`Period ${period} times:`, {
             periodStart: periodInfo.start,
             periodEnd: periodInfo.end,
             calculatedStart: startDate.toLocaleTimeString(),
-            calculatedEnd: endDate.toLocaleTimeString()
+            calculatedEnd: endDate.toLocaleTimeString(),
+            timezoneOffset: tzOffset
         });
         
         return {
             start: startDate,
-            end: endDate
+            end: endDate,
+            timezoneOffset: tzOffset
         };
     }
     
@@ -241,8 +246,8 @@ document.addEventListener('DOMContentLoaded', function() {
             let createdCount = 0;
             
             // Set up timing values
-            const startTime = 7.5; // 7:30 AM
-            const endTime = 17;    // 5:00 PM
+            const startTime = 8; // 8:15 AM
+            const endTime = 16.75;    // 4:45 PM
             const timespanHours = endTime - startTime;
             
             // Process each event
@@ -479,8 +484,8 @@ document.addEventListener('DOMContentLoaded', function() {
         editable: false,
         dayMaxEvents: true,
         allDaySlot: false,
-        slotMinTime: '07:30:00', 
-        slotMaxTime: '17:00:00',
+        slotMinTime: '08:00:00', 
+        slotMaxTime: '16:45:00',
         slotDuration: '00:45:00', 
         snapDuration: '00:45:00',
         scrollTime: '08:00:00',
@@ -996,18 +1001,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Format dates for backend
-        formData.set('start_date', periodTimes.start.toISOString());
-        formData.set('end_date', periodTimes.end.toISOString());
-        formData.set('period', periodNum);
-        
-        // Debug log the actual times being sent
-        console.log('Booking with times:', {
-            periodNum: periodNum,
-            start: periodTimes.start.toLocaleTimeString(),
-            startISO: periodTimes.start.toISOString(),
-            end: periodTimes.end.toLocaleTimeString(),
-            endISO: periodTimes.end.toISOString()
-        });
+        const startDate = new Date(periodTimes.start);
+        const endDate = new Date(periodTimes.end);
+
+        const formatDateForServer = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        };
+
+        formData.append('start_date', formatDateForServer(startDate));
+        formData.append('end_date', formatDateForServer(endDate));
         
         const itemId = formData.get('item_id');
         const notes = formData.get('notes');

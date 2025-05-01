@@ -33,7 +33,7 @@ Features:
 """
 
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify
 from werkzeug.utils import secure_filename
 import user as us
 import items as it
@@ -1096,6 +1096,41 @@ def plan_booking():
         print(f"Error in plan_booking: {e}")
         traceback.print_exc()
         return {"success": False, "error": f"Server error: {str(e)}"}, 500
+
+@app.route('/add_booking', methods=['POST'])
+def add_booking():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    item_id = request.form.get('item_id')
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
+    period = request.form.get('period')
+    notes = request.form.get('notes', '')
+    
+    # Parse dates as naive datetime objects
+    try:
+        # Simple datetime parsing without timezone
+        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d %H:%M:%S')
+        
+        if end_date_str:
+            end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S')
+        else:
+            end_date = None
+            
+        # Continue with adding the booking
+        booking_id = au.add_planned_booking(
+            item_id=item_id,
+            user=session['username'],
+            start_date=start_date,
+            end_date=end_date,
+            notes=notes,
+            period=period
+        )
+        
+        return jsonify({'success': True, 'booking_id': str(booking_id)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):

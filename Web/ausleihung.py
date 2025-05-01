@@ -35,6 +35,18 @@ Sammlungsstruktur:
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import datetime
+import pytz
+from datetime import timezone
+
+# Add this helper function after imports
+def ensure_timezone_aware(dt):
+    """Ensures a datetime is timezone-aware, using UTC if naive"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # Treat naive datetimes as UTC
+        return dt.replace(tzinfo=None)
+    return dt
 
 
 # === AUSLEIHUNG MANAGEMENT ===
@@ -61,6 +73,13 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active",
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
+        # Keep everything as naive datetime objects
+        if start and hasattr(start, 'tzinfo') and start.tzinfo:
+            start = start.replace(tzinfo=None)
+        if end and hasattr(end, 'tzinfo') and end.tzinfo:
+            end = end.replace(tzinfo=None)
+        now = datetime.datetime.now()
+        
         ausleihung_data = {
             'Item': item_id,
             'User': user_id,
@@ -68,8 +87,8 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active",
             'End': end,
             'Notes': notes,
             'Status': status,
-            'Created': datetime.datetime.now(),
-            'LastUpdated': datetime.datetime.now()
+            'Created': now,
+            'LastUpdated': now
         }
         
         # Add period if provided
@@ -84,7 +103,6 @@ def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active",
     except Exception as e:
         # print(f"Error adding ausleihung: {e}") # Log the error
         return None
-
 
 def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None, period=None):
     """
@@ -504,6 +522,12 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
     """
     try:
         print(f"Checking booking conflict for item {item_id}, period {period}, start {start_date}, end {end_date}")
+        
+        if start_date and hasattr(start_date, 'tzinfo') and start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
+        if end_date and hasattr(end_date, 'tzinfo') and end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
+        
         
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']

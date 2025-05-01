@@ -1,5 +1,4 @@
 flask
-bson
 werkzeug
 gunicorn
 pymongo
@@ -7,4 +6,3 @@ pillow
 qrcode
 apscheduler
 python-dateutil
-pytz
