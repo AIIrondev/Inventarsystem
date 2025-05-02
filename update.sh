@@ -82,6 +82,8 @@ create_backup() {
     sudo mkdir -p "$BACKUP_DIR"
     sudo cp -r "$PROJECT_DIR"/* "$BACKUP_DIR"
     
+    python Backup-DB.py --db Inventarsystem --uri mongodb://localhost:27017/ $BACKUP_DIR >> $LOG_FILE/Backup_db.log
+    
     # Compress the backup
     if [ "$COMPRESSION_LEVEL" -gt 0 ]; then
         log_message "Compressing backup with level $COMPRESSION_LEVEL..."
