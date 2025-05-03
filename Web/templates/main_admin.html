@@ -332,18 +332,29 @@
                     
                     // Check if item is borrowed by current user
                     const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+                    
+                    // Add borrower info badge if item is borrowed
+                    let borrowerBadge = '';
+                    if (!item.Verfuegbar && item.BorrowerInfo) {
+                        borrowerBadge = `
+                            <div class="borrower-badge">
+                                Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
+                                ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
+                            </div>`;
+                    }
 
                     card.innerHTML = `
                         <h3>${item.Name}</h3>
-                        <p><strong>Ort:</strong> ${item.Ort}</p>
-                        <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
-                        <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
-                        <p><strong>Filter 3:</strong> ${card.dataset.filter3}</p>
+                        <p><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                        <p><strong>Filter 1:</strong> ${card.dataset.filter1 || '-'}</p>
+                        <p><strong>Filter 2:</strong> ${card.dataset.filter2 || '-'}</p>
+                        <p><strong>Filter 3:</strong> ${card.dataset.filter3 || '-'}</p>
                         <div class="image-container">
                             ${imagesHtml}
                             <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
                             <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
                         </div>
+                        ${borrowerBadge}
                         <div class="actions">
                             ${item.Verfuegbar ? 
                                 `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
@@ -652,16 +663,20 @@
         // Check if item is borrowed by current user
         const isBorrowedByMe = !itemData.Verfuegbar && itemData.User === currentUsername;
         
-        // Add a "View Borrowing Details" button if the item is borrowed
-        let borrowingDetailsButton = '';
-        if (!itemData.Verfuegbar) {
-            borrowingDetailsButton = `
-                <button class="borrowing-details-btn" onclick="viewBorrowingDetails('${itemData._id}', '${itemData.Name}', '${itemData.User}')">
-                    Ausleihungs Details
-                </button>
+        // Create borrower info section
+        let borrowerInfo = '';
+        if (!itemData.Verfuegbar && itemData.BorrowerInfo) {
+            borrowerInfo = `
+                <div class="borrower-info-panel">
+                    <h4>Ausgeliehen von</h4>
+                    <div class="borrower-details">
+                        <p class="borrower-name">${itemData.BorrowerInfo.username}</p>
+                        <p class="borrow-time">Seit: ${itemData.BorrowerInfo.borrowTime || 'Unbekannt'}</p>
+                    </div>
+                </div>
             `;
         }
-            
+        
         // Build modal content
         modalContent.innerHTML = `
             <h2>${itemData.Name}</h2>
@@ -696,7 +711,7 @@
                     </div>
                     <div class="detail-group">
                         <div class="detail-label">Status:</div>
-                        <div class="detail-value">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
+                        <div class="detail-value ${!itemData.Verfuegbar ? 'status-borrowed' : ''}">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
                     </div>
                     <div class="detail-group">
                         <div class="detail-label">Code:</div>
@@ -704,6 +719,7 @@
                     </div>
                 </div>
             </div>
+            ${borrowerInfo}
             <div class="detail-group full-width">
                 <div class="detail-label">Beschreibung:</div>
                 <div class="detail-value">${itemData.Beschreibung || '-'}</div>
@@ -721,7 +737,6 @@
                     `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
                 <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
-                ${borrowingDetailsButton}
                 <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
                 <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
             </div>
@@ -1378,7 +1393,7 @@ input[type="file"] {
 }
 
 .navigation-buttons .prev-button,
-.navigation-buttons .next-button {
+ .navigation-buttons .next-button {
     background-color: #007bff;
     color: #fff;
     border: none;
@@ -1613,6 +1628,51 @@ input[type="file"] {
 
 .full-width {
     grid-column: 1 / -1;
+}
+
+/* Borrower badge on item cards */
+.borrower-badge {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+    padding: 8px;
+    margin: 10px 0;
+    font-size: 0.85em;
+    border-radius: 4px;
+}
+
+.borrow-time {
+    font-size: 0.9em;
+    color: #6c757d;
+    font-style: italic;
+    display: block;
+    margin-top: 3px;
+}
+
+/* Borrower panel in modal view */
+.borrower-info-panel {
+    margin: 15px 0;
+    padding: 15px;
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+.borrower-info-panel h4 {
+    color: #856404;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.borrower-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.status-borrowed {
+    color: #dc3545;
+    font-weight: bold;
 }
 
 /* Borrowing details modal styles */

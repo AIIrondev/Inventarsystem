@@ -298,12 +298,42 @@ def get_items():
     # Get all items
     items = it.get_items()
     
+    # Get all active borrowings for lookup
+    active_borrowings = {}
+    try:
+        all_borrowings = au.get_active_ausleihungen()
+        for borrowing in all_borrowings:
+            item_id = str(borrowing.get('Item'))
+            if item_id:
+                active_borrowings[item_id] = {
+                    'user': borrowing.get('User'),
+                    'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else ''
+                }
+    except Exception as e:
+        print(f"Error fetching active borrowings: {e}")
+    
+    # Process items
+    for item in items:
+        item_id = str(item['_id'])
+        
+        # Add borrower information if item is borrowed
+        if not item.get('Verfuegbar', True):
+            # Try to get detailed borrowing info
+            if item_id in active_borrowings:
+                item['BorrowerInfo'] = {
+                    'username': active_borrowings[item_id]['user'],
+                    'borrowTime': active_borrowings[item_id]['start_date']
+                }
+            # Fallback to basic info from item record
+            elif 'User' in item:
+                item['BorrowerInfo'] = {
+                    'username': item['User'],
+                    'borrowTime': 'Unbekannt'
+                }
+    
     # Filter items if needed
     if available_only:
         items = [item for item in items if item.get('Verfuegbar', False)]
-    
-    for item in items:
-        item['Images'] = item.get('Images', [])
     
     return {'items': items}
 
@@ -822,30 +852,15 @@ def get_bookings():
         bookings = []
         processed_items_with_status = set()  # Track item_id+status combinations instead of just items
         
-        # Define school periods
-        school_periods = {
-            1: { 'start': '08:00', 'end': '08:45' },
-            2: { 'start': '08:45', 'end': '09:30' },
-            3: { 'start': '09:45', 'end': '10:30' },
-            4: { 'start': '10:30', 'end': '11:15' },
-            5: { 'start': '11:30', 'end': '12:15' },
-            6: { 'start': '12:15', 'end': '13:00' },
-            7: { 'start': '13:30', 'end': '14:15' },
-            8: { 'start': '14:15', 'end': '15:00' },
-            9: { 'start': '15:15', 'end': '16:00' },
-            10: { 'start': '16:00', 'end': '16:45' }
-        }
+        # Create a dictionary to track current borrowers of all items
+        current_borrowers = {}
+        all_items = it.get_items()
+        for item in all_items:
+            if not item.get('Verfuegbar', True) and 'User' in item:
+                item_id = str(item['_id'])
+                current_borrowers[item_id] = item['User']
         
-        # Helper function to determine period
-        def get_period(time_obj):
-            hours = time_obj.hour
-            minutes = time_obj.minute
-            time_str = f"{hours:02d}:{minutes:02d}"
-            
-            for period, times in school_periods.items():
-                if times['start'] <= time_str <= times['end']:
-                    return period
-            return None
+        # Rest of the function remains the same until processing events...
         
         try:
             # 1. Get PLANNED bookings first to ensure they appear
@@ -884,7 +899,8 @@ def get_bookings():
                     "notes": booking.get('Notes', ''),
                     "status": "planned",
                     "period": period,
-                    "isCurrentUser": booking.get('User') == session['username']
+                    "isCurrentUser": booking.get('User') == session['username'],
+                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
                 })
             
             # 2. Get ACTIVE bookings 
@@ -927,7 +943,8 @@ def get_bookings():
                     "notes": booking.get('Notes', ''),
                     "status": "current",
                     "period": period,
-                    "isCurrentUser": booking.get('User') == session['username']
+                    "isCurrentUser": booking.get('User') == session['username'],
+                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
                 })
             
             # 3. Get current borrowings from ausleihungen collection
@@ -974,7 +991,8 @@ def get_bookings():
                     "notes": borrowing.get('Notes', ''),
                     "status": "current",
                     "period": period,
-                    "isCurrentUser": borrowing.get('User') == session['username']
+                    "isCurrentUser": borrowing.get('User') == session['username'],
+                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
                 })
             
             # 4. Add completed bookings
@@ -1009,7 +1027,8 @@ def get_bookings():
                     "notes": booking.get('Notes', ''),
                     "status": "completed",
                     "period": period,
-                    "isCurrentUser": booking.get('User') == session['username']
+                    "isCurrentUser": booking.get('User') == session['username'],
+                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
                 })
             
         except Exception as e:
@@ -1402,20 +1421,10 @@ def process_bookings():
     """
     # Create a proper datetime object
     current_time = datetime.datetime.now()
+    print(f"Running scheduled booking check at {current_time}")
     
     # Define school periods
-    school_periods = {
-        1: { 'start': '08:00', 'end': '08:45' },
-        2: { 'start': '08:45', 'end': '09:30' },
-        3: { 'start': '09:45', 'end': '10:30' },
-        4: { 'start': '10:30', 'end': '11:15' },
-        5: { 'start': '11:30', 'end': '12:15' },
-        6: { 'start': '12:15', 'end': '13:00' },
-        7: { 'start': '13:30', 'end': '14:15' },
-        8: { 'start': '14:15', 'end': '15:00' },
-        9: { 'start': '15:15', 'end': '16:00' },
-        10: { 'start': '16:00', 'end': '16:45' }
-    }
+    school_periods = SCHOOL_PERIODS  # Use the global school periods from config
     
     # Get current hour and minute
     current_hour = current_time.hour
@@ -1424,13 +1433,18 @@ def process_bookings():
     
     # Determine if we're currently in a school period
     current_period = None
-    for period, times in school_periods.items():
-        if times['start'] <= current_time_str <= times['end']:
-            current_period = period
+    for period_num, period_info in school_periods.items():
+        period_start = period_info.get('start', '')
+        period_end = period_info.get('end', '')
+        if period_start <= current_time_str <= period_end:
+            current_period = int(period_num)
             break
     
-    # Pass the datetime object to the function
+    print(f"Current time: {current_time_str}, Current period: {current_period}")
+    
+    # Pass the datetime object to the function to get bookings starting now
     bookings = au.get_bookings_starting_now(current_time)
+    print(f"Found {len(bookings)} bookings that might need activation")
     
     # Process the bookings
     for booking in bookings:
@@ -1443,51 +1457,64 @@ def process_bookings():
             notes = booking.get('Notes', '')
             period = booking.get('Period')
             
+            print(f"Processing booking {booking_id} for item {item_id}, period {period}")
+            
             # Only activate bookings if we're in the right period or within the booking time window
             booking_period = period
             should_activate = False
             
-            if booking_period and booking_period == current_period:
+            if booking_period and current_period and int(booking_period) == current_period:
                 # We're in the exact period, so activate
                 should_activate = True
-            elif start_date <= current_time <= end_date:
+                print(f"Activating booking {booking_id} - we're in the correct period {booking_period}")
+            elif start_date and end_date and start_date <= current_time <= end_date:
                 # We're within the exact booking time window
                 should_activate = True
+                print(f"Activating booking {booking_id} - current time is within booking window")
                 
             if not should_activate:
+                print(f"Skipping booking {booking_id} - not time to activate yet")
+                continue
+            
+            # Get the item to check its current status
+            item = it.get_item(item_id)
+            if not item:
+                print(f"Item {item_id} not found, cannot process booking {booking_id}")
                 continue
                 
-            # Check if an ausleihung record already exists for this booking
-            existing_ausleihung = au.get_ausleihung_by_item(item_id, status='active')
-            
-            if existing_ausleihung:
-                # Just mark the booking as active and link to existing ausleihung
-                au.mark_booking_active(booking_id, str(existing_ausleihung.get('_id')))
-                print(f"Booking {booking_id} linked to existing ausleihung {existing_ausleihung.get('_id')}")
+            # Check if the item is already borrowed
+            if not item.get('Verfuegbar', True):
+                print(f"Item {item_id} is already borrowed, updating booking status only")
+                # Just update the booking status
+                au.mark_booking_active(booking_id)
             else:
-                # No existing ausleihung, create a new one
+                print(f"Item {item_id} is available, creating ausleihung and updating item status")
+                # Create new ausleihung record
                 ausleihung_id = au.add_ausleihung(
                     item_id,
                     user,
                     start_date,
                     end_date,
                     notes,
+                    status="active",  # Make it active immediately
                     period=period
                 )
                 
                 if ausleihung_id:
-                    # Mark the booking as active and link it to the ausleihung
+                    # Mark the booking as active
                     au.mark_booking_active(booking_id, str(ausleihung_id))
                     
-                    # Update item status
-                    it.update_item_status(item_id, False, user)
-                    print(f"Created new ausleihung {ausleihung_id} for booking {booking_id}")
+                    # Update item status - THIS IS THE CRITICAL PART
+                    update_result = it.update_item_status(item_id, False, user)
+                    print(f"Item status update result: {update_result}")
                 else:
                     print(f"Failed to create ausleihung for booking {booking_id}")
         except Exception as e:
             print(f"Error processing booking: {e}")
+            import traceback
+            traceback.print_exc()
     
-    # Also check for bookings that should end now
+    # Check for bookings that should end now
     ending_bookings = au.get_bookings_ending_now(current_time)
     
     for booking in ending_bookings:

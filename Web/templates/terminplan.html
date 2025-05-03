@@ -729,6 +729,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 periodDiv.style.fontSize = '10px';
                 info.el.appendChild(periodDiv);
             }
+            
+            // Add borrowed indicator if relevant
+            if (info.event.extendedProps.itemBorrower && 
+                info.event.extendedProps.itemBorrower !== info.event.extendedProps.userName) {
+                
+                const borrowerIndicator = document.createElement('div');
+                borrowerIndicator.className = 'borrowed-indicator';
+                borrowerIndicator.innerHTML = '⚠️';  // Warning symbol
+                borrowerIndicator.title = `Bereits ausgeliehen von: ${info.event.extendedProps.itemBorrower}`;
+                borrowerIndicator.style.position = 'absolute';
+                borrowerIndicator.style.top = '2px';
+                borrowerIndicator.style.left = '2px';
+                borrowerIndicator.style.zIndex = '102';
+                borrowerIndicator.style.fontSize = '12px';
+                info.el.appendChild(borrowerIndicator);
+                
+                // Add a class to style the event differently
+                info.el.classList.add('already-borrowed');
+            }
         },
         eventClick: function(info) {
             console.log("Event clicked:", info.event.title);
@@ -920,6 +939,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // Check if item is already borrowed by someone else
+        let borrowerInfo = '';
+        if (event.extendedProps.itemBorrower && event.extendedProps.itemBorrower !== event.extendedProps.userName) {
+            borrowerInfo = `<p class="warning"><strong>Hinweis:</strong> Dieses Objekt ist aktuell ausgeliehen von <strong>${event.extendedProps.itemBorrower}</strong></p>`;
+        }
+        
         // Populate details
         details.innerHTML = `
             <p><strong>Objekt:</strong> ${event.title}</p>
@@ -930,6 +955,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <p><strong>Ausgeliehen von:</strong> ${event.extendedProps.userName}</p>
             ${event.extendedProps.notes ? `<p><strong>Notizen:</strong> ${event.extendedProps.notes}</p>` : ''}
             <p><strong>Status:</strong> ${statusText}</p>
+            ${borrowerInfo}
         `;
         
         // Show/hide cancel button based on ownership and status
