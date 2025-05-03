@@ -1413,6 +1413,34 @@ def get_usernames():
 
 '''-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
 
+def get_period(datetime_obj):
+    """
+    Determine which school period a given datetime falls into.
+    
+    Args:
+        datetime_obj (datetime): The datetime object to check
+        
+    Returns:
+        str: The period number (as a string) if the datetime falls within a period, None otherwise
+    """
+    if not datetime_obj:
+        return None
+        
+    # Extract the hour and minute from the datetime
+    current_hour = datetime_obj.hour
+    current_minute = datetime_obj.minute
+    current_time_str = f"{current_hour:02d}:{current_minute:02d}"
+    
+    # Find matching period
+    for period_num, period_info in SCHOOL_PERIODS.items():
+        period_start = period_info.get('start', '')
+        period_end = period_info.get('end', '')
+        
+        if period_start <= current_time_str <= period_end:
+            return period_num
+            
+    return None
+
 scheduler = BackgroundScheduler()
 
 def process_bookings():
