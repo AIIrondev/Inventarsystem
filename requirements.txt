@@ -7,3 +7,4 @@ pillow
 qrcode
 apscheduler
 python-dateutil
+pytz
