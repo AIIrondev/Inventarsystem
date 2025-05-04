@@ -41,6 +41,7 @@ import ausleihung as au
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import json
+from pymongo import MongoClient
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -458,9 +459,12 @@ def edit_item(id):
     name = request.form.get('name')
     ort = request.form.get('ort')
     beschreibung = request.form.get('beschreibung')
-    filter1 = request.form.get('filter')
-    filter2 = request.form.get('filter2')
-    filter3 = request.form.get('filter3')
+    
+    # Change these to getlist() to get all values for each filter
+    filter1 = request.form.getlist('filter')
+    filter2 = request.form.getlist('filter2')
+    filter3 = request.form.getlist('filter3')
+    
     anschaffungs_jahr = request.form.get('anschaffungsjahr')
     anschaffungs_kosten = request.form.get('anschaffungskosten')
     code_4 = request.form.get('code_4')
@@ -1446,6 +1450,7 @@ scheduler = BackgroundScheduler()
 def process_bookings():
     """
     Check for bookings that should start now and process them
+    Also check for any missed bookings that should have been processed earlier
     """
     # Create a proper datetime object
     current_time = datetime.datetime.now()
@@ -1459,6 +1464,9 @@ def process_bookings():
     current_minute = current_time.minute
     current_time_str = f"{current_hour:02d}:{current_minute:02d}"
     
+    # Get current date (for date comparisons)
+    current_date = current_time.date()
+    
     # Determine if we're currently in a school period
     current_period = None
     for period_num, period_info in school_periods.items():
@@ -1470,7 +1478,7 @@ def process_bookings():
     
     print(f"Current time: {current_time_str}, Current period: {current_period}")
     
-    # Pass the datetime object to the function to get bookings starting now
+    # Get bookings that should start now
     bookings = au.get_bookings_starting_now(current_time)
     print(f"Found {len(bookings)} bookings that might need activation")
     
@@ -1499,51 +1507,73 @@ def process_bookings():
                 # We're within the exact booking time window
                 should_activate = True
                 print(f"Activating booking {booking_id} - current time is within booking window")
+            elif start_date and start_date.date() == current_date and start_date <= current_time:
+                # Same day and past the start time - this catches missed bookings
+                should_activate = True
+                print(f"Activating booking {booking_id} - we're past the start time on the same day")
                 
             if not should_activate:
                 print(f"Skipping booking {booking_id} - not time to activate yet")
                 continue
             
-            # Get the item to check its current status
-            item = it.get_item(item_id)
-            if not item:
-                print(f"Item {item_id} not found, cannot process booking {booking_id}")
-                continue
-                
-            # Check if the item is already borrowed
-            if not item.get('Verfuegbar', True):
-                print(f"Item {item_id} is already borrowed, updating booking status only")
-                # Just update the booking status
-                au.mark_booking_active(booking_id)
-            else:
-                print(f"Item {item_id} is available, creating ausleihung and updating item status")
-                # Create new ausleihung record
-                ausleihung_id = au.add_ausleihung(
-                    item_id,
-                    user,
-                    start_date,
-                    end_date,
-                    notes,
-                    status="active",  # Make it active immediately
-                    period=period
-                )
-                
-                if ausleihung_id:
-                    # Mark the booking as active
-                    au.mark_booking_active(booking_id, str(ausleihung_id))
-                    
-                    # Update item status - THIS IS THE CRITICAL PART
-                    update_result = it.update_item_status(item_id, False, user)
-                    print(f"Item status update result: {update_result}")
-                else:
-                    print(f"Failed to create ausleihung for booking {booking_id}")
+            # Process the booking activation
+            process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period)
+            
         except Exception as e:
             print(f"Error processing booking: {e}")
             import traceback
             traceback.print_exc()
     
+    # Also look for any missed bookings (still planned but should be active)
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Find bookings that:
+        # 1. Are still planned
+        # 2. Have a start time in the past (over 10 minutes ago)
+        time_threshold = current_time - datetime.timedelta(minutes=10)
+        missed_bookings_query = {
+            'Status': 'planned',
+            'Start': {'$lt': time_threshold}
+        }
+        
+        missed_bookings = list(ausleihungen.find(missed_bookings_query))
+        print(f"Found {len(missed_bookings)} missed bookings that should have been activated")
+        
+        for booking in missed_bookings:
+            try:
+                booking_id = str(booking.get('_id'))
+                item_id = booking.get('Item')
+                user = booking.get('User')
+                start_date = booking.get('Start')
+                end_date = booking.get('End')
+                notes = booking.get('Notes', '')
+                period = booking.get('Period')
+                
+                print(f"Processing missed booking {booking_id} for item {item_id}, period {period}")
+                print(f"  - Should have started at {start_date}")
+                
+                # Check if today's booking date matches the period
+                if start_date and start_date.date() == current_date:
+                    # Process the booking - activate it
+                    process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period)
+                else:
+                    # For bookings from previous days, mark as cancelled
+                    print(f"Booking {booking_id} is from a previous day ({start_date.date()}), marking as cancelled")
+                    au.cancel_booking(booking_id)
+            except Exception as e:
+                print(f"Error processing missed booking: {e}")
+                continue
+        
+        client.close()
+    except Exception as e:
+        print(f"Error checking for missed bookings: {e}")
+    
     # Check for bookings that should end now
     ending_bookings = au.get_bookings_ending_now(current_time)
+    print(f"Found {len(ending_bookings)} bookings that might need to be completed")
     
     for booking in ending_bookings:
         try:
@@ -1551,29 +1581,58 @@ def process_bookings():
             item_id = booking.get('Item')
             ausleihung_id = booking.get('AusleihungId')
             period = booking.get('Period')
+            start_date = booking.get('Start')
+            end_date = booking.get('End')
+            
+            print(f"Evaluating if booking {booking_id} for item {item_id} should end now")
+            print(f"  - Period: {period}, Start: {start_date}, End: {end_date}")
+            print(f"  - Current time: {current_time}")
             
             # Only end bookings if we're out of the period or past the end time
             should_end = False
             
             if period and period == current_period:
-                # If we're at the end of the period (within 5 minutes of the end)
-                period_end = school_periods.get(period, {}).get('end', '')
+                # If we're at the end of the period (within 10 minutes of the end)
+                period_end = school_periods.get(str(period), {}).get('end', '')
                 if period_end:
                     period_end_hour, period_end_minute = map(int, period_end.split(':'))
-                    if current_hour == period_end_hour and abs(current_minute - period_end_minute) <= 5:
+                    period_end_datetime = datetime.datetime.combine(
+                        current_date, 
+                        datetime.time(period_end_hour, period_end_minute)
+                    )
+                    
+                    # If we're within 10 minutes after the end of the period
+                    if current_time >= period_end_datetime:
                         should_end = True
+                        print(f"Ending booking {booking_id} - we're past the end of period {period}")
             elif end_date and current_time >= end_date:
                 # We're past the end time
                 should_end = True
+                print(f"Ending booking {booking_id} - we're past the end time ({end_date})")
+            
+            # Also end if we're past the end of school day and it's a period-based booking
+            if period and current_hour >= 17:  # After 5pm
+                should_end = True
+                print(f"Ending booking {booking_id} - it's after school hours")
+                
+            # Check if this is an old booking (from a previous day)
+            if start_date and start_date.date() < current_date:
+                should_end = True
+                print(f"Ending booking {booking_id} - it's from a previous day ({start_date.date()})")
                 
             if not should_end:
+                print(f"Not ending booking {booking_id} - conditions not met")
                 continue
+            
+            print(f"Processing end of booking {booking_id}")
             
             # Mark item as available again
             it.update_item_status(item_id, True)
+            print(f"Item {item_id} marked as available")
             
             # Update booking status to completed
             au.mark_booking_completed(booking_id)
+            print(f"Booking {booking_id} marked as completed")
             
             # Update the ausleihung record to set end date if it exists
             if ausleihung_id:
@@ -1588,9 +1647,98 @@ def process_bookings():
                         ausleihung.get('Start'),
                         current_time
                     )
+                    print(f"Ausleihung {ausleihung_id} updated with end time")
+            
+            print(f"Successfully ended booking {booking_id}")
+            
         except Exception as e:
             print(f"Error ending booking: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Also look for any active bookings that should have ended already
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Find active bookings with end times in the past
+        missed_endings_query = {
+            'Status': 'active',
+            'End': {'$lt': current_time}
+        }
+        
+        missed_endings = list(ausleihungen.find(missed_endings_query))
+        print(f"Found {len(missed_endings)} active bookings that should have already ended")
+        
+        for booking in missed_endings:
+            try:
+                booking_id = str(booking.get('_id'))
+                item_id = booking.get('Item')
+                
+                print(f"Processing missed ending for booking {booking_id}, item {item_id}")
+                print(f"  - End time was: {booking.get('End')}")
+                
+                # Mark item as available
+                it.update_item_status(item_id, True)
+                
+                # Mark booking as completed
+                au.mark_booking_completed(booking_id)
+                
+                print(f"Successfully ended missed booking {booking_id}")
+                
+            except Exception as e:
+                print(f"Error processing missed ending: {e}")
+                continue
+        
+        client.close()
+    except Exception as e:
+        print(f"Error checking for missed endings: {e}")
+
+def process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period):
+    """
+    Helper function to process booking activation consistently
+    """
+    try:
+        # Get the item to check its current status
+        item = it.get_item(item_id)
+        if not item:
+            print(f"Item {item_id} not found, cannot process booking {booking_id}")
+            return False
             
+        # Check if the item is already borrowed
+        if not item.get('Verfuegbar', True):
+            print(f"Item {item_id} is already borrowed, updating booking status only")
+            # Just update the booking status
+            au.mark_booking_active(booking_id)
+        else:
+            print(f"Item {item_id} is available, creating ausleihung and updating item status")
+            # Create new ausleihung record
+            ausleihung_id = au.add_ausleihung(
+                item_id,
+                user,
+                start_date,
+                end_date,
+                notes,
+                status="active",  # Make it active immediately
+                period=period
+            )
+            
+            if ausleihung_id:
+                # Mark the booking as active and link the ausleihung record
+                au.mark_booking_active(booking_id, str(ausleihung_id))
+                
+                # Update item status - THIS IS THE CRITICAL PART
+                update_result = it.update_item_status(item_id, False, user)
+                print(f"Item status update result: {update_result}")
+                return True
+            else:
+                print(f"Failed to create ausleihung for booking {booking_id}")
+                return False
+    except Exception as e:
+        print(f"Error activating booking {booking_id}: {e}")
+        return False
+
 scheduler.add_job(process_bookings, 'interval', minutes=1)
 scheduler.start()
 

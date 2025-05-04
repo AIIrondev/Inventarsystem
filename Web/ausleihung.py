@@ -621,27 +621,53 @@ def get_ausleihungen_starting_now(current_time):
         list: Liste von Ausleihungen, die jetzt beginnen sollen
     """
     try:
-        # Zeitfenster definieren (1 Stunde vor und nach jetzt)
-        h_1 = datetime.timedelta(hours=1)
-        start_time = current_time - h_1
-        end_time = current_time + h_1
+        # Define a wider time window (3 hours before to 1 hour after)
+        # This helps catch bookings that might have been missed
+        hours_before = datetime.timedelta(hours=3)
+        hours_after = datetime.timedelta(hours=1)
+        start_time = current_time - hours_before
+        end_time = current_time + hours_after
+        
+        # Get today's date for date comparison
+        today = current_time.date()
         
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
+        # Build a query to find planned bookings that:
+        # 1. Are scheduled to start within our time window
+        # 2. OR have a period set for today
         query = {
             'Status': 'planned',
-            'Start': {
-                '$lte': end_time,
-                '$gte': start_time
-            }
+            '$or': [
+                # Time-based bookings within our window
+                {'Start': {'$lte': end_time, '$gte': start_time}},
+                
+                # Period-based bookings for today
+                {
+                    'Period': {'$exists': True},
+                    'Start': {
+                        '$gte': datetime.datetime.combine(today, datetime.time.min),
+                        '$lt': datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time.min)
+                    }
+                }
+            ]
         }
         
+        print(f"Query for bookings starting now: {query}")
         bookings = list(ausleihungen.find(query))
+        
+        print(f"Found {len(bookings)} bookings that might be starting now")
+        for b in bookings:
+            print(f"  - Booking {b.get('_id')}: Start={b.get('Start')}, Period={b.get('Period')}")
+            
         client.close()
         return bookings
     except Exception as e:
+        print(f"Error in get_ausleihungen_starting_now: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -660,23 +686,44 @@ def get_ausleihungen_ending_now(current_time):
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        # Zeitfenster erstellen (5 Minuten vor und nach)
-        window = datetime.timedelta(minutes=5)
-        start_time = current_time - window
-        end_time = current_time + window
+        # Create a wider time window (15 minutes before to catch any missed endings)
+        window_before = datetime.timedelta(minutes=15)
+        window_after = datetime.timedelta(minutes=5)
+        start_time = current_time - window_before
+        end_time = current_time + window_after
         
-        # Ausleihungen finden, die:
-        # 1. Den Status 'active' haben
-        # 2. Ein Enddatum innerhalb dieses Zeitfensters haben
+        # Get today's date for period-based checks
+        today = current_time.date()
+        
+        # Find active bookings that:
+        # 1. Have an end time within our window, OR
+        # 2. Are from today with a period (will check the period in process_bookings)
         query = {
             'Status': 'active',
-            'End': {'$gte': start_time, '$lte': end_time}
+            '$or': [
+                {'End': {'$gte': start_time, '$lte': end_time}},
+                {
+                    'Period': {'$exists': True},
+                    'Start': {
+                        '$gte': datetime.datetime.combine(today, datetime.time.min),
+                        '$lt': datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time.min)
+                    }
+                }
+            ]
         }
         
+        print(f"Looking for bookings ending now with query: {query}")
         bookings = list(ausleihungen.find(query))
+        print(f"Found {len(bookings)} bookings that might be ending now")
+        for b in bookings:
+            print(f"  - Potential ending booking {b.get('_id')}: End={b.get('End')}, Period={b.get('Period')}")
+            
         client.close()
         return bookings
     except Exception as e:
+        print(f"Error in get_ausleihungen_ending_now: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
