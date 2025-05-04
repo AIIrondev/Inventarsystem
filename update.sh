@@ -88,7 +88,7 @@ create_backup() {
     sudo mkdir -p "$BACKUP_DIR/mongodb_backup"
     sudo chmod 777 "$BACKUP_DIR/mongodb_backup"  # Temporarily give write permissions
     
-    python "$PROJECT_DIR/Backup-DB.py" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+    python3 "$PROJECT_DIR/Backup-DB.py" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
         log_message "ERROR: Failed to backup database"
         # Continue with the backup process even if DB backup fails
     }
@@ -201,10 +201,10 @@ setup_cron_job() {
     log_message "Checking cron job configuration..."
     
     # Define cron job to run daily at 2:00 AM
-    CRON_JOB="0 2 * * * $PROJECT_DIR/new_daily_update.sh"
+    CRON_JOB="0 2 * * * $PROJECT_DIR/update.sh"
     
     # Check if cron job already exists
-    EXISTING_CRON=$(crontab -l 2>/dev/null | grep -F "$PROJECT_DIR/new_daily_update.sh")
+    EXISTING_CRON=$(crontab -l 2>/dev/null | grep -F "$PROJECT_DIR/update.sh")
     
     if [ -z "$EXISTING_CRON" ]; then
         log_message "Setting up daily cron job..."
