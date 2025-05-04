@@ -84,10 +84,17 @@ create_backup() {
     
     # Create database backup using Backup-DB.py
     log_message "Running database backup..."
+    # Create mongodb_backup directory with appropriate permissions first
+    sudo mkdir -p "$BACKUP_DIR/mongodb_backup"
+    sudo chmod 777 "$BACKUP_DIR/mongodb_backup"  # Temporarily give write permissions
+    
     python "$PROJECT_DIR/Backup-DB.py" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
         log_message "ERROR: Failed to backup database"
         # Continue with the backup process even if DB backup fails
     }
+    
+    # Reset to more restrictive permissions after backup completes
+    sudo chmod -R 755 "$BACKUP_DIR/mongodb_backup"
     
     # Compress the backup
     if [ "$COMPRESSION_LEVEL" -gt 0 ]; then
