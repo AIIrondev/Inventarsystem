@@ -76,6 +76,7 @@
             <button class="next-button" onclick="scrollNext()">&#10095;</button>
         </div>
     </div>
+    </div>
     <div id="item-modal" class="item-modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
@@ -83,6 +84,7 @@
                 <!-- Content will be dynamically inserted here -->
             </div>
         </div>
+    </div>
 </div>
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
@@ -176,9 +178,15 @@
                 const filter2Values = new Set();
                 const filter3Values = new Set();
                 
+                // Clear the container first
+                itemsContainer.innerHTML = '';
+                
                 data.items.forEach(item => {
                     const card = document.createElement('div');
                     card.classList.add('item-card');
+                    
+                    // Add class to make card clickable 
+                    card.classList.add('clickable-card');
                     
                     // Add highlight class if this is the item we're looking for
                     if (item._id === highlightItemId) {
@@ -188,41 +196,73 @@
                         }, 500);
                     }
                     
-                    // Fix: Use the correct property names (Filter instead of Filter1)
-                    const filter1Value = Array.isArray(item.Filter) && item.Filter.length > 0 ? item.Filter[0] : (item.Filter || '');
-                    const filter2Value = Array.isArray(item.Filter2) && item.Filter2.length > 0 ? item.Filter2[0] : (item.Filter2 || '');
-                    const filter3Value = Array.isArray(item.Filter3) && item.Filter3.length > 0 ? item.Filter3[0] : (item.Filter3 || '');
+                    // Process and store filter values with consistent handling
+                    const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+                    const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+                    const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
                     
-                    card.dataset.filter1 = filter1Value;
-                    card.dataset.filter2 = filter2Value;
-                    card.dataset.filter3 = filter3Value;
+                    // Store arrays on the card as data attributes
+                    card.dataset.filter1 = JSON.stringify(filter1Array);
+                    card.dataset.filter2 = JSON.stringify(filter2Array);
+                    card.dataset.filter3 = JSON.stringify(filter3Array);
                     
-                    // Add filter values to their respective sets
-                    if (filter1Value && filter1Value.trim() !== '') {
-                        filter1Values.add(filter1Value);
-                    }
-                    if (filter2Value && filter2Value.trim() !== '') {
-                        filter2Values.add(filter2Value);
-                    }
-                    if (filter3Value && filter3Value.trim() !== '') {
-                        filter3Values.add(filter3Value);
-                    }
+                    // Add filter values to their respective sets - all values should be strings
+                    filter1Array.forEach(value => {
+                        if (value && typeof value === 'string' && value.trim() !== '') {
+                            filter1Values.add(value);
+                        }
+                    });
+                    
+                    filter2Array.forEach(value => {
+                        if (value && typeof value === 'string' && value.trim() !== '') {
+                            filter2Values.add(value);
+                        }
+                    });
+                    
+                    filter3Array.forEach(value => {
+                        if (value && typeof value === 'string' && value.trim() !== '') {
+                            filter3Values.add(value);
+                        }
+                    });
+
+                    // Display first filter value or dash if none exist
+                    const filter1Display = filter1Array.length > 0 ? filter1Array[0] : '-';
+                    const filter2Display = filter2Array.length > 0 ? filter2Array[0] : '-';
+                    const filter3Display = filter3Array.length > 0 ? filter3Array[0] : '-';
+                    
+                    // Additional filter values indicator
+                    const filter1More = filter1Array.length > 1 ? ` (+${filter1Array.length - 1} mehr)` : '';
+                    const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
+                    const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
                     const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                     
                     // Check if item is borrowed by current user
                     const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+                    
+                    // Add borrower info badge if item is borrowed
+                    let borrowerBadge = '';
+                    if (!item.Verfuegbar && item.BorrowerInfo) {
+                        borrowerBadge = `
+                            <div class="borrower-badge">
+                                Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
+                                ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
+                            </div>`;
+                    }
 
                     card.innerHTML = `
-                        <h3>${item.Name}</h3>
-                        <p><strong>Ort:</strong> ${item.Ort}</p>
-                        <p><strong>Filter 1:</strong> ${card.dataset.filter1}</p>
-                        <p><strong>Filter 2:</strong> ${card.dataset.filter2}</p>
-                        <p><strong>Filter 3:</strong> ${card.dataset.filter3}</p>
-                        <div class="image-container">
-                            ${imagesHtml}
-                            <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
-                            <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
+                        <div class="card-content" data-item-id="${item._id}">
+                            <h3>${item.Name}</h3>
+                            <p><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                            <p><strong>Filter 1:</strong> ${filter1Display}${filter1More}</p>
+                            <p><strong>Filter 2:</strong> ${filter2Display}${filter2More}</p>
+                            <p><strong>Filter 3:</strong> ${filter3Display}${filter3More}</p>
+                            <div class="image-container">
+                                ${imagesHtml}
+                                <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
+                                <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
+                            </div>
+                            ${borrowerBadge}
                         </div>
                         <div class="actions">
                             ${item.Verfuegbar ? 
@@ -239,27 +279,16 @@
                         </div>
                     `;
                     itemsContainer.appendChild(card);
-                    
-                    // Add click event to open the modal with item details - making this more robust
-                    card.addEventListener('click', function(e) {
-                        // Prevent modal from opening when clicking buttons or links
-                        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || 
-                            e.target.closest('button') || e.target.closest('a')) {
-                            return;
-                        }
-                        
-                        console.log("Opening modal for item:", item.Name); // Debug log
-                        
-                        // Prepare the item data with correct image paths
-                        const itemData = {...item};
-                        itemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
-                        
-                        // Open the modal
-                        openItemModal(itemData);
+
+                    // Add click event to open modal
+                    card.addEventListener('click', () => {
+                        openItemModal(item);
                     });
                 });
                 
                 // Now populate the filter checkboxes with the collected unique values
+                console.log("Filter values collected:", 
+                    { filter1: [...filter1Values], filter2: [...filter2Values], filter3: [...filter3Values] });
                 populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
@@ -276,115 +305,126 @@
             .catch(error => console.error('Error fetching items:', error));
     }
 
-    // Function to populate filter options with checkboxes
+    function checkFilterMatch(activeFilterValues, itemFilterValuesJSON) {
+        // If no filters are selected, all items pass
+        if (activeFilterValues.length === 0) {
+            return true;
+        }
+        
+        try {
+            // Parse the JSON array of filter values from the item
+            const itemFilterValues = JSON.parse(itemFilterValuesJSON);
+            
+            // Extract the values from each active filter (after the ":" if present)
+            const matchingValues = activeFilterValues.map(filter => {
+                if (filter.includes(':')) {
+                    return filter.split(':')[1];
+                }
+                return filter;
+            });
+            
+            // DEBUG: Log values for debugging
+            console.debug("Active filter values:", matchingValues);
+            console.debug("Item filter values:", itemFilterValues);
+            
+            // Check if ANY of the item's filter values match ANY of the active filters
+            for (const itemValue of itemFilterValues) {
+                if (matchingValues.includes(itemValue)) {
+                    return true;
+                }
+            }
+            
+            // No match found
+            return false;
+        } catch (e) {
+            console.error("Error parsing filter values:", e);
+            if (typeof itemFilterValuesJSON === 'string' && activeFilterValues.includes(itemFilterValuesJSON)) {
+                // Fallback for string comparisons
+                return true;
+            }
+            return false;
+        }
+    }
+
     function populateFilterOptions(containerId, filterValues, filterNum) {
         const container = document.getElementById(containerId);
         container.innerHTML = ''; // Clear previous options
         
+        // Debug: Log filter values
+        console.debug(`Filter ${filterNum} values:`, filterValues);
+        
+        // Group values to create option groups
+        const groupedValues = {};
+        
+        // Process filter values to group them
         filterValues.forEach(filterName => {
             if (!filterName) return; // Skip empty values
             
-            const option = document.createElement('div');
-            option.className = 'filter-option';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = `filter${filterNum}-${filterName.replace(/\s+/g, '-')}`;
-            checkbox.value = filterName;
-            checkbox.onchange = () => updateFilter(filterNum, filterName, checkbox.checked);
-            
-            const label = document.createElement('label');
-            label.htmlFor = checkbox.id;
-            label.textContent = filterName;
-            
-            option.appendChild(checkbox);
-            option.appendChild(label);
-            container.appendChild(option);
-        });
-    }
-
-    // Function to toggle filter dropdown visibility
-    function toggleFilterDropdown(dropdownId) {
-        const dropdown = document.getElementById(dropdownId);
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-        
-        // Update toggle button text
-        const button = event.currentTarget;
-        button.textContent = dropdown.style.display === 'block' ? '▲' : '▼';
-    }
-
-    // Function to update filters when checkbox state changes
-    function updateFilter(filterNum, value, isChecked) {
-        const filterKey = `filter${filterNum}`;
-        
-        if (isChecked) {
-            // Add to active filters if not already present
-            if (!activeFilters[filterKey].includes(value)) {
-                activeFilters[filterKey].push(value);
+            // Check if the value contains a ":" to separate option group from value
+            if (filterName.includes(":")) {
+                const [groupName, value] = filterName.split(":", 2);
+                if (!groupedValues[groupName]) {
+                    groupedValues[groupName] = [];
+                }
+                groupedValues[groupName].push(value);
+            } else {
+                // Default group for values without a group prefix
+                if (!groupedValues["Option1"]) {
+                    groupedValues["Option1"] = [];
+                }
+                groupedValues["Option1"].push(filterName);
             }
-        } else {
-            // Remove from active filters
-            activeFilters[filterKey] = activeFilters[filterKey].filter(val => val !== value);
-        }
+        });
         
-        // Update the selected filters display
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // Apply the filters to show/hide items
-        applyFilters();
-    }
-
-    // Function to update the display of selected filters
-    function updateSelectedFiltersDisplay(filterNum) {
-        const filterKey = `filter${filterNum}`;
-        const container = document.getElementById(`selected-filter${filterNum}`);
-        container.innerHTML = '';
-        
-        activeFilters[filterKey].forEach(value => {
-            const tag = document.createElement('span');
-            tag.className = 'filter-tag';
-            tag.textContent = value;
+        // Create option groups
+        Object.keys(groupedValues).sort().forEach(groupName => {
+            // Create option group container
+            const optionGroup = document.createElement('div');
+            optionGroup.className = 'filter-option-group';
             
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'filter-tag-remove';
-            removeBtn.textContent = '×';
-            removeBtn.onclick = () => {
-                // Remove from active filters
-                activeFilters[filterKey] = activeFilters[filterKey].filter(val => val !== value);
-                
-                // Uncheck the corresponding checkbox
-                const checkbox = document.getElementById(`filter${filterNum}-${value.replace(/\s+/g, '-')}`);
-                if (checkbox) checkbox.checked = false;
-                
-                // Update display and apply filters
-                updateSelectedFiltersDisplay(filterNum);
-                applyFilters();
-            };
+            // Create group header
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'filter-group-header';
+            groupHeader.textContent = groupName;
+            optionGroup.appendChild(groupHeader);
             
-            tag.appendChild(removeBtn);
-            container.appendChild(tag);
+            // Create options within this group
+            const values = groupedValues[groupName].sort();
+            values.forEach(value => {
+                const option = document.createElement('div');
+                option.className = 'filter-option';
+                
+                // Create unique ID for the checkbox (avoid spaces and special characters)
+                const safeValue = value.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+                const safeGroup = groupName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+                const checkboxId = `filter${filterNum}-${safeGroup}-${safeValue}`;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = checkboxId;
+                checkbox.value = value;
+                checkbox.dataset.group = groupName;
+                
+                // Check if this value is already active
+                const fullValue = `${groupName}:${value}`;
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(fullValue);
+                
+                checkbox.onchange = () => updateFilter(filterNum, value, checkbox.checked, groupName);
+                
+                const label = document.createElement('label');
+                label.htmlFor = checkboxId;
+                label.textContent = value;
+                
+                option.appendChild(checkbox);
+                option.appendChild(label);
+                optionGroup.appendChild(option);
+            });
+            
+            container.appendChild(optionGroup);
         });
     }
 
-    // Function to clear all filter selections for a specific filter
-    function clearFilter(filterNum) {
-        const filterKey = `filter${filterNum}`;
-        
-        // Uncheck all checkboxes for this filter
-        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = false;
-        });
-        
-        // Clear active filters
-        activeFilters[filterKey] = [];
-        
-        // Update display and apply filters
-        updateSelectedFiltersDisplay(filterNum);
-        applyFilters();
-    }
-
-    // Updated filter application function to handle multiple selections
+    // Updated function to apply filters to items
     function applyFilters() {
         const itemsContainer = document.querySelector('#items-container');
         const items = itemsContainer.querySelectorAll('.item-card');
@@ -396,10 +436,9 @@
             const itemFilter3 = item.dataset.filter3;
             
             // Check if item matches the active filters
-            // If no filters are selected for a category, all items pass that filter
-            const matchesFilter1 = activeFilters.filter1.length === 0 || activeFilters.filter1.includes(itemFilter1);
-            const matchesFilter2 = activeFilters.filter2.length === 0 || activeFilters.filter2.includes(itemFilter2);
-            const matchesFilter3 = activeFilters.filter3.length === 0 || activeFilters.filter3.includes(itemFilter3);
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
             
             // All three filter categories must match (AND operation between categories)
             if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
@@ -410,7 +449,7 @@
             }
         });
         
-        // Informationen zur Anzahl der sichtbaren Elemente
+        // Log visible items count
         console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
         
         // After filtering, reset scroll position to show the first visible card
@@ -420,99 +459,43 @@
         }
     }
 
-    // Verbesserte Filter-Anwendungsfunktion
-    function applyFilters() {
-        const itemsContainer = document.querySelector('#items-container');
-        const items = itemsContainer.querySelectorAll('.item-card');
-        
-        let visibleCount = 0;
-        items.forEach(item => {
-            const itemFilter1 = item.dataset.filter1;
-            const itemFilter2 = item.dataset.filter2;
-            const itemFilter3 = item.dataset.filter3;
-            
-            const matchesFilter1 = activeFilters.filter1.length === 0 || activeFilters.filter1.includes(itemFilter1);
-            const matchesFilter2 = activeFilters.filter2.length === 0 || activeFilters.filter2.includes(itemFilter2);
-            const matchesFilter3 = activeFilters.filter3.length === 0 || activeFilters.filter3.includes(itemFilter3);
-            
-            // All three filters must match (AND operation)
-            if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
-                item.style.display = 'block';
-                visibleCount++;
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        
-        // Informationen zur Anzahl der sichtbaren Elemente
-        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
-        
-        // After filtering, reset scroll position to show the first visible card
-        const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
-        if (firstVisibleCard) {
-            firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-        }
+    // Function to close the edit modal
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
     }
 
-    function prevImage(event) {
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function nextImage(event) {
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(image => image.style.display === 'block');
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function scrollPrev() {
-        const itemsContainer = document.querySelector('#items-container');
-        // Better selector to find visible cards
-        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
-            .filter(card => window.getComputedStyle(card).display !== 'none');
-        
-        if (visibleCards.length > 0) {
-            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
-            itemsContainer.scrollBy({ left: -cardWidth, behavior: 'smooth' });
-        }
-    }
-
-    function scrollNext() {
-        const itemsContainer = document.querySelector('#items-container');
-        const visibleCards = Array.from(itemsContainer.querySelectorAll('.item-card'))
-            .filter(card => window.getComputedStyle(card).display !== 'none');
-        
-        if (visibleCards.length > 0) {
-            const cardWidth = visibleCards[0].offsetWidth + 20; // 20px for the gap
-            itemsContainer.scrollBy({ left: cardWidth, behavior: 'smooth' });
-        }
-    }
-
-    // Function to open modal with item details
+    // Function to open modal with item details - completely rewritten
     function openItemModal(itemData) {
         console.log("Modal opening with data:", itemData);
         
         const modalContent = document.getElementById('modal-content-wrapper');
         const modal = document.getElementById('item-modal');
         
-        // Create image gallery
+        // Get filter values - handle arrays properly, join with commas and handle missing values
+        const filter1Value = Array.isArray(itemData.Filter) ? itemData.Filter.filter(Boolean).join(", ") : 
+                            (itemData.Filter || '-');
+        const filter2Value = Array.isArray(itemData.Filter2) ? itemData.Filter2.filter(Boolean).join(", ") : 
+                            (itemData.Filter2 || '-');
+        const filter3Value = Array.isArray(itemData.Filter3) ? itemData.Filter3.filter(Boolean).join(", ") : 
+                            (itemData.Filter3 || '-');
+        
+        // Create image gallery - fix image URLs by ensuring they're complete URLs
         let imagesHtml = '';
         if (itemData.Images && itemData.Images.length > 0) {
             imagesHtml = `
                 <div class="modal-image-container">
-                    ${itemData.Images.map((image, index) => 
-                        `<img src="${image}" alt="${itemData.Name}" class="modal-image" 
-                         data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`
-                    ).join('')}
-                    <button class="modal-image-nav modal-prev-image" onclick="prevModalImage()">&#10094;</button>
-                    <button class="modal-image-nav modal-next-image" onclick="nextModalImage()">&#10095;</button>
+                    ${itemData.Images.map((image, index) => {
+                        // Check if image is a full URL or just a path
+                        const imageUrl = image.startsWith('http') || image.startsWith('/uploads/') ? 
+                            image : `/uploads/${image}`;
+                        
+                        return `<img src="${imageUrl}" alt="${itemData.Name}" class="modal-image" 
+                         data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                    }).join('')}
+                    ${itemData.Images.length > 1 ? `
+                        <button class="modal-image-nav modal-prev-image" onclick="prevModalImage()">&#10094;</button>
+                        <button class="modal-image-nav modal-next-image" onclick="nextModalImage()">&#10095;</button>
+                    ` : ''}
                 </div>
             `;
         }
@@ -520,17 +503,21 @@
         // Check if item is borrowed by current user
         const isBorrowedByMe = !itemData.Verfuegbar && itemData.User === currentUsername;
         
-        // Add a "View Borrowing Details" button if the item is borrowed
-        let borrowingDetailsButton = '';
-        if (!itemData.Verfuegbar) {
-            borrowingDetailsButton = `
-                <button class="borrowing-details-btn" onclick="viewBorrowingDetails('${itemData._id}', '${itemData.Name}', '${itemData.User}')">
-                    Ausleihungs Details
-                </button>
+        // Create borrower info section
+        let borrowerInfo = '';
+        if (!itemData.Verfuegbar && itemData.BorrowerInfo) {
+            borrowerInfo = `
+                <div class="borrower-info-panel">
+                    <h4>Ausgeliehen von</h4>
+                    <div class="borrower-details">
+                        <p class="borrower-name">${itemData.BorrowerInfo.username}</p>
+                        <p class="borrow-time">Seit: ${itemData.BorrowerInfo.borrowTime || 'Unbekannt'}</p>
+                    </div>
+                </div>
             `;
         }
-            
-        // Build modal content
+        
+        // Build complete modal content
         modalContent.innerHTML = `
             <h2>${itemData.Name}</h2>
             ${imagesHtml}
@@ -541,16 +528,16 @@
                         <div class="detail-value">${itemData.Ort || '-'}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Kategorie 1:</div>
-                        <div class="detail-value">${itemData.Filter || '-'}</div>
+                        <div class="detail-label">Filter 1:</div>
+                        <div class="detail-value">${filter1Value}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Kategorie 2:</div>
-                        <div class="detail-value">${itemData.Filter2 || '-'}</div>
+                        <div class="detail-label">Filter 2:</div>
+                        <div class="detail-value">${filter2Value}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Kategorie 3:</div>
-                        <div class="detail-value">${itemData.Filter3 || '-'}</div>
+                        <div class="detail-label">Filter 3:</div>
+                        <div class="detail-value">${filter3Value}</div>
                     </div>
                 </div>
                 <div class="detail-section">
@@ -564,7 +551,7 @@
                     </div>
                     <div class="detail-group">
                         <div class="detail-label">Status:</div>
-                        <div class="detail-value">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
+                        <div class="detail-value ${!itemData.Verfuegbar ? 'status-borrowed' : ''}">${itemData.Verfuegbar ? 'Verfügbar' : 'Ausgeliehen'}</div>
                     </div>
                     <div class="detail-group">
                         <div class="detail-label">Code:</div>
@@ -572,6 +559,7 @@
                     </div>
                 </div>
             </div>
+            ${borrowerInfo}
             <div class="detail-group full-width">
                 <div class="detail-label">Beschreibung:</div>
                 <div class="detail-value">${itemData.Beschreibung || '-'}</div>
@@ -588,229 +576,45 @@
                 :
                     `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
-                <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
-                ${borrowingDetailsButton}
-                <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
-                <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
             </div>
         `;
         
-        // Ensure the close button is wired up for this specific modal instance
+        // Add event listener for the close button
         const closeBtn = modal.querySelector('.close-modal');
         if (closeBtn) {
             closeBtn.onclick = function() {
-                modal.style.display = 'none';
+                closeModal(modal);
             };
         }
         
-        // Show the modal
+        // Make sure the modal is visible
         modal.style.display = 'block';
     }
-
-    // Update the global modal event handlers to be more robust
-    document.addEventListener('DOMContentLoaded', function() {
-        // Close modals when clicking outside
-        window.addEventListener('click', function(event) {
-            const modals = document.querySelectorAll('.item-modal');
-            modals.forEach(function(modal) {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-        });
-
-        // Handle close buttons for all modals that exist at page load
-        document.querySelectorAll('.close-modal').forEach(function(closeBtn) {
-            closeBtn.addEventListener('click', function() {
-                const modal = this.closest('.item-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                }
-            });
+    
+    // Function to close modal
+    function closeModal(modal) {
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    // Add event listener to close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        const modals = document.querySelectorAll('.item-modal');
+        modals.forEach(function(modal) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
         });
     });
-
-    // Function to view borrowing details
-    function viewBorrowingDetails(itemId, itemName, borrowedBy) {
-        // Close the item modal
-        document.getElementById('item-modal').style.display = 'none';
-        
-        // Fetch borrowing details from the server
-        fetch(`/get_ausleihung_by_item/${itemId}`)
-            .then(response => {
-                // First check if the response is ok
-                if (!response.ok && response.status !== 200) {
-                    if (response.status === 403) {
-                        throw new Error('Sie sind nicht berechtigt, diese Ausleihungsdaten einzusehen.');
-                    } else {
-                        throw new Error('Ein Serverfehler ist aufgetreten.');
-                    }
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data && data.ausleihung) {
-                    showBorrowingDetailsModal(data.ausleihung, itemName);
-                } else {
-                    // More descriptive error message based on the response
-                    let message = 'Keine aktiven Ausleihungsdaten gefunden.';
-                    if (data.error) {
-                        message = data.error;
-                    }
-                    
-                    // Create a simple alert or show a more user-friendly modal
-                    showInfoModal(message, itemName);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching borrowing details:', error);
-                alert(error.message || 'Fehler beim Laden der Ausleihungsdaten');
-            });
-    }
-
-    // Add a simple info modal function for displaying informational messages
-    function showInfoModal(message, itemName) {
-        // You can reuse the borrowing details modal structure
-        let infoModal = document.getElementById('info-modal');
-        
-        // Create the modal if it doesn't exist yet
-        if (!infoModal) {
-            infoModal = document.createElement('div');
-            infoModal.id = 'info-modal';
-            infoModal.className = 'item-modal';
-            
-            const modalContent = document.createElement('div');
-            modalContent.className = 'modal-content';
-            
-            const closeButton = document.createElement('span');
-            closeButton.className = 'close-modal';
-            closeButton.innerHTML = '&times;';
-            closeButton.onclick = function() {
-                infoModal.style.display = 'none';
-            };
-            
-            const contentWrapper = document.createElement('div');
-            contentWrapper.id = 'info-content-wrapper';
-            
-            modalContent.appendChild(closeButton);
-            modalContent.appendChild(contentWrapper);
-            infoModal.appendChild(modalContent);
-            
-            document.body.appendChild(infoModal);
-            
-            // Close when clicking outside the modal
-            infoModal.onclick = function(event) {
-                if (event.target === infoModal) {
-                    infoModal.style.display = 'none';
-                }
-            };
-        }
-        
-        // Fill modal with the message
-        const contentWrapper = document.getElementById('info-content-wrapper');
-        contentWrapper.innerHTML = `
-            <h2>Information zu ${itemName}</h2>
-            <div class="info-message">
-                <p>${message}</p>
-            </div>
-        `;
-        
-        // Display the modal
-        infoModal.style.display = 'block';
-    }
-
-    // Function to show borrowing details modal
-    function showBorrowingDetailsModal(ausleihung, itemName) {
-        // Create modal container if it doesn't exist
-        let borrowingModal = document.getElementById('borrowing-details-modal');
-        if (!borrowingModal) {
-            borrowingModal = document.createElement('div');
-            borrowingModal.id = 'borrowing-details-modal';
-            borrowingModal.className = 'item-modal';
-            
-            const modalContent = document.createElement('div');
-            modalContent.className = 'modal-content';
-            
-            const closeButton = document.createElement('span');
-            closeButton.className = 'close-modal';
-            closeButton.innerHTML = '&times;';
-            closeButton.onclick = function() {
-                borrowingModal.style.display = 'none';
-            };
-            
-            const contentWrapper = document.createElement('div');
-            contentWrapper.id = 'borrowing-content-wrapper';
-            
-            modalContent.appendChild(closeButton);
-            modalContent.appendChild(contentWrapper);
-            borrowingModal.appendChild(modalContent);
-            
-            document.body.appendChild(borrowingModal);
-            
-            // Close when clicking outside
-            borrowingModal.onclick = function(event) {
-                if (event.target === borrowingModal) {
-                    borrowingModal.style.display = 'none';
-                }
-            };
-        }
-        
-        // Format dates properly
-        const startDate = new Date(ausleihung.Start);
-        
-        // Handle end date - use placeholder for active borrowings
-        let endDateStr = 'Aktiv - Kein Enddatum';
-        if (ausleihung.End) {
-            const endDate = new Date(ausleihung.End);
-            // Check if this is the Unix epoch date (indicates a null date problem)
-            if (endDate.getFullYear() > 1970) {
-                endDateStr = formatDate(endDate);
-            }
-        }
-        
-        // Fill modal with borrowing details
-        const contentWrapper = document.getElementById('borrowing-content-wrapper');
-        contentWrapper.innerHTML = `
-            <h2>Ausleihungs Details</h2>
-            <div class="borrowing-details">
-                <p><strong>Objekt:</strong> ${itemName}</p>
-                <p><strong>Von:</strong> ${formatDate(startDate)}</p>
-                <p><strong>Bis:</strong> ${endDateStr}</p>
-                <p><strong>Ausgeliehen von:</strong> ${ausleihung.User}</p>
-                <p><strong>Notizen:</strong> ${ausleihung.Notes || '-'}</p>
-                <p><strong>Status:</strong> ${getBorrowingStatusText(ausleihung.Status)}</p>
-            </div>
-        `;
-        
-        // Show the modal
-        borrowingModal.style.display = 'block';
-    }
-
-    // Helper function to format dates
-    function formatDate(date) {
-        return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}, ${padZero(date.getHours())}:${padZero(date.getMinutes())}:${padZero(date.getSeconds())}`;
-    }
-
-    // Helper function to pad numbers with leading zeros
-    function padZero(num) {
-        return num.toString().padStart(2, '0');
-    }
-
-    // Helper function to get status text in German
-    function getBorrowingStatusText(status) {
-        switch(status) {
-            case 'active': return 'Aktuell ausgeliehen';
-            case 'completed': return 'Zurückgegeben';
-            case 'planned': return 'Geplant';
-            case 'cancelled': return 'Storniert';
-            default: return status;
-        }
-    }
-
-    // Image navigation in modal
+    
+    // Image navigation in modal - make sure these functions exist
     function prevModalImage() {
         const images = document.querySelectorAll('.modal-image');
+        if (images.length <= 1) return;
+        
         let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        if (currentIndex === -1) currentIndex = 0;
         
         images[currentIndex].style.display = 'none';
         currentIndex = (currentIndex - 1 + images.length) % images.length;
@@ -819,147 +623,311 @@
 
     function nextModalImage() {
         const images = document.querySelectorAll('.modal-image');
+        if (images.length <= 1) return;
+        
         let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        if (currentIndex === -1) currentIndex = 0;
         
         images[currentIndex].style.display = 'none';
         currentIndex = (currentIndex + 1) % images.length;
         images[currentIndex].style.display = 'block';
     }
 
-    // Add this function to handle the edit button click
-    function editItem(itemId, event) {
-        // Prevent the event from propagating to parent elements
-        event.preventDefault();
-        event.stopPropagation();
+    // Add missing filter toggle function
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
         
-        // Close any open modal
-        document.getElementById('item-modal').style.display = 'none';
+        // Close all other dropdowns first
+        document.querySelectorAll('.filter-dropdown').forEach(dd => {
+            if (dd.id !== dropdownId) {
+                dd.style.display = 'none';
+            }
+        });
         
-        // Fetch the item data
-        fetch(`/get_item/${itemId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to load item data');
-                }
-                return response.json();
-            })
-            .then(data => {
-                // Open edit form with the item data
-                showEditItemForm(data.item);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Laden der Objektdaten');
-            });
+        // Toggle this dropdown
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
-
-    // Implement the edit form display function
-    function showEditItemForm(itemData) {
-        console.log('Showing edit form with data:', itemData);
+    
+    // Add missing filter clear function
+    function clearFilter(filterNum) {
+        // Reset the active filters for this category
+        activeFilters[`filter${filterNum}`] = [];
         
-        // Set form action
-        const form = document.getElementById('edit-item-form');
-        form.action = `/edit_item/${itemData._id}`;
+        // Clear the selected filters display
+        document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
         
-        // Populate form fields
-        document.getElementById('edit-item-id').value = itemData._id;
-        document.getElementById('edit-name').value = itemData.Name || '';
-        document.getElementById('edit-ort').value = itemData.Ort || '';
-        document.getElementById('edit-beschreibung').value = itemData.Beschreibung || '';
+        // Uncheck all checkboxes
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
         
-        // Handle filter values which could be arrays or strings
-        let filter1 = '';
-        if (Array.isArray(itemData.Filter) && itemData.Filter.length > 0) {
-            filter1 = itemData.Filter[0];
-        } else if (itemData.Filter) {
-            filter1 = itemData.Filter;
-        }
-        document.getElementById('edit-filter1').value = filter1;
+        // Apply the updated filters
+        applyFilters();
+    }
+    
+    // Add function to update filter when checkbox changes
+    function updateFilter(filterNum, value, isChecked, group = '') {
+        const filterKey = `filter${filterNum}`;
+        // Add group prefix if provided
+        const filterValue = group ? `${group}:${value}` : value;
         
-        let filter2 = '';
-        if (Array.isArray(itemData.Filter2) && itemData.Filter2.length > 0) {
-            filter2 = itemData.Filter2[0];
-        } else if (itemData.Filter2) {
-            filter2 = itemData.Filter2;
-        }
-        document.getElementById('edit-filter2').value = filter2;
-        
-        let filter3 = '';
-        if (Array.isArray(itemData.Filter3) && itemData.Filter3.length > 0) {
-            filter3 = itemData.Filter3[0];
-        } else if (itemData.Filter3) {
-            filter3 = itemData.Filter3;
-        }
-        document.getElementById('edit-filter3').value = filter3;
-        
-        // Handle date - needs to be in YYYY-MM-DD format for input[type=date]
-        if (itemData.Anschaffungsjahr) {
-            // If it's already a date string, use it; otherwise format it
-            if (typeof itemData.Anschaffungsjahr === 'string' && itemData.Anschaffungsjahr.includes('-')) {
-                document.getElementById('edit-anschaffungsjahr').value = itemData.Anschaffungsjahr.substring(0, 10);
-            } else {
-                // Assuming Anschaffungsjahr might be just a year
-                document.getElementById('edit-anschaffungsjahr').value = `${itemData.Anschaffungsjahr}-01-01`;
+        if (isChecked) {
+            // Add filter value if not already present
+            if (!activeFilters[filterKey].includes(filterValue)) {
+                activeFilters[filterKey].push(filterValue);
             }
         } else {
-            document.getElementById('edit-anschaffungsjahr').value = '';
+            // Remove filter value
+            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
         }
         
-        document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
-        document.getElementById('edit-code4').value = itemData.Code_4 || '';
+        // Update the filter display
+        updateSelectedFilters(filterNum);
         
-        // Load existing images
-        const existingImagesContainer = document.getElementById('edit-existing-images');
-        existingImagesContainer.innerHTML = '';
+        // Apply the filters
+        applyFilters();
+    }
+    
+    // Add function to display selected filters
+    function updateSelectedFilters(filterNum) {
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
         
-        // Check if the item has images
-        if (itemData.Images && itemData.Images.length > 0) {
-            itemData.Images.forEach(imageName => {
-                const imageUrl = `/uploads/${imageName}`;
+        activeFilters[`filter${filterNum}`].forEach(filter => {
+            // Extract display value from filter
+            let displayValue = filter;
+            let groupName = '';
+            
+            // Handle group:value format
+            if (filter.includes(':')) {
+                [groupName, displayValue] = filter.split(':');
+            }
+            
+            // Create filter tag
+            const tag = document.createElement('div');
+            tag.className = 'filter-tag';
+            
+            // Show group if present
+            let tagContent = '';
+            if (groupName) {
+                tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
+            }
+            
+            // Add filter value and remove button
+            tagContent += displayValue;
+            tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
+            
+            tag.innerHTML = tagContent;
+            container.appendChild(tag);
+        });
+    }
+    
+    // Add function to remove filter when clicking X
+    function removeFilter(filterNum, filter) {
+        const filterKey = `filter${filterNum}`;
+        
+        // Remove from active filters
+        activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filter);
+        
+        // Update UI
+        updateSelectedFilters(filterNum);
+        
+        // Uncheck corresponding checkbox if exists
+        let value = filter;
+        let group = '';
+        
+        if (filter.includes(':')) {
+            [group, value] = filter.split(':');
+        }
+        
+        // Find and uncheck the checkbox
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            if ((checkbox.value === value) && 
+                ((!group && !checkbox.dataset.group) || 
+                 (group && checkbox.dataset.group === group))) {
+                checkbox.checked = false;
+            }
+        });
+        
+        // Apply the filters
+        applyFilters();
+    }
+
+    // Fix populateFilterOptions to correctly set up filter checkboxes
+    function populateFilterOptions(containerId, filterValues, filterNum) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        
+        // Check for option groups in values
+        const optionGroups = {};
+        filterValues.forEach(value => {
+            if (!value) return;
+            
+            // Check if value contains a group separator
+            if (value.includes(':')) {
+                const [group, val] = value.split(':', 2);
+                if (!optionGroups[group]) {
+                    optionGroups[group] = [];
+                }
+                optionGroups[group].push(val);
+            } else {
+                // Default group for ungrouped values
+                if (!optionGroups['Werte']) {
+                    optionGroups['Werte'] = [];
+                }
+                optionGroups['Werte'].push(value);
+            }
+        });
+        
+        // If no groups were found, create simple checkbox list
+        if (Object.keys(optionGroups).length === 0) {
+            filterValues.forEach(value => {
+                if (!value) return;
                 
-                const imageDiv = document.createElement('div');
-                imageDiv.className = 'existing-image-item';
+                const option = document.createElement('div');
+                option.className = 'filter-option';
                 
-                const img = document.createElement('img');
-                img.src = imageUrl;
-                img.alt = itemData.Name;
-                img.className = 'edit-thumbnail';
+                const id = `filter${filterNum}-${value.replace(/\s+/g, '_')}`;
                 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.name = 'existing_images';
-                checkbox.value = imageName;
-                checkbox.id = `img-${imageName}`;
-                checkbox.checked = true; // Default to keeping the image
+                checkbox.id = id;
+                checkbox.value = value;
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(value);
+                checkbox.onchange = () => updateFilter(filterNum, value, checkbox.checked);
                 
                 const label = document.createElement('label');
-                label.htmlFor = checkbox.id;
-                label.textContent = 'Behalten';
+                label.htmlFor = id;
+                label.textContent = value;
                 
-                const labelDiv = document.createElement('div');
-                labelDiv.className = 'image-keep-controls';
-                labelDiv.appendChild(checkbox);
-                labelDiv.appendChild(label);
-                
-                imageDiv.appendChild(img);
-                imageDiv.appendChild(labelDiv);
-                
-                existingImagesContainer.appendChild(imageDiv);
+                option.appendChild(checkbox);
+                option.appendChild(label);
+                container.appendChild(option);
             });
         } else {
-            existingImagesContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+            // Create grouped options
+            Object.keys(optionGroups).sort().forEach(group => {
+                const values = optionGroups[group];
+                if (!values.length) return;
+                
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'filter-option-group';
+                
+                const header = document.createElement('div');
+                header.className = 'filter-group-header';
+                header.textContent = group;
+                groupDiv.appendChild(header);
+                
+                values.sort().forEach(value => {
+                    const option = document.createElement('div');
+                    option.className = 'filter-option';
+                    
+                    const id = `filter${filterNum}-${group}-${value.replace(/\s+/g, '_')}`;
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = id;
+                    checkbox.value = value;
+                    checkbox.dataset.group = group;
+                    
+                    // Check if this value is already active
+                    const filterValue = group === 'Werte' ? value : `${group}:${value}`;
+                    checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
+                    
+                    checkbox.onchange = () => updateFilter(filterNum, value, checkbox.checked, 
+                        group === 'Werte' ? '' : group);
+                    
+                    const label = document.createElement('label');
+                    label.htmlFor = id;
+                    label.textContent = value;
+                    
+                    option.appendChild(checkbox);
+                    option.appendChild(label);
+                    groupDiv.appendChild(option);
+                });
+                
+                container.appendChild(groupDiv);
+            });
         }
         
-        // Reset the file input for new images
-        document.getElementById('edit-new-images').value = '';
-        
-        // Show the modal
-        document.getElementById('edit-modal').style.display = 'block';
+        // Update the selected filters display
+        updateSelectedFilters(filterNum);
     }
-
-    // Function to close the edit modal
-    function closeEditModal() {
-        document.getElementById('edit-modal').style.display = 'none';
+    
+    // Fix check filter match function to properly handle multiple filter values
+    function checkFilterMatch(activeFilterValues, itemFilterValuesJSON) {
+        // If no active filters, all items match
+        if (!activeFilterValues || activeFilterValues.length === 0) {
+            return true;
+        }
+        
+        try {
+            // Parse item filter values
+            const itemFilterValues = JSON.parse(itemFilterValuesJSON || '[]');
+            
+            // If item has no values, it can't match any filters
+            if (!itemFilterValues || itemFilterValues.length === 0) {
+                return false;
+            }
+            
+            // Check if ANY active filter values match ANY item filter values
+            for (const activeFilter of activeFilterValues) {
+                // Extract value from activeFilter (remove group prefix if exists)
+                const activeValue = activeFilter.includes(':') 
+                    ? activeFilter.split(':')[1] 
+                    : activeFilter;
+                
+                // Check if any item filter value matches this active filter
+                if (itemFilterValues.includes(activeValue)) {
+                    return true;
+                }
+            }
+            
+            // No match found
+            return false;
+        } catch (err) {
+            console.error("Error in checkFilterMatch:", err);
+            return false;
+        }
+    }
+    
+    // Update applyFilters to correctly apply all filters
+    function applyFilters() {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            
+            // Check if item matches the active filters
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
+            
+            // All three filter categories must match (AND between categories)
+            if (matchesFilter1 && matchesFilter2 && matchesFilter3) {
+                item.style.display = 'block';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Log visible items count
+        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
+        
+        // Show first visible card
+        if (visibleCount > 0) {
+            const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
+            if (firstVisibleCard) {
+                firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
     }
 </script>
 
@@ -1027,13 +995,14 @@ h1, h2 {
     top: 100%;
     left: 0;
     width: 100%;
-    max-height: 200px;
+    max-height: 300px; /* Increased height */
     overflow-y: auto;
     background-color: white;
     border: 1px solid #ddd;
     border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     z-index: 100;
+    padding: 8px;
 }
 
 .filter-options {
@@ -1046,9 +1015,33 @@ h1, h2 {
     align-items: center;
 }
 
+.filter-option input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.filter-option:hover {
+    background-color: #f5f5f5;
+}
+
 .filter-option label {
     margin-left: 5px;
     cursor: pointer;
+}
+
+.filter-option-group {
+    margin-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+.filter-group-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #495057;
+    font-size: 0.9rem;
 }
 
 .selected-filters {
@@ -1065,6 +1058,13 @@ h1, h2 {
     border-radius: 15px;
     padding: 3px 10px;
     font-size: 0.8rem;
+}
+
+.filter-tag-group {
+    color: #6c757d;
+    font-size: 0.8em;
+    font-style: italic;
+    margin-right: 2px;
 }
 
 .filter-tag-remove {
@@ -1246,7 +1246,7 @@ input[type="file"] {
 }
 
 .navigation-buttons .prev-button,
-.navigation-buttons .next-button {
+ .navigation-buttons .next-button {
     background-color: #007bff;
     color: #fff;
     border: none;
@@ -1383,6 +1383,12 @@ input[type="file"] {
     height: 100%;
     background-color: rgba(0,0,0,0.7);
     overflow-y: auto;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {opacity: 0;}
+    to {opacity: 1;}
 }
 
 .modal-content {
@@ -1390,61 +1396,76 @@ input[type="file"] {
     background-color: #fefefe;
     margin: 5% auto;
     padding: 20px;
-    border-radius: 5px;
+    border-radius: 8px;
     width: 80%;
     max-width: 900px;
-    animation: modalAppear 0.3s ease-out;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    overflow: hidden;
 }
 
-@keyframes modalAppear {
-    from {opacity: 0; transform: translateY(-30px);}
-    to {opacity: 1; transform: translateY(0);}
+@keyframes slideIn {
+    from {transform: translateY(-20px); opacity: 0;}
+    to {transform: translateY(0); opacity: 1;}
 }
 
 .close-modal {
     position: absolute;
-    top: 10px;
-    left: 15px;
+    top: 15px;
+    right: 20px;
     color: #aaa;
     font-size: 28px;
     font-weight: bold;
     cursor: pointer;
+    z-index: 10;
 }
 
 .close-modal:hover {
-    color: #555;
+    color: #000;
 }
 
+/* Enhanced image navigation */
 .modal-image-container {
     text-align: center;
     margin: 20px 0;
     position: relative;
+    max-height: 500px;
+    overflow: hidden;
 }
 
 .modal-image {
     max-width: 100%;
-    max-height: 500px;
+    max-height: 450px;
     border-radius: 5px;
+    object-fit: contain;
 }
 
 .modal-image-nav {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    padding: 10px;
+    padding: 15px;
     background-color: rgba(0,0,0,0.5);
     color: white;
     border: none;
     cursor: pointer;
     border-radius: 50%;
+    font-size: 18px;
+    opacity: 0.8;
+    transition: opacity 0.3s;
+}
+
+.modal-image-nav:hover {
+    opacity: 1;
+    background-color: rgba(0,0,0,0.7);
 }
 
 .modal-prev-image {
-    left: 10px;
+    left: 15px;
 }
 
 .modal-next-image {
-    right: 10px;
+    right: 15px;
 }
 
 .modal-details {
@@ -1481,6 +1502,51 @@ input[type="file"] {
 
 .full-width {
     grid-column: 1 / -1;
+}
+
+/* Borrower badge on item cards */
+.borrower-badge {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+    padding: 8px;
+    margin: 10px 0;
+    font-size: 0.85em;
+    border-radius: 4px;
+}
+
+.borrow-time {
+    font-size: 0.9em;
+    color: #6c757d;
+    font-style: italic;
+    display: block;
+    margin-top: 3px;
+}
+
+/* Borrower panel in modal view */
+.borrower-info-panel {
+    margin: 15px 0;
+    padding: 15px;
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+}
+
+.borrower-info-panel h4 {
+    color: #856404;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.borrower-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.status-borrowed {
+    color: #dc3545;
+    font-weight: bold;
 }
 
 /* Borrowing details modal styles */
@@ -1619,6 +1685,39 @@ input[type="file"] {
 
 .image-keep-controls label {
     font-size: 0.9em;
+}
+
+/* Updated styles for multi-filter inputs */
+.multi-filter {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.filter-inputs h3 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #495057;
+}
+
+/* Add styles for clickable cards */
+.clickable-card {
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.clickable-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(0, 123, 255, 0.3);
+}
+
+.card-content {
+    cursor: pointer;
+    z-index: 1;
+    position: relative;
 }
 </style>
 {% endblock %}
