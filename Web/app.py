@@ -61,6 +61,14 @@ __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
 Port = 8080
 
+# Default MongoDB settings
+MONGODB_HOST = 'localhost'
+MONGODB_PORT = 27017
+MONGODB_DB = 'Inventarsystem'
+SCHEDULER_INTERVAL = 1  # minutes
+SSL_CERT = 'ssl_certs/cert.pem'
+SSL_KEY = 'ssl_certs/key.pem'
+
 
 # Import config
 try:
@@ -93,6 +101,32 @@ try:
         "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
         "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
     })
+    
+    # Get additional configurable settings
+    # MongoDB settings
+    mongodb_settings = conf.get('mongodb', {})
+    MONGODB_HOST = mongodb_settings.get('host', 'localhost')
+    MONGODB_PORT = mongodb_settings.get('port', 27017)
+    MONGODB_DB = mongodb_settings.get('db', 'Inventarsystem')
+    
+    # File paths and settings
+    paths = conf.get('paths', {})
+    app.config['UPLOAD_FOLDER'] = paths.get('uploads', os.path.join(BASE_DIR, 'uploads'))
+    app.config['QR_CODE_FOLDER'] = paths.get('qrcodes', QR_CODE_FOLDER)
+    app.config['STATIC_FOLDER'] = paths.get('static', os.path.join(BASE_DIR, 'static'))
+    
+    # File extensions
+    extensions = conf.get('allowed_extensions', ['png', 'jpg', 'jpeg', 'gif'])
+    app.config['ALLOWED_EXTENSIONS'] = set(extensions)
+    
+    # Scheduler settings
+    scheduler_settings = conf.get('scheduler', {})
+    SCHEDULER_INTERVAL = scheduler_settings.get('interval_minutes', 1)
+    
+    # SSL settings
+    ssl_settings = conf.get('ssl', {})
+    SSL_CERT = ssl_settings.get('cert', 'ssl_certs/cert.pem')
+    SSL_KEY = ssl_settings.get('key', 'ssl_certs/key.pem')
     
 except FileNotFoundError:
     print("Config file not found. Using default values.")
@@ -1526,8 +1560,8 @@ def process_bookings():
     
     # Also look for any missed bookings (still planned but should be active)
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Find bookings that:
@@ -1658,8 +1692,8 @@ def process_bookings():
 
     # Also look for any active bookings that should have ended already
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Find active bookings with end times in the past
@@ -1739,7 +1773,7 @@ def process_booking_activation(booking_id, item_id, user, start_date, end_date, 
         print(f"Error activating booking {booking_id}: {e}")
         return False
 
-scheduler.add_job(process_bookings, 'interval', minutes=1)
+scheduler.add_job(process_bookings, 'interval', minutes=SCHEDULER_INTERVAL)
 scheduler.start()
 
 if __name__ == '__main__':
@@ -1749,7 +1783,7 @@ if __name__ == '__main__':
     Includes SSL configuration for secure development testing.
     """
     # SSL configuration
-    ssl_context = ('ssl_certs/cert.pem', 'ssl_certs/key.pem')
+    ssl_context = (SSL_CERT, SSL_KEY)
     app.run(Host, Port, ssl_context=ssl_context)
 
 import atexit

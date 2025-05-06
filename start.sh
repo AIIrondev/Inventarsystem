@@ -160,7 +160,6 @@ fi
 # Fix PyMongo/Bson compatibility issue
 echo "Fixing PyMongo/Bson compatibility issue..."
 pip uninstall -y bson pymongo
-pip Install pytz
 pip install pymongo==4.6.1 || {
     echo "Failed to install pymongo. Exiting."
     exit 1

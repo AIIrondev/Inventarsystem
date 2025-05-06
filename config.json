@@ -1,7 +1,7 @@
 {
     "dbg": false,
     "key": 123457,
-    "ver": "1.5.3",
+    "ver": "1.5.4",
     "host": "0.0.0.0",
     "port": 443,
     "schoolPeriods": {
@@ -15,5 +15,23 @@
         "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
         "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
         "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
+    },
+    "mongodb": {
+        "host": "localhost",
+        "port": 27017,
+        "db": "Inventarsystem"
+    },
+    "paths": {
+        "uploads": "/home/max/Dokumente/repos/Inventarsystem/Web/uploads",
+        "qrcodes": "/home/max/Dokumente/repos/Inventarsystem/Web/QRCodes",
+        "static": "/home/max/Dokumente/repos/Inventarsystem/Web/static"
+    },
+    "allowed_extensions": ["png", "jpg", "jpeg", "gif"],
+    "scheduler": {
+        "interval_minutes": 1
+    },
+    "ssl": {
+        "cert": "ssl_certs/cert.pem",
+        "key": "ssl_certs/key.pem"
     }
 }
