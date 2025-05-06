@@ -21,11 +21,6 @@
         "port": 27017,
         "db": "Inventarsystem"
     },
-    "paths": {
-        "uploads": "/home/max/Dokumente/repos/Inventarsystem/Web/uploads",
-        "qrcodes": "/home/max/Dokumente/repos/Inventarsystem/Web/QRCodes",
-        "static": "/home/max/Dokumente/repos/Inventarsystem/Web/static"
-    },
     "allowed_extensions": ["png", "jpg", "jpeg", "gif"],
     "scheduler": {
         "interval_minutes": 1

@@ -66,8 +66,8 @@ MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
 MONGODB_DB = 'Inventarsystem'
 SCHEDULER_INTERVAL = 1  # minutes
-SSL_CERT = 'ssl_certs/cert.pem'
-SSL_KEY = 'ssl_certs/key.pem'
+SSL_CERT = 'ssl_certs/inventarsystem.crt'
+SSL_KEY = 'ssl_certs/inventarsystem.key'
 
 
 # Import config
@@ -108,12 +108,6 @@ try:
     MONGODB_HOST = mongodb_settings.get('host', 'localhost')
     MONGODB_PORT = mongodb_settings.get('port', 27017)
     MONGODB_DB = mongodb_settings.get('db', 'Inventarsystem')
-    
-    # File paths and settings
-    paths = conf.get('paths', {})
-    app.config['UPLOAD_FOLDER'] = paths.get('uploads', os.path.join(BASE_DIR, 'uploads'))
-    app.config['QR_CODE_FOLDER'] = paths.get('qrcodes', QR_CODE_FOLDER)
-    app.config['STATIC_FOLDER'] = paths.get('static', os.path.join(BASE_DIR, 'static'))
     
     # File extensions
     extensions = conf.get('allowed_extensions', ['png', 'jpg', 'jpeg', 'gif'])
