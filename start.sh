@@ -376,6 +376,9 @@ server {
     listen 443 ssl;
     server_name $NETWORK_IP;
     
+    # Add this line to increase the upload limit to 50MB
+    client_max_body_size 50M;
+    
     # SSL configuration
     ssl_certificate $CERT_PATH;
     ssl_certificate_key $KEY_PATH;
