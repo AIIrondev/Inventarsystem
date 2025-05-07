@@ -1,7 +1,7 @@
 {
     "dbg": false,
     "key": 123457,
-    "ver": "1.5.4",
+    "ver": "1.5.5",
     "host": "0.0.0.0",
     "port": 443,
     "schoolPeriods": {
@@ -21,12 +21,12 @@
         "port": 27017,
         "db": "Inventarsystem"
     },
-    "allowed_extensions": ["png", "jpg", "jpeg", "gif"],
+    "allowed_extensions": ["png", "jpg", "jpeg", "gif", "HEVC", "HEIF", "mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "ogg"],
     "scheduler": {
         "interval_minutes": 1
     },
     "ssl": {
-        "cert": "ssl_certs/cert.pem",
-        "key": "ssl_certs/key.pem"
+        "cert": "ssl_certs/Inventarsystem.crt",
+        "key": "ssl_certs/Inventarsystem.key"
     }
 }
