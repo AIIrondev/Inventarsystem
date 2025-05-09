@@ -30,9 +30,6 @@
     
     <div id="calendar"></div>
     
-    <!-- Notification area for alerts -->
-    <div id="notification-area" class="notification-area"></div>
-    
     <!-- Modal for new bookings -->
     <div id="booking-modal" class="modal">
         <div class="modal-content">
@@ -94,18 +91,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const bookingModal = document.getElementById('booking-modal');
     const eventModal = document.getElementById('event-modal');
     const newBookingBtn = document.getElementById('new-booking');
-    const notificationArea = document.getElementById('notification-area');
     let currentEventId = null;
     let calendar;
     let showCompletedBookings = false;
     
-    // School period times from server configuration - more robust parsing
+    // School period times from server configuration
     let schoolPeriods;
     try {
         schoolPeriods = JSON.parse('{{ school_periods|tojson|safe }}');
-        console.log("Successfully parsed school periods:", schoolPeriods);
     } catch (e) {
-        console.error("Error parsing school periods:", e);
         // Fallback to default periods if parsing fails
         schoolPeriods = {
             "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
@@ -144,14 +138,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add timezone offset information for server-side handling
         const tzOffset = startDate.getTimezoneOffset();
         
-        console.log(`Period ${period} times:`, {
-            periodStart: periodInfo.start,
-            periodEnd: periodInfo.end,
-            calculatedStart: startDate.toLocaleTimeString(),
-            calculatedEnd: endDate.toLocaleTimeString(),
-            timezoneOffset: tzOffset
-        });
-        
         return {
             start: startDate,
             end: endDate,
@@ -173,309 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return null;
     }
 
-    // Simple notification function
-    function showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.innerHTML = message;
-        
-        notificationArea.appendChild(notification);
-        
-        // Auto-remove after 8 seconds
-        setTimeout(() => {
-            notification.classList.add('fade-out');
-            setTimeout(() => {
-                notification.remove();
-            }, 500);
-        }, 8000);
-        
-        console.log(`Notification (${type}): ${message}`);
-    }
-    
-    // Create direct manual rendering of events
-    function createManualEvents(events) {
-        console.log('Creating manual events:', events.length);
-        
-        // Try/catch the entire function to avoid global failures
-        try {
-            // Find the container where we'll add our events
-            const container = document.querySelector('.fc-timegrid-body');
-            if (!container) {
-                console.error('Could not find calendar grid container');
-                
-                // Try fallback containers - with added error protection
-                const fallbackContainer = document.querySelector('.fc-view-harness') || 
-                                        document.querySelector('.fc') ||
-                                        document.getElementById('calendar');
-                
-                if (!fallbackContainer) {
-                    console.error('Could not find any suitable calendar container');
-                    // Last resort fallback - just add to the body if we can't find the calendar
-                    createFloatingEvents(events, document.body);
-                    return;
-                }
-                
-                console.log('Using fallback container:', fallbackContainer);
-                createFloatingEvents(events, fallbackContainer);
-                return;
-            }
-            
-            // Remove any existing manual events
-            document.querySelectorAll('.manual-calendar-event').forEach(el => el.remove());
-            
-            // Create container for manual events with clearer positioning
-            const manualEventsContainer = document.createElement('div');
-            manualEventsContainer.className = 'manual-events-container';
-            Object.assign(manualEventsContainer.style, {
-                position: 'absolute',
-                top: '0',
-                left: '0',
-                right: '0',
-                bottom: '0',
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: '2000',
-                overflow: 'visible'
-            });
-            container.appendChild(manualEventsContainer);
-            
-            console.log('Created manual events container, container size:', container.offsetWidth, container.offsetHeight);
-            
-            // Count of successfully created events
-            let createdCount = 0;
-            
-            // Set up timing values
-            const startTime = 8; // 8:15 AM
-            const endTime = 16.75;    // 4:45 PM
-            const timespanHours = endTime - startTime;
-            
-            // Process each event
-            events.forEach(event => {
-                try {
-                    // Parse dates from ISO strings if needed
-                    let startDate, endDate;
-                    
-                    if (typeof event.start === 'string') {
-                        startDate = new Date(event.start);
-                    } else if (event.start instanceof Date) {
-                        startDate = event.start;
-                    } else {
-                        console.warn('Invalid start date for manual event:', event.start);
-                        return;
-                    }
-                    
-                    if (typeof event.end === 'string') {
-                        endDate = new Date(event.end);
-                    } else if (event.end instanceof Date) {
-                        endDate = event.end;
-                    } else {
-                        endDate = new Date(startDate.getTime() + 45*60000); // Default 45 min
-                    }
-                    
-                    // Create the manual event element
-                    const manualEvent = document.createElement('div');
-                    manualEvent.className = 'manual-calendar-event';
-                    manualEvent.setAttribute('data-event-id', event.id);
-                    
-                    // Add stronger styling for high visibility - with explicit !important flags
-                    Object.assign(manualEvent.style, {
-                        position: 'absolute',
-                        backgroundColor: event.backgroundColor || '#3788d8',
-                        color: 'white',
-                        borderRadius: '3px',
-                        padding: '8px',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                        overflow: 'hidden', 
-                        pointerEvents: 'auto',
-                        cursor: 'pointer',
-                        zIndex: '5000',
-                        border: '2px solid ' + (event.borderColor || '#2c6aa0'),
-                        fontWeight: 'bold',
-                        fontSize: '12px',
-                        minHeight: '40px', 
-                        visibility: 'visible !important',
-                        display: 'block !important',
-                        opacity: '1 !important'
-                    });
-                    
-                    // Calculate column position
-                    manualEvent.style.left = '50px';
-                    manualEvent.style.right = '50px';
-                    
-                    // Calculate vertical position - simpler positioning logic
-                    const startHour = startDate.getHours() + (startDate.getMinutes() / 60);
-                    const endHour = endDate.getHours() + (endDate.getMinutes() / 60);
-                    
-                    // Calculate position relative to visible time range
-                    // Make sure position is constrained to the visible area
-                    let relativeStart = Math.max(0, (startHour - startTime) / timespanHours);
-                    let relativeEnd = Math.min(1, (endHour - startTime) / timespanHours);
-                    
-                    if (relativeEnd <= 0 || relativeStart >= 1) {
-                        // Event is outside visible range
-                        console.log(`Event outside visible range: ${startHour}-${endHour}`);
-                        return;
-                    }
-                    
-                    // Constrain to visible area
-                    relativeStart = Math.max(0, relativeStart);
-                    relativeEnd = Math.min(1, relativeEnd);
-                    
-                    // Convert to pixels (percentage of container)
-                    const containerHeight = container.offsetHeight;
-                    const top = Math.floor(relativeStart * containerHeight);
-                    const height = Math.max(40, Math.floor((relativeEnd - relativeStart) * containerHeight));
-                    
-                    // Apply positioning
-                    manualEvent.style.top = `${top}px`;
-                    manualEvent.style.height = `${height}px`;
-                    
-                    // Event content with more detailed information
-                    manualEvent.innerHTML = `
-                        <div style="font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                            ${event.title}
-                        </div>
-                        <div style="font-size:11px;margin-top:3px;">
-                            ${startDate.getHours()}:${String(startDate.getMinutes()).padStart(2, '0')} - 
-                            ${endDate.getHours()}:${String(endDate.getMinutes()).padStart(2, '0')}
-                        </div>
-                        <div style="font-size:10px;margin-top:2px;opacity:0.9;">
-                            ${event.extendedProps?.userName || 'Unknown'}
-                        </div>
-                    `;
-                    
-                    // Add period badge if available
-                    if (event.extendedProps && event.extendedProps.period) {
-                        const periodBadge = document.createElement('div');
-                        Object.assign(periodBadge.style, {
-                            position: 'absolute',
-                            right: '5px',
-                            top: '5px',
-                            fontSize: '10px',
-                            padding: '2px 4px',
-                            borderRadius: '3px',
-                            backgroundColor: 'rgba(255,255,255,0.3)',
-                            fontWeight: 'bold'
-                        });
-                        periodBadge.textContent = event.extendedProps.period + '. Std';
-                        manualEvent.appendChild(periodBadge);
-                    }
-                    
-                    // Add click handler
-                    manualEvent.addEventListener('click', () => {
-                        if (typeof showEventDetails === 'function') {
-                            showEventDetails(event);
-                        }
-                    });
-                    
-                    // Add to container
-                    manualEventsContainer.appendChild(manualEvent);
-                    createdCount++;
-                    
-                    console.log(`Created manual event: "${event.title}" at ${top}px (${startHour}h)`);
-                } catch (e) {
-                    console.error('Error creating manual event:', e, event);
-                }
-            });
-            
-            console.log(`Successfully created ${createdCount} manual events out of ${events.length}`);
-            
-            // Add a visual indicator that we're in manual mode
-            const indicator = document.createElement('div');
-            Object.assign(indicator.style, {
-                position: 'fixed',  // Changed to fixed for better visibility
-                top: '10px',
-                right: '10px',
-                backgroundColor: '#e74c3c',
-                color: 'white',
-                padding: '5px 10px',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-                zIndex: '5500',
-                fontSize: '12px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-            });
-            indicator.textContent = 'Manueller Anzeigemodus';
-            document.body.appendChild(indicator);  // Add to body to ensure visibility
-        } catch (e) {
-            console.error('Fatal error in manual event creation:', e);
-            // Last resort emergency display
-            try {
-                // Create a simple notification element as absolute last resort
-                const emergencyContainer = document.createElement('div');
-                emergencyContainer.style.position = 'fixed';
-                emergencyContainer.style.top = '20%';
-                emergencyContainer.style.left = '20%';
-                emergencyContainer.style.right = '20%';
-                emergencyContainer.style.backgroundColor = '#f8d7da';
-                emergencyContainer.style.color = '#721c24';
-                emergencyContainer.style.padding = '20px';
-                emergencyContainer.style.borderRadius = '5px';
-                emergencyContainer.style.zIndex = '9999';
-                emergencyContainer.style.boxShadow = '0 5px 15px rgba(0,0,0,0.5)';
-                
-                const header = document.createElement('h3');
-                header.textContent = 'Kalenderanzeige konnte nicht geladen werden';
-                emergencyContainer.appendChild(header);
-                
-                const message = document.createElement('p');
-                message.textContent = `Es gibt ${events.length} Termine, die nicht angezeigt werden können.`;
-                emergencyContainer.appendChild(message);
-                
-                const eventsList = document.createElement('ul');
-                events.slice(0, 5).forEach(event => {
-                    const li = document.createElement('li');
-                    li.textContent = `${event.title} (ID: ${event.id})`;
-                    eventsList.appendChild(li);
-                });
-                emergencyContainer.appendChild(eventsList);
-                
-                document.body.appendChild(emergencyContainer);
-            } catch (finalError) {
-                // At this point we've tried everything we can
-                console.error('Complete failure in event rendering:', finalError);
-                alert('Fehler beim Rendern der Kalenderereignisse. Bitte laden Sie die Seite neu.');
-            }
-        }
-    }
-
-    // Alternative approach for when the normal container isn't available
-    function createFloatingEvents(events, container) {
-        console.log('Creating floating events:', events.length);
-        // Implementation for floating events
-    }
-
-    // Create a debug overlay to show where events should be - SIMPLIFIED VERSION
-    function createDebugOverlay(events) {
-        console.log("Using simplified debug overlay as fallback");
-        // Just call our manual event renderer which is more robust
-        createManualEvents(events);
-    }
-
-    // Add simple self-healing function
-    function checkAndFixEvents() {
-        console.log("Running self-healing event check");
-        try {
-            const events = calendar.getEvents();
-            if (!events || !Array.isArray(events)) {
-                console.log('No valid events array found');
-                return;
-            }
-            
-            const visibleEvents = document.querySelectorAll('.fc-event').length;
-            
-            if (events.length > 0 && visibleEvents === 0) {
-                console.log('Self-healing: Events exist but are not visible. Creating manual events...');
-                createManualEvents(events);
-            }
-        } catch (e) {
-            console.error('Error in self-healing function:', e);
-        }
-    }
-
-    // Initialize calendar with expanded debugging
-    console.log('Initializing calendar with container size:', calendarEl.offsetWidth, calendarEl.offsetHeight);
+    // Initialize calendar
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridDay',
         locale: 'de',
@@ -493,11 +177,11 @@ document.addEventListener('DOMContentLoaded', function() {
         now: new Date(),
         timeZone: 'local',
         displayEventTime: true,
-        height: 'auto', // Let the calendar adjust to content
-        contentHeight: 'auto', // Let the calendar adjust to content
-        handleWindowResize: true, // Ensure it resizes with the window
-        eventDisplay: 'block',        // Force block display mode
-        forceEventDuration: true,     // Ensure events have a duration
+        height: 'auto',
+        contentHeight: 'auto',
+        handleWindowResize: true,
+        eventDisplay: 'block',
+        forceEventDuration: true,
         eventTimeFormat: {
             hour: '2-digit',
             minute: '2-digit',
@@ -512,8 +196,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const startStr = info.startStr;
             const endStr = info.endStr;
             
-            console.log(`Fetching events from ${startStr} to ${endStr}`);
-            
             // Load events from the server
             fetch('/get_bookings?start=' + startStr + '&end=' + endStr)
                 .then(response => {
@@ -523,19 +205,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     return response.json();
                 })
                 .then(data => {
-                    // Extract bookings from response with detailed logging
+                    // Extract bookings from response
                     const bookingsArray = Array.isArray(data) ? data : (data.bookings || []);
-                    console.log("Raw event data received:", bookingsArray);
-                    
-                    if (bookingsArray.length === 0) {
-                        console.log("No events received from server for this period");
-                    }
                     
                     // Process events to add colors based on status
                     let processedEvents = bookingsArray.map(event => {
-                        // Debug individual event
-                        console.log("Processing event:", event);
-                        
                         let eventColor = '#3788d8'; // Default color
                         
                         if (event.isCurrentUser) {
@@ -554,69 +228,43 @@ document.addEventListener('DOMContentLoaded', function() {
                             startTime = new Date(event.start);
                             endTime = new Date(event.end);
                             
-                            // Add debugging for time conversion
-                            console.log(`Event time conversion for ${event.id}:`, {
-                                originalStart: event.start,
-                                originalEnd: event.end,
-                                parsedStart: startTime.toString(),
-                                parsedEnd: endTime.toString(),
-                                localStart: startTime.toLocaleString(),
-                                localEnd: endTime.toLocaleString()
-                            });
-                            
                             // Verify dates are valid
                             if (isNaN(startTime) || isNaN(endTime)) {
-                                console.error("Invalid date for event:", event);
-                                // Use fallback values if dates are invalid
                                 const now = new Date();
                                 startTime = now;
                                 endTime = new Date(now.getTime() + 45*60000); // 45 minutes later
                             }
                         } catch (e) {
-                            console.error("Error parsing dates for event:", e, event);
                             const now = new Date();
                             startTime = now;
                             endTime = new Date(now.getTime() + 45*60000);
                         }
                         
-                        // Add direct debugging elements
-                        const debugInfo = {
-                            id: event.id,
-                            title: event.title || "Unnamed Event",
-                            startTime: startTime.toLocaleString(),
-                            endTime: endTime.toLocaleString()
-                        };
-                        
                         // Create the processed event object
-                        const processedEvent = {
+                        return {
                             id: event.id,
                             title: event.title || "Unnamed Event",
                             start: startTime.toISOString(),
                             end: endTime.toISOString(),
-                            allDay: false, // Explicitly set to false for time-based events
+                            allDay: false,
                             extendedProps: {
                                 itemId: event.itemId,
                                 userName: event.userName || "Unknown User",
                                 notes: event.notes || "",
                                 status: event.status || "unknown",
                                 isCurrentUser: Boolean(event.isCurrentUser),
-                                period: event.period,
-                                debugInfo: debugInfo
+                                period: event.period
                             },
                             backgroundColor: eventColor,
                             borderColor: eventColor,
                             textColor: '#ffffff',
-                            display: 'block', // Use 'block' for better visibility
+                            display: 'block',
                             classNames: [
                                 (event.status || "unknown") + '-event',
                                 event.isCurrentUser ? 'user-event' : '',
-                                'custom-event',
-                                'fc-event-forced-visible'
+                                'custom-event'
                             ]
                         };
-                        
-                        console.log("Created processed event:", processedEvent);
-                        return processedEvent;
                     });
                     
                     // Filter completed if needed
@@ -624,92 +272,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         ? processedEvents 
                         : processedEvents.filter(event => event.extendedProps.status !== 'completed');
                     
-                    console.log(`Processed ${processedEvents.length} events, displaying ${filteredEvents.length}`);
-                    if (filteredEvents.length > 0) {
-                        console.log("First event sample:", filteredEvents[0]);
-                    } else {
-                        console.log("No events to display after filtering");
-                    }
-                    
-                    // Add direct rendering after event processing
-                    setTimeout(() => {
-                        calendar.removeAllEvents();
-                        calendar.addEventSource(filteredEvents);
-                    }, 100);
-                    
-                    // Successfully provide events to calendar
+                    // Provide events to calendar
                     successCallback(filteredEvents);
-                    
-                    // Visual confirmation that events are loaded
-                    showNotification(`${filteredEvents.length} Ausleihungen geladen`, 'info');
-                    
-                    // Create a visible debug overlay if events are present but not visible
-                    if (filteredEvents.length > 0) {
-                        setTimeout(() => {
-                            try {
-                                const visibleEvents = document.querySelectorAll('.fc-event').length;
-                                if (visibleEvents === 0) {
-                                    console.warn("Events were processed but none are visible in the DOM!");
-                                    // Direct call to createManualEvents instead of createDebugOverlay
-                                    createManualEvents(filteredEvents);
-                                } else {
-                                    console.log(`${visibleEvents} events found in DOM`);
-                                }
-                            } catch (e) {
-                                console.error("Error checking for visible events:", e);
-                                // If there's an error, try to render the events directly
-                                try {
-                                    createManualEvents(filteredEvents);
-                                } catch (innerError) {
-                                    console.error("Failed to create manual events:", innerError);
-                                }
-                            }
-                        }, 1000);
-                    }
-                    
-                    // Force a complete refresh of the calendar
-                    setTimeout(() => {
-                        calendar.updateSize();
-                        calendar.render(); // Force re-render everything
-                    }, 200);
                 })
                 .catch(error => {
-                    console.error('Error loading bookings:', error);
                     failureCallback(error);
-                    showNotification('Fehler beim Laden der Ausleihungen: ' + error.message, 'error');
                 });
         },
         eventDidMount: function(info) {
-            console.log("Event mounted:", info.event.title, info.el);
-            
-            // DEBUG - Style the element directly to ensure visibility
-            info.el.style.zIndex = '100';
-            info.el.style.position = 'absolute';
-            info.el.style.backgroundColor = info.event.backgroundColor;
-            info.el.style.borderColor = info.event.borderColor;
-            info.el.style.color = '#fff';
-            info.el.style.padding = '4px 6px';
-            info.el.style.borderRadius = '3px';
-            info.el.style.fontWeight = 'bold';
-            info.el.style.margin = '1px 0';
-            info.el.style.opacity = '1';
-            info.el.style.visibility = 'visible';
-            info.el.style.display = 'block';
-            info.el.style.pointerEvents = 'auto';
-            
-            // Add a visible debug indicator to every event
-            const debugDot = document.createElement('div');
-            debugDot.className = 'debug-dot';
-            debugDot.style.width = '8px';
-            debugDot.style.height = '8px';
-            debugDot.style.borderRadius = '50%';
-            debugDot.style.backgroundColor = '#ff0000';
-            debugDot.style.position = 'absolute';
-            debugDot.style.top = '0';
-            debugDot.style.right = '0';
-            debugDot.style.zIndex = '101';
-            info.el.appendChild(debugDot);
-            
             // Add custom attributes for styling
             if (info.event.extendedProps.isCurrentUser) {
                 info.el.setAttribute('data-is-current-user', 'true');
@@ -745,95 +315,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 borrowerIndicator.style.fontSize = '12px';
                 info.el.appendChild(borrowerIndicator);
                 
-                // Add a class to style the event differently
                 info.el.classList.add('already-borrowed');
             }
         },
         eventClick: function(info) {
-            console.log("Event clicked:", info.event.title);
             showEventDetails(info.event);
         },
         datesSet: function(dateInfo) {
-            console.log("Calendar dates set:", dateInfo.start, dateInfo.end);
+            updateCurrentDayDisplay();
         }
     });
 
-    // Render calendar with more robust error handling and add additional fixes
+    // Render calendar
     try {
-        console.log('Rendering calendar and checking for events');
         calendar.render();
-        console.log('Calendar rendered successfully');
         
-        // Override FullCalendar CSS directly to ensure visibility
-        const styleOverrides = document.createElement('style');
-        styleOverrides.textContent = `
-            /* Force event visibility */
-            .fc-timegrid-event-harness, 
-            .fc-timegrid-event, 
-            .fc-daygrid-event-harness,
-            .fc-daygrid-event,
-            .fc-event-main,
-            .fc-event-main-frame,
-            .fc-event,
-            .fc-event-forced-visible {
-                opacity: 1 !important;
-                visibility: visible !important;
-                display: block !important;
-                position: absolute !important;
-                z-index: 999 !important;
-                pointer-events: auto !important;
-            }
-            
-            /* Ensure proper containment */
-            .fc-view-harness,
-            .fc-timegrid,
-            .fc-timegrid-body,
-            .fc-timegrid-slots,
-            .fc-timegrid-cols,
-            .fc-timegrid-col {
-                overflow: visible !important;
-            }
-        `;
-        document.head.appendChild(styleOverrides);
-        
-        // Multiple refresh attempts with different strategies
         setTimeout(() => {
             calendar.updateSize();
-            console.log('Calendar size updated');
-            
-            // Check for rendered events
-            const events = document.querySelectorAll('.fc-event');
-            console.log(`Found ${events.length} event elements in DOM after rendering`);
-            
-            // Force calendar to completely reload
             calendar.refetchEvents();
         }, 500);
-        
-        // Try another refresh after a delay
-        setTimeout(() => {
-            console.log('Forcing initial event refresh');
-            calendar.refetchEvents();
-            
-            // Apply our manual rendering if needed
-            checkAndFixEvents();
-        }, 1000);
-        
-        // Final attempt
-        setTimeout(() => {
-            console.log('Forcing secondary event refresh');
-            calendar.refetchEvents();
-            
-            // Check again
-            const events = document.querySelectorAll('.fc-event');
-            console.log(`Found ${events.length} event elements in DOM after refresh`);
-            
-            // Final manual rendering if still needed
-            checkAndFixEvents();
-        }, 2500);
-        
     } catch (e) {
         console.error("Error rendering calendar:", e);
-        showNotification('Fehler beim Rendern des Kalenders: ' + e.message, 'error');
     }
     
     updateCurrentDayDisplay();
@@ -872,8 +374,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const items = data.items || [];
                 
                 items.forEach(item => {
-                    // Include all items, even if not immediately available
-                    // Availability will be checked when booking
                     const option = document.createElement('option');
                     const itemId = item._id.$oid || item._id || item.id;
                     option.value = itemId;
@@ -883,9 +383,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (items.length === 0) {
                     itemSelect.innerHTML += '<option value="" disabled>Keine Objekte gefunden</option>';
-                    console.log('No items found');
-                } else {
-                    console.log(`Loaded ${items.length} items into dropdown`);
                 }
             })
             .catch(error => console.error('Error loading items:', error));
@@ -999,13 +496,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(this);
         
-        // Log form data for basic tracking
-        const formValues = {};
-        for (let [key, value] of formData.entries()) {
-            formValues[key] = value;
-        }
-        console.log('Booking form submitted', formValues);
-        
         // Add period information to the form data
         const bookingDate = new Date(formData.get('booking_date'));
         const periodNum = formData.get('period');
@@ -1014,15 +504,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const periodTimes = getPeriodTimes(bookingDate, periodNum);
         
         if (!periodTimes) {
-            showNotification('Ungültige Schulstunde ausgewählt!', 'error');
+            alert('Ungültige Schulstunde ausgewählt!');
             return;
         }
         
         // Verify the times are in the correct range
         const startHour = periodTimes.start.getHours();
         if (startHour < 8 || startHour > 16) {
-            console.error('Invalid hour generated:', startHour);
-            showNotification('Fehler: Ungültiger Zeitraum erzeugt!', 'error');
+            alert('Fehler: Ungültiger Zeitraum erzeugt!');
             return;
         }
         
@@ -1043,12 +532,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         formData.append('start_date', formatDateForServer(startDate));
         formData.append('end_date', formatDateForServer(endDate));
-        
-        const itemId = formData.get('item_id');
-        const notes = formData.get('notes');
-        
-        // Show loading notification
-        showNotification('Reservierung wird geprüft...', 'info');
         
         fetch('/plan_booking', {
             method: 'POST',
@@ -1074,30 +557,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Close modal and refresh calendar
                 bookingModal.style.display = 'none';
                 
-                showNotification('Ausleihe erfolgreich geplant!', 'success');
+                alert('Ausleihe erfolgreich geplant!');
                 
                 // Force-refresh the calendar
                 setTimeout(() => {
-                    console.log('Refreshing calendar after successful booking');
-                    // Just refetch events - this is the correct method
                     calendar.refetchEvents();
-                    
-                    // In rare cases, changing the view can help
-                    const currentView = calendar.view.type;
-                    calendar.changeView('listDay');
-                    setTimeout(() => calendar.changeView(currentView), 100);
-                }, 1000); 
+                }, 500); 
             } else {
                 const errorMsg = data.error || 'Unbekannter Fehler';
-                showNotification('Fehler: ' + errorMsg, 'error');
+                alert('Fehler: ' + errorMsg);
             }
         })
         .catch(error => {
             console.error('Error submitting booking:', error);
-            showNotification(
-                'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 
-                'error'
-            );
+            alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
         });
     });
     
@@ -1112,14 +585,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     eventModal.style.display = 'none';
                     calendar.refetchEvents();
-                    showNotification('Ausleihe erfolgreich storniert!', 'success');
+                    alert('Ausleihe erfolgreich storniert!');
                 } else {
-                    showNotification('Fehler: ' + data.error, 'error');
+                    alert('Fehler: ' + data.error);
                 }
             })
             .catch(error => {
                 console.error('Error canceling booking:', error);
-                showNotification('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
+                alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
             });
         }
     });
@@ -1128,30 +601,6 @@ document.addEventListener('DOMContentLoaded', function() {
         showCompletedBookings = this.checked;
         calendar.refetchEvents();
     });
-
-    // On initial page load, add an extra attempt to render events manually
-    setTimeout(() => {
-        try {
-            const events = calendar.getEvents();
-            const visibleEvents = document.querySelectorAll('.fc-event').length;
-            
-            if (events.length > 0 && visibleEvents === 0) {
-                console.log('Initial load: Events exist but are not visible. Creating manual events...');
-                createManualEvents(events);
-            }
-            
-            // Set up periodic self-healing with error handling
-            setInterval(() => {
-                try {
-                    checkAndFixEvents();
-                } catch (e) {
-                    console.error('Error in self-healing interval:', e);
-                }
-            }, 5000);
-        } catch (e) {
-            console.error('Error in initial manual rendering check:', e);
-        }
-    }, 1500);
 });
 </script>
 
@@ -1170,17 +619,17 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
-    flex-wrap: wrap; /* Allow items to wrap on small screens */
-    gap: 10px; /* Add gap between items */
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .calendar-actions button {
     background-color: #f0f0f0;
     border: 1px solid #ddd;
     padding: 5px 10px;
-    margin: 0;  /* Remove horizontal margins */
+    margin: 0;
     cursor: pointer;
-    white-space: nowrap;  /* Prevent button text from wrapping */
+    white-space: nowrap;
 }
 
 .calendar-actions .primary-button {
@@ -1199,19 +648,19 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
     .calendar-actions {
-        justify-content: center; /* Center items on mobile */
-        flex-direction: column; /* Stack buttons vertically on very small screens */
+        justify-content: center;
+        flex-direction: column;
         margin-bottom: 15px;
     }
     
     .calendar-actions button {
-        width: 100%; /* Full width buttons on mobile */
-        margin: 5px 0; /* Add vertical spacing between buttons */
+        width: 100%;
+        margin: 5px 0;
     }
     
     .calendar-actions .primary-button {
-        margin-left: 0; /* Reset margin on mobile */
-        order: -1; /* Place the primary button first */
+        margin-left: 0;
+        order: -1;
     }
     
     #current-day-display {
@@ -1264,7 +713,6 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #8e44ad;
 }
 
-/* Add to existing styles */
 .calendar-options {
     margin: 10px 0;
 }
@@ -1277,50 +725,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .checkbox-container input {
     margin-right: 8px;
-}
-
-/* Notification area */
-.notification-area {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-    width: 300px;
-}
-
-.notification {
-    background-color: #fff;
-    border-left: 4px solid #3788d8;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    padding: 15px;
-    margin-bottom: 10px;
-    animation: slideIn 0.3s ease-out;
-}
-
-.notification.success {
-    border-left-color: #2ecc71;
-}
-
-.notification.error {
-    border-left-color: #e74c3c;
-}
-
-.notification.warning {
-    border-left-color: #f39c12;
-}
-
-.notification.fade-out {
-    animation: fadeOut 0.5s ease-in forwards;
-}
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
 }
 
 /* Modal styles */
@@ -1488,68 +892,6 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: rgba(240, 240, 245, 0.4);
 }
 
-/* Time overflow indicators styles */
-.time-overflow-container {
-    width: 100%;
-    background-color: #f8f8f8;
-    border: 1px solid #ddd;
-    padding: 5px;
-    margin-bottom: 10px;
-    z-index: 10;
-}
-
-.before-container {
-    border-bottom: 2px dashed #aaa;
-    margin-top: -5px;
-    position: relative;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.after-container {
-    border-top: 2px dashed #aaa;
-    margin-bottom: -5px;
-    position: relative;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.overflow-event-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 8px;
-    margin: 3px 0;
-    border-radius: 3px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.overflow-event-item:hover {
-    opacity: 0.9;
-}
-
-.overflow-event-time {
-    font-weight: bold;
-    margin-right: 5px;
-}
-
-.overflow-event-title {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.before-event {
-    border-left: 4px solid;
-}
-
-.after-event {
-    border-right: 4px solid;
-}
-
 /* Class for events with special times */
 .has-early-start {
     border-top-width: 3px !important;
@@ -1566,8 +908,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .fc-timegrid-event, 
 .fc-event-main, 
 .fc-timegrid-event-harness, 
-.custom-event,
-.fc-event-forced-visible {
+.custom-event {
     border-width: 2px !important;
     font-weight: bold !important;
     padding: 2px 4px !important;
@@ -1582,62 +923,12 @@ document.addEventListener('DOMContentLoaded', function() {
     overflow: visible !important;
 }
 
-/* Manual event elements for backup rendering */
-.manual-calendar-event {
-    font-family: Arial, sans-serif;
-    box-sizing: border-box;
-    line-height: 1.3;
-    transition: box-shadow 0.2s, transform 0.1s;
-    z-index: 2001 !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-}
-
-.manual-calendar-event:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
-    transform: scale(1.03);
-}
-
-.manual-events-container {
-    pointer-events: none;
-    z-index: 2000 !important;
-    position: absolute !important;
-    inset: 0 !important;
-}
-
-/* Add extra specificity to ensure high visibility */
-.calendar-container .manual-calendar-event,
-#calendar .manual-calendar-event,
-div.manual-calendar-event {
-    visibility: visible !important;
-    display: block !important;
-    opacity: 1 !important;
-    position: absolute !important;
-    z-index: 3000 !important;
-}
-
-/* Debug overlay styling */
-.debug-event {
-    box-shadow: 0 0 8px rgba(0,0,0,0.3);
-    margin-bottom: 5px;
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-
-.debug-event:hover {
-    transform: scale(1.05);
-}
-
-.debug-alert {
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-}
-
 /* Extra specificity for user events to ensure visibility */
 .user-event-visible,
 .fc-event[data-is-current-user="true"],
 .fc-timegrid-event[data-is-current-user="true"] {
     box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
-    z-index: 100 !important; /* Make sure user's events appear on top */
+    z-index: 100 !important;
     opacity: 1 !important;
     border-width: 3px !important;
     padding: 3px 5px !important;
@@ -1656,32 +947,6 @@ div.manual-calendar-event {
     opacity: 1 !important;
     visibility: visible !important;
     display: block !important;
-}
-
-/* Debug overlay */
-.debug-event-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1000;
-    pointer-events: none;
-}
-
-.debug-event {
-    box-shadow: 0 0 5px rgba(0,0,0,0.5);
-    margin-bottom: 5px;
-}
-
-.debug-dot {
-    animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.3; }
-    100% { opacity: 1; }
 }
 </style>
 {% endblock %}
