@@ -1087,8 +1087,8 @@ def plan_booking():
     try:
         # Extract form data
         item_id = request.form.get('item_id')
-        start_date_str = request.form.get('start_date')
-        end_date_str = request.form.get('end_date')
+        start_date_str = request.form.get('booking_date')  # Changed from start_date to booking_date
+        end_date_str = request.form.get('booking_end_date')  # Changed from end_date to booking_end_date
         period_start = request.form.get('period_start')
         period_end = request.form.get('period_end')
         notes = request.form.get('notes', '')
