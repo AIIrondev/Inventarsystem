@@ -36,10 +36,29 @@
             <span class="close">&times;</span>
             <h2>Neue Reservierung</h2>
             <form id="booking-form">
+                <!-- Booking Type -->
                 <div class="form-group">
-                    <label for="booking-date">Datum:</label>
+                    <label for="booking-type">Reservierungstyp:</label>
+                    <select id="booking-type" name="booking_type">
+                        <option value="single">Einzeltermin</option>
+                        <option value="range">Zeitraum</option>
+                        <option value="recurring">Wiederkehrend</option>
+                    </select>
+                </div>
+                
+                <!-- Start Date -->
+                <div class="form-group" id="start-date-group">
+                    <label for="booking-date" id="booking-date-label">Datum:</label>
                     <input type="date" id="booking-date" name="booking_date" required>
                 </div>
+                
+                <!-- End Date (for range) -->
+                <div class="form-group" id="end-date-group" style="display:none;">
+                    <label for="booking-end-date">Bis:</label>
+                    <input type="date" id="booking-end-date" name="booking_end_date">
+                </div>
+                
+                <!-- Period Selection -->
                 <div class="form-group">
                     <label for="period-select">Schulstunde:</label>
                     <select id="period-select" name="period" required>
@@ -49,6 +68,45 @@
                         {% endfor %}
                     </select>
                 </div>
+                
+                <!-- Recurring Options -->
+                <div id="recurring-options" style="display:none;">
+                    <div class="form-group">
+                        <label for="recurrence-pattern">Wiederholungsmuster:</label>
+                        <select id="recurrence-pattern" name="recurrence_pattern">
+                            <option value="daily">Täglich</option>
+                            <option value="weekly" selected>Wöchentlich</option>
+                            <option value="monthly">Monatlich</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="recurrence-end-date">Wiederholung bis:</label>
+                        <input type="date" id="recurrence-end-date" name="recurrence_end_date">
+                    </div>
+                    
+                    <div class="form-group" id="weekly-options">
+                        <label>Wochentage:</label>
+                        <div class="weekday-selector">
+                            <label><input type="checkbox" name="weekdays" value="1"> Mo</label>
+                            <label><input type="checkbox" name="weekdays" value="2"> Di</label>
+                            <label><input type="checkbox" name="weekdays" value="3"> Mi</label>
+                            <label><input type="checkbox" name="weekdays" value="4"> Do</label>
+                            <label><input type="checkbox" name="weekdays" value="5"> Fr</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="monthly-options" style="display:none;">
+                        <label>Tag des Monats:</label>
+                        <select id="day-of-month" name="day_of_month">
+                            <option value="same_day">Gleicher Tag</option>
+                            <option value="first_weekday">Erster gleicher Wochentag</option>
+                            <option value="last_weekday">Letzter gleicher Wochentag</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Item Selection -->
                 <div class="form-group">
                     <label for="item-select">Objekt:</label>
                     <select id="item-select" name="item_id" required>
@@ -56,10 +114,18 @@
                         <!-- Items will be loaded dynamically -->
                     </select>
                 </div>
+                
+                <!-- Notes -->
                 <div class="form-group">
                     <label for="booking-notes">Notizen:</label>
                     <textarea id="booking-notes" name="notes"></textarea>
                 </div>
+                
+                <!-- Booking Summary -->
+                <div class="booking-summary" id="booking-summary" style="display:none;">
+                    <!-- Will be populated dynamically -->
+                </div>
+                
                 <button type="submit" class="primary-button">Ausleihung speichern</button>
             </form>
         </div>
@@ -601,6 +667,328 @@ document.addEventListener('DOMContentLoaded', function() {
         showCompletedBookings = this.checked;
         calendar.refetchEvents();
     });
+    
+    // Helper functions for dates
+    function formatDate(date) {
+        if (!date) return '';
+        return date.toISOString().split('T')[0];
+    }
+
+    // Setup booking form controls
+    const bookingTypeSelect = document.getElementById('booking-type');
+    const startDateGroup = document.getElementById('start-date-group');
+    const endDateGroup = document.getElementById('end-date-group');
+    const recurringOptions = document.getElementById('recurring-options');
+    const bookingDateLabel = document.getElementById('booking-date-label');
+    const recurrencePatternSelect = document.getElementById('recurrence-pattern');
+    const weeklyOptions = document.getElementById('weekly-options');
+    const monthlyOptions = document.getElementById('monthly-options');
+    const bookingSummary = document.getElementById('booking-summary');
+
+    // Handle booking type changes
+    bookingTypeSelect.addEventListener('change', function() {
+        const selectedType = this.value;
+        
+        // Reset form visibility
+        startDateGroup.style.display = 'block';
+        endDateGroup.style.display = 'none';
+        recurringOptions.style.display = 'none';
+        bookingDateLabel.textContent = 'Datum:';
+        bookingSummary.style.display = 'none';
+        
+        // Configure form based on booking type
+        if (selectedType === 'range') {
+            bookingDateLabel.textContent = 'Von:';
+            endDateGroup.style.display = 'block';
+            bookingSummary.style.display = 'block';
+        } else if (selectedType === 'recurring') {
+            recurringOptions.style.display = 'block';
+            bookingSummary.style.display = 'block';
+            
+            // Set default recurring end date to 3 months from now
+            const threeMonthsLater = new Date();
+            threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+            document.getElementById('recurrence-end-date').value = formatDate(threeMonthsLater);
+            
+            // Check the weekday of the selected date
+            updateWeekdaySelection();
+        }
+        
+        updateBookingSummary();
+    });
+
+    // Handle recurrence pattern change
+    recurrencePatternSelect.addEventListener('change', function() {
+        const pattern = this.value;
+        
+        weeklyOptions.style.display = pattern === 'weekly' ? 'block' : 'none';
+        monthlyOptions.style.display = pattern === 'monthly' ? 'block' : 'none';
+        
+        updateBookingSummary();
+    });
+
+    // Update weekday checkboxes when date changes
+    document.getElementById('booking-date').addEventListener('change', function() {
+        if (bookingTypeSelect.value === 'recurring') {
+            updateWeekdaySelection();
+        }
+        updateBookingSummary();
+    });
+
+    // Update booking summary when relevant fields change
+    document.getElementById('booking-end-date').addEventListener('change', updateBookingSummary);
+    document.getElementById('recurrence-end-date').addEventListener('change', updateBookingSummary);
+    document.getElementById('period-select').addEventListener('change', updateBookingSummary);
+
+    // Add listeners to all weekday checkboxes
+    document.querySelectorAll('input[name="weekdays"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateBookingSummary);
+    });
+
+    // Select the correct weekday checkbox based on chosen date
+    function updateWeekdaySelection() {
+        const date = new Date(document.getElementById('booking-date').value);
+        if (!isNaN(date.getTime())) {
+            // Clear all checkboxes
+            document.querySelectorAll('input[name="weekdays"]').forEach(cb => cb.checked = false);
+            
+            // Get day of week (0=Sunday, 1=Monday, etc.)
+            let dayOfWeek = date.getDay();
+            // Convert to 1=Monday, 2=Tuesday, ... 7=Sunday
+            dayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+            
+            // Check the corresponding checkbox
+            const checkbox = document.querySelector(`input[name="weekdays"][value="${dayOfWeek}"]`);
+            if (checkbox) checkbox.checked = true;
+        }
+    }
+
+    // Generate booking summary based on current selections
+    function updateBookingSummary() {
+        const bookingType = bookingTypeSelect.value;
+        const startDate = new Date(document.getElementById('booking-date').value);
+        const periodSelect = document.getElementById('period-select');
+        const periodLabel = periodSelect.options[periodSelect.selectedIndex]?.text || "Keine Schulstunde ausgewählt";
+        
+        // Hide summary for single bookings or if date is invalid
+        if (bookingType === 'single' || isNaN(startDate.getTime())) {
+            bookingSummary.style.display = 'none';
+            return;
+        }
+        
+        bookingSummary.style.display = 'block';
+        let summaryHTML = '<h4>Reservierungsübersicht:</h4>';
+        
+        const formattedStartDate = startDate.toLocaleDateString('de-DE', {
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric'
+        });
+        
+        if (bookingType === 'range') {
+            const endDate = new Date(document.getElementById('booking-end-date').value);
+            
+            if (isNaN(endDate.getTime())) {
+                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum.</p>';
+            } else {
+                const formattedEndDate = endDate.toLocaleDateString('de-DE', {
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric'
+                });
+                
+                // Calculate number of days in the range
+                const diffTime = Math.abs(endDate - startDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                
+                summaryHTML += `
+                    <p>Zeitraum vom ${formattedStartDate} bis ${formattedEndDate}</p>
+                    <p>${diffDays} Tage, jeweils Schulstunde: ${periodLabel}</p>
+                `;
+            }
+        }
+        else if (bookingType === 'recurring') {
+            const pattern = document.getElementById('recurrence-pattern').value;
+            const endDate = new Date(document.getElementById('recurrence-end-date').value);
+            
+            if (isNaN(endDate.getTime())) {
+                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum für die Wiederholung.</p>';
+                bookingSummary.innerHTML = summaryHTML;
+                return;
+            }
+            
+            const formattedEndDate = endDate.toLocaleDateString('de-DE', {
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric'
+            });
+            
+            let patternText = '';
+            let selectedDates = [];
+            
+            if (pattern === 'daily') {
+                patternText = 'Täglich';
+                selectedDates = calculateDailyDates(startDate, endDate, 5);
+            } 
+            else if (pattern === 'weekly') {
+                const selectedWeekdays = [];
+                document.querySelectorAll('input[name="weekdays"]:checked').forEach(cb => {
+                    selectedWeekdays.push(parseInt(cb.value));
+                });
+                
+                if (selectedWeekdays.length === 0) {
+                    summaryHTML += '<p>Bitte wählen Sie mindestens einen Wochentag aus.</p>';
+                    bookingSummary.innerHTML = summaryHTML;
+                    return;
+                }
+                
+                const weekdayNames = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+                patternText = 'Wöchentlich am ' + selectedWeekdays.map(day => weekdayNames[day]).join(', ');
+                
+                selectedDates = calculateWeeklyDates(startDate, endDate, selectedWeekdays, 5);
+            } 
+            else if (pattern === 'monthly') {
+                const monthOption = document.getElementById('day-of-month').value;
+                
+                if (monthOption === 'same_day') {
+                    patternText = `Monatlich am ${startDate.getDate()}. Tag des Monats`;
+                } else if (monthOption === 'first_weekday') {
+                    patternText = `Monatlich am ersten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
+                } else if (monthOption === 'last_weekday') {
+                    patternText = `Monatlich am letzten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
+                }
+                
+                selectedDates = calculateMonthlyDates(startDate, endDate, monthOption, 5);
+            }
+            
+            summaryHTML += `
+                <p>${patternText} bis zum ${formattedEndDate}</p>
+                <p>Schulstunde: ${periodLabel}</p>
+            `;
+            
+            if (selectedDates.length > 0) {
+                summaryHTML += '<p>Beispieltermine:</p><ul>';
+                selectedDates.forEach(date => {
+                    summaryHTML += `<li>${date.toLocaleDateString('de-DE', {
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric'
+                    })}</li>`;
+                });
+                summaryHTML += '</ul>';
+            }
+        }
+        
+        bookingSummary.innerHTML = summaryHTML;
+    }
+
+    // Date calculation functions
+    function calculateDailyDates(startDate, endDate, maxSamples) {
+        const dates = [];
+        let currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate && dates.length < maxSamples) {
+            dates.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return dates;
+    }
+
+    function calculateWeeklyDates(startDate, endDate, weekdays, maxSamples) {
+        const dates = [];
+        let currentDate = new Date(startDate);
+        
+        // Sort weekdays numerically
+        weekdays.sort((a, b) => a - b);
+        
+        // If the start date's weekday isn't in the selected weekdays,
+        // move to the next selected weekday
+        let startWeekday = currentDate.getDay();
+        startWeekday = startWeekday === 0 ? 7 : startWeekday;
+        
+        if (!weekdays.includes(startWeekday)) {
+            // Find next weekday
+            let nextWeekday = weekdays.find(day => day > startWeekday);
+            
+            if (!nextWeekday) {
+                // If no higher weekday, take the first one and add a week
+                nextWeekday = weekdays[0];
+                currentDate.setDate(currentDate.getDate() + (7 - startWeekday + nextWeekday));
+            } else {
+                // Move to the next higher weekday
+                currentDate.setDate(currentDate.getDate() + (nextWeekday - startWeekday));
+            }
+        }
+        
+        while (currentDate <= endDate && dates.length < maxSamples) {
+            dates.push(new Date(currentDate));
+            
+            // Find the next occurrence
+            let currentWeekday = currentDate.getDay();
+            currentWeekday = currentWeekday === 0 ? 7 : currentWeekday;
+            
+            let nextWeekday = weekdays.find(day => day > currentWeekday);
+            
+            if (!nextWeekday) {
+                // If no higher weekday, take the first one and add a week
+                nextWeekday = weekdays[0];
+                currentDate.setDate(currentDate.getDate() + (7 - currentWeekday + nextWeekday));
+            } else {
+                // Move to the next higher weekday
+                currentDate.setDate(currentDate.getDate() + (nextWeekday - currentWeekday));
+            }
+        }
+        
+        return dates;
+    }
+
+    function calculateMonthlyDates(startDate, endDate, option, maxSamples) {
+        const dates = [];
+        let currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate && dates.length < maxSamples) {
+            dates.push(new Date(currentDate));
+            
+            // Move to next month
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            
+            if (option === 'same_day') {
+                // Keep the same day of month
+                const targetDay = startDate.getDate();
+                // Adjust if the day doesn't exist in this month
+                const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+                currentDate.setDate(Math.min(targetDay, lastDayOfMonth));
+            } 
+            else if (option === 'first_weekday' || option === 'last_weekday') {
+                const targetWeekday = startDate.getDay();
+                
+                if (option === 'first_weekday') {
+                    // Set to first day of month
+                    currentDate.setDate(1);
+                    
+                    // Find first occurrence of target weekday
+                    while (currentDate.getDay() !== targetWeekday) {
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    }
+                } else {
+                    // Set to last day of month
+                    currentDate.setMonth(currentDate.getMonth() + 1);
+                    currentDate.setDate(0);
+                    
+                    // Find last occurrence of target weekday going backwards
+                    while (currentDate.getDay() !== targetWeekday) {
+                        currentDate.setDate(currentDate.getDate() - 1);
+                    }
+                }
+            }
+        }
+        
+        return dates;
+    }
 });
 </script>
 
@@ -947,6 +1335,90 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 1 !important;
     visibility: visible !important;
     display: block !important;
+}
+
+/* Add these styles to your existing CSS */
+.weekday-selector {
+    display: flex;
+    gap: 15px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.weekday-selector label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.weekday-selector input {
+    margin-right: 5px;
+}
+
+.booking-summary {
+    margin: 15px 0;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.booking-summary h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #3788d8;
+}
+
+.booking-summary ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.booking-summary li {
+    margin-bottom: 4px;
+}
+
+.progress-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.progress-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.progress-bar-container {
+    height: 20px;
+    background-color: #f0f0f0;
+    border-radius: 10px;
+    margin: 15px 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #3788d8;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 14px;
+    color: #666;
 }
 </style>
 {% endblock %}
