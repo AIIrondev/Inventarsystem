@@ -608,6 +608,102 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
         return True  # Bei Fehler Konflikt annehmen, um auf Nummer sicher zu gehen
 
 
+def check_booking_conflict(item_id, start_date, end_date, period=None, period_end=None):
+    """
+    Checks for conflicts with existing bookings, supporting period ranges
+    
+    Args:
+        item_id (str): ID of the item to check
+        start_date (datetime): Start time for the booking
+        end_date (datetime): End time for the booking
+        period (int): Optional period number (for period-based booking)
+        period_end (int): Optional end period number for period ranges
+        
+    Returns:
+        bool: True if there's a conflict, False otherwise
+    """
+    try:
+        if start_date and hasattr(start_date, 'tzinfo') and start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
+        if end_date and hasattr(end_date, 'tzinfo') and end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
+        
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Get the date component for filtering
+        booking_date = start_date.date()
+        
+        # First, get all active and planned bookings for this item
+        all_bookings = list(ausleihungen.find({
+            'Item': item_id,
+            'Status': {'$in': ['planned', 'active']}
+        }))
+        
+        # Print all relevant bookings for debugging
+        print(f"Found {len(all_bookings)} existing bookings for this item")
+        
+        # If we're booking by period, check for period conflicts
+        if period is not None:
+            period_start = int(period)
+            periods_to_check = [period_start]
+            
+            # If period_end is specified, it's a range of periods
+            if period_end is not None:
+                period_end = int(period_end)
+                periods_to_check = list(range(period_start, period_end + 1))
+                
+            # Check bookings on the same day with any overlapping period
+            for booking in all_bookings:
+                booking_start = booking.get('Start')
+                if not booking_start:
+                    continue
+                    
+                # Compare just the date part
+                existing_date = booking_start.date()
+                if existing_date == booking_date:
+                    booking_period = booking.get('Period')
+                    
+                    # If this booking has any period in our range, it's a conflict
+                    if booking_period is not None and booking_period in periods_to_check:
+                        print(f"CONFLICT: Same day, overlapping period. Booking period: {booking_period}")
+                        client.close()
+                        return True
+        
+        # Time-based check for conflicts (same as before)
+        else:
+            for booking in all_bookings:
+                booking_start = booking.get('Start')
+                booking_end = booking.get('End')
+                
+                if not booking_start:
+                    continue
+                
+                # Set default end time if not specified
+                if not booking_end:
+                    booking_end = booking_start + datetime.timedelta(hours=1)
+                
+                # Check for overlap
+                if ((start_date >= booking_start and start_date < booking_end) or
+                    (end_date > booking_start and end_date <= booking_end) or
+                    (start_date <= booking_start and end_date >= booking_end) or
+                    (start_date >= booking_start and end_date <= booking_end)):
+                    print(f"CONFLICT: Time overlap. New: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
+                    client.close()
+                    return True
+        
+        print("No conflicts found!")
+        client.close()
+        return False
+        
+    except Exception as e:
+        print(f"Error checking booking conflicts: {e}")
+        import traceback
+        traceback.print_exc()
+        return True  # Assume conflict on error for safety
+
+
 # === AUTOMATISIERTE VERARBEITUNG ===
 
 def get_ausleihungen_starting_now(current_time):

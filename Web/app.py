@@ -1079,75 +1079,159 @@ def get_bookings():
 @app.route('/plan_booking', methods=['POST'])
 def plan_booking():
     """
-    Create a new planned booking
+    Create a new planned booking or a range of bookings
     """
     if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
+        return {"success": False, "error": "Not authenticated"}, 401
         
-    # Extract form data with error handling
     try:
+        # Extract form data
         item_id = request.form.get('item_id')
         start_date_str = request.form.get('start_date')
         end_date_str = request.form.get('end_date')
-        period = request.form.get('period')
+        period_start = request.form.get('period_start')
+        period_end = request.form.get('period_end')
         notes = request.form.get('notes', '')
-        
-        # Log the booking attempt details
-        print(f"Booking attempt: item={item_id}, period={period}")
-        print(f"  - start_date_str={start_date_str}")
-        print(f"  - end_date_str={end_date_str}")
+        booking_type = request.form.get('booking_type', 'single')
         
         # Validate inputs
-        if not all([item_id, start_date_str, end_date_str]):
-            print("Missing required fields for booking")
+        if not all([item_id, start_date_str, end_date_str, period_start]):
             return {"success": False, "error": "Missing required fields"}, 400
             
-        # Parse dates with detailed logging
+        # Parse dates
         try:
             start_date = datetime.datetime.fromisoformat(start_date_str)
             end_date = datetime.datetime.fromisoformat(end_date_str)
-            print(f"Parsed dates: start={start_date}, end={end_date}")
+            
+            # For single day bookings, use the start date as the end date
+            if booking_type == 'single':
+                end_date = start_date
         except ValueError as e:
-            print(f"Date parsing error: {e}")
             return {"success": False, "error": f"Invalid date format: {e}"}, 400
             
         # Check if item exists
         item = it.get_item(item_id)
         if not item:
-            print(f"Item {item_id} not found")
             return {"success": False, "error": "Item not found"}, 404
+        
+        # Handle period range
+        periods = []
+        period_start_num = int(period_start)
+        
+        # If period_end is provided, it's a range of periods
+        if period_end:
+            period_end_num = int(period_end)
             
-        # Check for date conflicts
-        print(f"Checking conflicts for item {item_id} on {start_date}")
-        if au.check_booking_conflict(item_id, start_date, end_date, period):
-            print(f"Conflict detected for item {item_id}, period {period}")
-            return {"success": False, "error": "Objekt ist in diesem Zeitraum bereits gebucht"}, 409
+            # Validate period range
+            if period_end_num < period_start_num:
+                return {"success": False, "error": "End period cannot be before start period"}, 400
+                
+            # Create list of all periods in the range
+            periods = list(range(period_start_num, period_end_num + 1))
+        else:
+            # Single period booking
+            periods = [period_start_num]
+            
+        # For date range bookings, we'll process each date separately
+        booking_ids = []
+        errors = []
         
-        # Create the planned booking with period information
-        print(f"Creating booking for item {item_id}, period {period}")
-        booking_id = au.add_planned_booking(
-            item_id, 
-            session['username'], 
-            start_date, 
-            end_date, 
-            notes, 
-            period=period
-        )
-        
-        if not booking_id:
-            print("Failed to create booking - null booking ID returned")
-            return {"success": False, "error": "Fehler beim Erstellen der Reservierung"}, 500
-        
-        print(f"Successfully created booking {booking_id}")
-        return {"success": True, "booking_id": str(booking_id)}
-        
+        # If it's a range of days
+        if booking_type == 'range' and start_date != end_date:
+            current_date = start_date
+            while current_date <= end_date:
+                # For each day in the range
+                day_booking_ids, day_errors = process_day_bookings(
+                    item_id, 
+                    current_date,
+                    periods,
+                    notes
+                )
+                booking_ids.extend(day_booking_ids)
+                errors.extend(day_errors)
+                
+                # Move to next day
+                current_date += datetime.timedelta(days=1)
+        else:
+            # Single day with multiple periods
+            booking_ids, errors = process_day_bookings(
+                item_id,
+                start_date,
+                periods,
+                notes
+            )
+            
+        # Return results
+        if errors:
+            if booking_ids:
+                # Some succeeded, some failed
+                return {
+                    "success": True, 
+                    "partial": True,
+                    "booking_ids": booking_ids,
+                    "errors": errors
+                }
+            else:
+                # All failed
+                return {"success": False, "errors": errors}, 400
+        else:
+            # All succeeded
+            return {"success": True, "booking_ids": booking_ids}
+            
     except Exception as e:
         import traceback
         print(f"Error in plan_booking: {e}")
         traceback.print_exc()
         return {"success": False, "error": f"Server error: {str(e)}"}, 500
 
+def process_day_bookings(item_id, booking_date, periods, notes):
+    """
+    Helper function to process bookings for a single day across multiple periods
+    
+    Args:
+        item_id: The item to book
+        booking_date: The date for the booking
+        periods: List of period numbers to book
+        notes: Booking notes
+        
+    Returns:
+        tuple: (list of booking_ids, list of errors)
+    """
+    booking_ids = []
+    errors = []
+    
+    for period in periods:
+        # Get period times
+        period_times = get_period_times(booking_date, period)
+        if not period_times:
+            errors.append(f"Invalid period {period}")
+            continue
+            
+        # Create the start and end times for this period
+        start_time = period_times.get('start')
+        end_time = period_times.get('end')
+        
+        # Check for conflicts
+        if au.check_booking_conflict(item_id, start_time, end_time, period):
+            errors.append(f"Conflict for period {period} on {booking_date.strftime('%Y-%m-%d')}")
+            continue
+            
+        # Create the booking
+        booking_id = au.add_planned_booking(
+            item_id,
+            session['username'],
+            start_time,
+            end_time,
+            notes,
+            period=period
+        )
+        
+        if booking_id:
+            booking_ids.append(str(booking_id))
+        else:
+            errors.append(f"Failed to create booking for period {period}")
+            
+    return booking_ids, errors
 @app.route('/add_booking', methods=['POST'])
 def add_booking():
     if 'username' not in session:
@@ -1597,188 +1681,56 @@ def process_bookings():
         
         client.close()
     except Exception as e:
-        print(f"Error checking for missed bookings: {e}")
-    
-    # Check for bookings that should end now
-    ending_bookings = au.get_bookings_ending_now(current_time)
-    print(f"Found {len(ending_bookings)} bookings that might need to be completed")
-    
-    for booking in ending_bookings:
-        try:
-            booking_id = str(booking.get('_id'))
-            item_id = booking.get('Item')
-            ausleihung_id = booking.get('AusleihungId')
-            period = booking.get('Period')
-            start_date = booking.get('Start')
-            end_date = booking.get('End')
-            
-            print(f"Evaluating if booking {booking_id} for item {item_id} should end now")
-            print(f"  - Period: {period}, Start: {start_date}, End: {end_date}")
-            print(f"  - Current time: {current_time}")
-            
-            # Only end bookings if we're out of the period or past the end time
-            should_end = False
-            
-            if period and period == current_period:
-                # If we're at the end of the period (within 10 minutes of the end)
-                period_end = school_periods.get(str(period), {}).get('end', '')
-                if period_end:
-                    period_end_hour, period_end_minute = map(int, period_end.split(':'))
-                    period_end_datetime = datetime.datetime.combine(
-                        current_date, 
-                        datetime.time(period_end_hour, period_end_minute)
-                    )
-                    
-                    # If we're within 10 minutes after the end of the period
-                    if current_time >= period_end_datetime:
-                        should_end = True
-                        print(f"Ending booking {booking_id} - we're past the end of period {period}")
-            elif end_date and current_time >= end_date:
-                # We're past the end time
-                should_end = True
-                print(f"Ending booking {booking_id} - we're past the end time ({end_date})")
-            
-            # Also end if we're past the end of school day and it's a period-based booking
-            if period and current_hour >= 17:  # After 5pm
-                should_end = True
-                print(f"Ending booking {booking_id} - it's after school hours")
-                
-            # Check if this is an old booking (from a previous day)
-            if start_date and start_date.date() < current_date:
-                should_end = True
-                print(f"Ending booking {booking_id} - it's from a previous day ({start_date.date()})")
-                
-            if not should_end:
-                print(f"Not ending booking {booking_id} - conditions not met")
-                continue
-            
-            print(f"Processing end of booking {booking_id}")
-            
-            # Mark item as available again
-            it.update_item_status(item_id, True)
-            print(f"Item {item_id} marked as available")
-            
-            # Update booking status to completed
-            au.mark_booking_completed(booking_id)
-            print(f"Booking {booking_id} marked as completed")
-            
-            # Update the ausleihung record to set end date if it exists
-            if ausleihung_id:
-                # Get the ausleihung record
-                ausleihung = au.get_ausleihung(ausleihung_id)
-                if ausleihung:
-                    # Update with end date
-                    au.update_ausleihung(
-                        ausleihung_id,
-                        item_id,
-                        ausleihung.get('User'),
-                        ausleihung.get('Start'),
-                        current_time
-                    )
-                    print(f"Ausleihung {ausleihung_id} updated with end time")
-            
-            print(f"Successfully ended booking {booking_id}")
-            
-        except Exception as e:
-            print(f"Error ending booking: {e}")
-            import traceback
-            traceback.print_exc()
+        print(f"Error in missed bookings processing: {e}")
+        import traceback
+        traceback.print_exc()
 
-    # Also look for any active bookings that should have ended already
+def get_period_times(booking_date, period_num):
+    """
+    Get the start and end times for a given period on a specific date
+    
+    Args:
+        booking_date: The date for the booking
+        period_num: The period number
+    
+    Returns:
+        dict: {"start": datetime, "end": datetime} or None if invalid
+    """
     try:
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        ausleihungen = db['ausleihungen']
+        # Convert period_num to string for lookup in SCHOOL_PERIODS
+        period_str = str(period_num)
         
-        # Find active bookings with end times in the past
-        missed_endings_query = {
-            'Status': 'active',
-            'End': {'$lt': current_time}
+        if period_str not in SCHOOL_PERIODS:
+            return None
+            
+        period_info = SCHOOL_PERIODS[period_str]
+        
+        # Extract start and end times from period info
+        start_time_str = period_info.get('start')
+        end_time_str = period_info.get('end')
+        
+        if not start_time_str or not end_time_str:
+            return None
+            
+        # Parse hours and minutes
+        start_hour, start_min = map(int, start_time_str.split(':'))
+        end_hour, end_min = map(int, end_time_str.split(':'))
+        
+        # Create datetime objects for start and end times
+        start_datetime = datetime.datetime.combine(
+            booking_date.date(),
+            datetime.time(start_hour, start_min)
+        )
+        
+        end_datetime = datetime.datetime.combine(
+            booking_date.date(),
+            datetime.time(end_hour, end_min)
+        )
+        
+        return {
+            'start': start_datetime,
+            'end': end_datetime
         }
-        
-        missed_endings = list(ausleihungen.find(missed_endings_query))
-        print(f"Found {len(missed_endings)} active bookings that should have already ended")
-        
-        for booking in missed_endings:
-            try:
-                booking_id = str(booking.get('_id'))
-                item_id = booking.get('Item')
-                
-                print(f"Processing missed ending for booking {booking_id}, item {item_id}")
-                print(f"  - End time was: {booking.get('End')}")
-                
-                # Mark item as available
-                it.update_item_status(item_id, True)
-                
-                # Mark booking as completed
-                au.mark_booking_completed(booking_id)
-                
-                print(f"Successfully ended missed booking {booking_id}")
-                
-            except Exception as e:
-                print(f"Error processing missed ending: {e}")
-                continue
-        
-        client.close()
     except Exception as e:
-        print(f"Error checking for missed endings: {e}")
-
-def process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period):
-    """
-    Helper function to process booking activation consistently
-    """
-    try:
-        # Get the item to check its current status
-        item = it.get_item(item_id)
-        if not item:
-            print(f"Item {item_id} not found, cannot process booking {booking_id}")
-            return False
-            
-        # Check if the item is already borrowed
-        if not item.get('Verfuegbar', True):
-            print(f"Item {item_id} is already borrowed, updating booking status only")
-            # Just update the booking status
-            au.mark_booking_active(booking_id)
-        else:
-            print(f"Item {item_id} is available, creating ausleihung and updating item status")
-            # Create new ausleihung record
-            ausleihung_id = au.add_ausleihung(
-                item_id,
-                user,
-                start_date,
-                end_date,
-                notes,
-                status="active",  # Make it active immediately
-                period=period
-            )
-            
-            if ausleihung_id:
-                # Mark the booking as active and link the ausleihung record
-                au.mark_booking_active(booking_id, str(ausleihung_id))
-                
-                # Update item status - THIS IS THE CRITICAL PART
-                update_result = it.update_item_status(item_id, False, user)
-                print(f"Item status update result: {update_result}")
-                return True
-            else:
-                print(f"Failed to create ausleihung for booking {booking_id}")
-                return False
-    except Exception as e:
-        print(f"Error activating booking {booking_id}: {e}")
-        return False
-
-scheduler.add_job(process_bookings, 'interval', minutes=SCHEDULER_INTERVAL)
-scheduler.start()
-
-if __name__ == '__main__':
-    """
-    Development server execution.
-    This block only runs when executing app.py directly, not when using Gunicorn.
-    Includes SSL configuration for secure development testing.
-    """
-    # SSL configuration
-    ssl_context = (SSL_CERT, SSL_KEY)
-    app.run(Host, Port, ssl_context=ssl_context)
-
-import atexit
-atexit.register(lambda: scheduler.shutdown())
+        print(f"Error getting period times: {e}")
+        return None
