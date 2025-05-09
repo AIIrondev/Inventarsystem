@@ -36,6 +36,8 @@
             <span class="close">&times;</span>
             <h2>Neue Reservierung</h2>
             <form id="booking-form">
+                <input type="hidden" name="user_id" id="user-id" value="{{ current_user }}">
+                
                 <!-- Booking Type -->
                 <div class="form-group">
                     <label for="booking-type">Reservierungstyp:</label>
@@ -563,7 +565,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Simplified booking form submission
+    // Find the form submission handler (around line 562) and enhance the debug information
+
     document.getElementById('booking-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -572,6 +575,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const periodStart = document.getElementById('period-start-select').value;
         const periodEnd = document.getElementById('period-end-select').value;
         const startDate = document.getElementById('booking-date').value;
+        
+        console.log("DEBUG - Form submission - Required fields:", {
+            itemId,
+            periodStart,
+            periodEnd,
+            startDate,
+            "itemId exists": Boolean(itemId),
+            "periodStart exists": Boolean(periodStart),
+            "periodEnd exists": Boolean(periodEnd),
+            "startDate exists": Boolean(startDate)
+        });
         
         // Check required fields
         if (!itemId || !periodStart || !periodEnd || !startDate) {
@@ -585,32 +599,46 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create FormData from form
-        const formData = new FormData(this);
-        
-        // Add proper time values to dates (server expects datetime, not just date)
-        // Get the first period's start time for the start date
-        const periodInfo = schoolPeriods[periodStart];
-        if (periodInfo && periodInfo.start) {
-            // Use the period's start time with the selected date
-            const startTimeStr = `${startDate}T${periodInfo.start}:00`;
-            formData.set('start_date', startTimeStr);
-        }
+        const userId = document.getElementById('user-id').value || 'Admin';  // Get user ID or use fallback
 
-        // Do the same for the end date with the last period's end time
-        const endPeriodInfo = schoolPeriods[periodEnd];
-        if (endPeriodInfo && endPeriodInfo.end) {
-            const endTimeStr = `${startDate}T${endPeriodInfo.end}:00`;
-            formData.set('end_date', endTimeStr);
-        }
+        // Convert JSON data to FormData
+        const formData = new FormData();
         
-        // Submit single booking
+        // Add all required fields with correct names the server expects
+        formData.append('item_id', itemId);
+        formData.append('booking_date', startDate);
+        formData.append('booking_end_date', startDate); // For single bookings, end = start
+        formData.append('period_start', periodStart);
+        formData.append('period_end', periodEnd);
+        formData.append('notes', document.getElementById('booking-notes').value || '');
+        formData.append('booking_type', document.getElementById('booking-type').value);
+        formData.append('user_id', userId);
+        
+        // Submit with FormData instead of JSON
         fetch('/plan_booking', {
             method: 'POST',
-            body: formData
+            body: formData // Remove the Content-Type header and JSON.stringify
         })
-        .then(response => response.json())
+        .then(response => {
+            
+            if (!response.ok) {
+                return response.json().then(data => {
+                    console.error("DEBUG - Error response data:", data);
+                    
+                    // Show detailed error information
+                    let errorMsg = data.error || `Server returned ${response.status}: ${response.statusText}`;
+                    
+                    if (data.missing_fields) {
+                        errorMsg += "\nMissing fields: " + data.missing_fields.join(", ");
+                    }
+                    
+                    throw new Error(errorMsg);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
+            
             if (data.success) {
                 bookingModal.style.display = 'none';
                 alert('Ausleihe erfolgreich geplant!');
@@ -621,8 +649,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
-            console.error('Error submitting booking:', error);
-            alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+            console.error('DEBUG - Error submitting booking:', error);
+            alert('Ein Fehler ist aufgetreten: ' + error.message);
         });
     });
     
@@ -721,29 +749,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const bookingType = bookingTypeSelect.value;
         const startDate = new Date(document.getElementById('booking-date').value);
         
-        // Get period select elements with null checks
+        // Get the period select elements directly
         const periodStartSelect = document.getElementById('period-start-select');
         const periodEndSelect = document.getElementById('period-end-select');
+        const periodStart = periodStartSelect ? periodStartSelect.value : "";
+        const periodEnd = periodEndSelect ? periodEndSelect.value : "";
         
-        // Exit if period selects don't exist
-        if (!periodStartSelect || !periodEndSelect) {
-            console.warn('Period select elements not found');
-            bookingSummary.style.display = 'none';
-            return;
-        }
-        
-        const periodStart = periodStartSelect.value;
-        const periodEnd = periodEndSelect.value;
-        
-        // Get the text from the select elements with safe navigation
+        // Get the text labels safely
         let periodLabelStart = "Keine Schulstunde ausgewählt";
         let periodLabelEnd = "Keine Schulstunde ausgewählt";
         
-        if (periodStartSelect.options && periodStartSelect.selectedIndex >= 0) {
+        if (periodStartSelect && periodStartSelect.selectedIndex >= 0) {
             periodLabelStart = periodStartSelect.options[periodStartSelect.selectedIndex].text;
         }
         
-        if (periodEndSelect.options && periodEndSelect.selectedIndex >= 0) {
+        if (periodEndSelect && periodEndSelect.selectedIndex >= 0) {
             periodLabelEnd = periodEndSelect.options[periodEndSelect.selectedIndex].text;
         }
 
@@ -991,125 +1011,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Generate booking summary based on current selections
-    function updateBookingSummary() {
-        const bookingType = bookingTypeSelect.value;
-        const startDate = new Date(document.getElementById('booking-date').value);
-        const periodStart = document.getElementById('period-start-select').value;
-        const periodEnd = document.getElementById('period-end-select').value;
-        const periodSelect = document.getElementById('period-select');
-        const periodLabelStart = periodSelect.options[periodStart]?.text || "Keine Schulstunde ausgewählt";
-        const periodLabelEnd = periodSelect.options[periodEnd]?.text || "Keine Schulstunde ausgewählt";
-
-        // Hide summary for single bookings or if date is invalid
-        if (bookingType === 'single' || isNaN(startDate.getTime())) {
-            bookingSummary.style.display = 'none';
-            return;
-        }
-
-        bookingSummary.style.display = 'block';
-        let summaryHTML = '<h4>Reservierungsübersicht:</h4>';
-
-        const formattedStartDate = startDate.toLocaleDateString('de-DE', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-
-        if (bookingType === 'range') {
-            const endDate = new Date(document.getElementById('booking-end-date').value);
-
-            if (isNaN(endDate.getTime())) {
-                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum.</p>';
-            } else {
-                const formattedEndDate = endDate.toLocaleDateString('de-DE', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                });
-
-                summaryHTML += `
-                    <p>Zeitraum vom ${formattedStartDate} bis ${formattedEndDate}</p>
-                    <p>Schulstunden: ${periodLabelStart} bis ${periodLabelEnd}</p>
-                `;
-            }
-        } else if (bookingType === 'recurring') {
-            const pattern = document.getElementById('recurrence-pattern').value;
-            const endDate = new Date(document.getElementById('recurrence-end-date').value);
-            
-            if (isNaN(endDate.getTime())) {
-                summaryHTML += '<p>Bitte wählen Sie ein gültiges Enddatum für die Wiederholung.</p>';
-                bookingSummary.innerHTML = summaryHTML;
-                return;
-            }
-            
-            const formattedEndDate = endDate.toLocaleDateString('de-DE', {
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric'
-            });
-            
-            let patternText = '';
-            let selectedDates = [];
-            
-            if (pattern === 'daily') {
-                patternText = 'Täglich';
-                selectedDates = calculateDailyDates(startDate, endDate, 5);
-            } 
-            else if (pattern === 'weekly') {
-                const selectedWeekdays = [];
-                document.querySelectorAll('input[name="weekdays"]:checked').forEach(cb => {
-                    selectedWeekdays.push(parseInt(cb.value));
-                });
-                
-                if (selectedWeekdays.length === 0) {
-                    summaryHTML += '<p>Bitte wählen Sie mindestens einen Wochentag aus.</p>';
-                    bookingSummary.innerHTML = summaryHTML;
-                    return;
-                }
-                
-                const weekdayNames = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-                patternText = 'Wöchentlich am ' + selectedWeekdays.map(day => weekdayNames[day]).join(', ');
-                
-                selectedDates = calculateWeeklyDates(startDate, endDate, selectedWeekdays, 5);
-            } 
-            else if (pattern === 'monthly') {
-                const monthOption = document.getElementById('day-of-month').value;
-                
-                if (monthOption === 'same_day') {
-                    patternText = `Monatlich am ${startDate.getDate()}. Tag des Monats`;
-                } else if (monthOption === 'first_weekday') {
-                    patternText = `Monatlich am ersten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
-                } else if (monthOption === 'last_weekday') {
-                    patternText = `Monatlich am letzten ${startDate.toLocaleDateString('de-DE', {weekday: 'long'})} des Monats`;
-                }
-                
-                selectedDates = calculateMonthlyDates(startDate, endDate, monthOption, 5);
-            }
-            
-            summaryHTML += `
-                <p>${patternText} bis zum ${formattedEndDate}</p>
-                <p>Schulstunden: ${periodLabelStart} bis ${periodLabelEnd}</p>
-            `;
-            
-            if (selectedDates.length > 0) {
-                summaryHTML += '<p>Beispieltermine:</p><ul>';
-                selectedDates.forEach(date => {
-                    summaryHTML += `<li>${date.toLocaleDateString('de-DE', {
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric'
-                    })}</li>`;
-                });
-                summaryHTML += '</ul>';
-            }
-        }
-        
-        bookingSummary.innerHTML = summaryHTML;
-    }
+    
 
     // Process multiple dates for a booking with period ranges
     function processMultipleDates(formData, dates, periodStart, periodEnd) {

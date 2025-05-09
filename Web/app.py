@@ -1734,3 +1734,48 @@ def get_period_times(booking_date, period_num):
     except Exception as e:
         print(f"Error getting period times: {e}")
         return None
+
+def process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period):
+    """
+    Activates a planned booking by marking it as active in the database
+    and updating the item's status.
+    
+    Args:
+        booking_id (str): ID of the booking to activate
+        item_id (str): ID of the item being booked
+        user (str): Username of the person booking the item
+        start_date (datetime): When the booking starts
+        end_date (datetime): When the booking ends
+        notes (str): Any notes attached to the booking
+        period (int): School period number (if applicable)
+        
+    Returns:
+        bool: True if activation was successful, False otherwise
+    """
+    try:
+        print(f"Activating booking {booking_id} for item {item_id} by user {user}")
+        
+        # Import modules locally to avoid circular imports
+        import ausleihung as au
+        import items as it
+        
+        # 1. Mark the booking as active in the ausleihungen collection
+        booking_activated = au.mark_booking_active(booking_id)
+        if not booking_activated:
+            print(f"Failed to mark booking {booking_id} as active")
+            return False
+            
+        # 2. Update the item status to show it's borrowed
+        item_updated = it.update_item_status(item_id, False, user)
+        if not item_updated:
+            print(f"Failed to update item {item_id} status")
+            return False
+            
+        print(f"Successfully activated booking {booking_id} for item {item_id}")
+        return True
+        
+    except Exception as e:
+        print(f"Error activating booking {booking_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
