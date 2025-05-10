@@ -197,6 +197,23 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
+def strip_whitespace(value):
+    """
+    Strip leading and trailing whitespace from a string or from each item in a list.
+    
+    Args:
+        value: String or list of strings to strip
+        
+    Returns:
+        String or list of strings with whitespace stripped
+    """
+    if isinstance(value, str):
+        return value.strip()
+    elif isinstance(value, list):
+        return [item.strip() if isinstance(item, str) else item for item in value]
+    return value
+
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """
@@ -406,16 +423,17 @@ def upload_item():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
-    name = request.form['name']
-    ort = request.form['ort']
-    beschreibung = request.form['beschreibung']
+    # Strip whitespace from all text fields
+    name = strip_whitespace(request.form['name'])
+    ort = strip_whitespace(request.form['ort'])
+    beschreibung = strip_whitespace(request.form['beschreibung'])
     images = request.files.getlist('images')
-    filter_upload = request.form.getlist('filter')
-    filter_upload2 = request.form.getlist('filter2')
-    filter_upload3 = request.form.getlist('filter3')
-    anschaffungs_jahr = request.form.getlist('anschaffungsjahr')
-    anschaffungs_kosten = request.form.getlist('anschaffungskosten')
-    code_4 = request.form.getlist('code_4')
+    filter_upload = strip_whitespace(request.form.getlist('filter'))
+    filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
+    filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
+    anschaffungs_jahr = strip_whitespace(request.form.getlist('anschaffungsjahr'))
+    anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
+    code_4 = strip_whitespace(request.form.getlist('code_4'))
     
     if not name or not ort or not beschreibung or not images:
         flash('Please fill all fields', 'error')
@@ -461,6 +479,7 @@ def delete_item(id):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
+    
     it.remove_item(id)
     flash('Item deleted successfully', 'success')
     return redirect(url_for('home_admin'))
@@ -484,19 +503,19 @@ def edit_item(id):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
-    # Get form data
-    name = request.form.get('name')
-    ort = request.form.get('ort')
-    beschreibung = request.form.get('beschreibung')
+    # Strip whitespace from all text fields
+    name = strip_whitespace(request.form.get('name'))
+    ort = strip_whitespace(request.form.get('ort'))
+    beschreibung = strip_whitespace(request.form.get('beschreibung'))
     
-    # Change these to getlist() to get all values for each filter
-    filter1 = request.form.getlist('filter')
-    filter2 = request.form.getlist('filter2')
-    filter3 = request.form.getlist('filter3')
+    # Strip whitespace from all filter values
+    filter1 = strip_whitespace(request.form.getlist('filter'))
+    filter2 = strip_whitespace(request.form.getlist('filter2'))
+    filter3 = strip_whitespace(request.form.getlist('filter3'))
     
-    anschaffungs_jahr = request.form.get('anschaffungsjahr')
-    anschaffungs_kosten = request.form.get('anschaffungskosten')
-    code_4 = request.form.get('code_4')
+    anschaffungs_jahr = strip_whitespace(request.form.get('anschaffungsjahr'))
+    anschaffungs_kosten = strip_whitespace(request.form.get('anschaffungskosten'))
+    code_4 = strip_whitespace(request.form.get('code_4'))
     
     # Get current item to check availability status
     current_item = it.get_item(id)
