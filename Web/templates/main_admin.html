@@ -1298,6 +1298,54 @@
             }
         }
     }
+
+    // Add missing scroll functions
+    function scrollPrev() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 20; // Match the gap in CSS
+        
+        // Scroll one card width to the left + gap
+        container.scrollBy({
+            left: -1 * (cardWidth + gap),
+            behavior: 'smooth'
+        });
+    }
+
+    function scrollNext() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 20; // Match the gap in CSS
+        
+        // Scroll one card width to the right + gap
+        container.scrollBy({
+            left: cardWidth + gap,
+            behavior: 'smooth'
+        });
+    }
+
+    // Add functions for image navigation in item cards
+    function prevImage(event) {
+        event.stopPropagation(); // Prevent card click event
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex - 1 + images.length) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+
+    function nextImage(event) {
+        event.stopPropagation(); // Prevent card click event
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex + 1) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
 </script>
 
 <style>
