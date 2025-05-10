@@ -103,7 +103,6 @@
             );
             
             html5QrcodeScanner.render((decodedText) => {
-                console.log("QR Code detected:", decodedText);
                 html5QrcodeScanner.clear();
                 qrReader.style.display = 'none';
                 
@@ -150,7 +149,6 @@
         fetch('/user_status')
             .then(response => response.json())
             .then(data => {
-                console.log('User status:', data);
                 currentUsername = data.username;
                 // Now load items with username information
                 loadItems();
@@ -285,10 +283,7 @@
                         openItemModal(item);
                     });
                 });
-                
-                // Now populate the filter checkboxes with the collected unique values
-                console.log("Filter values collected:", 
-                    { filter1: [...filter1Values], filter2: [...filter2Values], filter3: [...filter3Values] });
+                // Populate filter options
                 populateFilterOptions('filter1-options', [...filter1Values].sort(), 1);
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
@@ -323,9 +318,6 @@
                 return filter;
             });
             
-            // DEBUG: Log values for debugging
-            console.debug("Active filter values:", matchingValues);
-            console.debug("Item filter values:", itemFilterValues);
             
             // Check if ANY of the item's filter values match ANY of the active filters
             for (const itemValue of itemFilterValues) {
@@ -349,9 +341,6 @@
     function populateFilterOptions(containerId, filterValues, filterNum) {
         const container = document.getElementById(containerId);
         container.innerHTML = ''; // Clear previous options
-        
-        // Debug: Log filter values
-        console.debug(`Filter ${filterNum} values:`, filterValues);
         
         // Group values to create option groups
         const groupedValues = {};
@@ -449,8 +438,6 @@
             }
         });
         
-        // Log visible items count
-        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
         
         // After filtering, reset scroll position to show the first visible card
         const firstVisibleCard = itemsContainer.querySelector('.item-card[style="display: block"]');
@@ -466,7 +453,6 @@
 
     // Function to open modal with item details - completely rewritten
     function openItemModal(itemData) {
-        console.log("Modal opening with data:", itemData);
         
         const modalContent = document.getElementById('modal-content-wrapper');
         const modal = document.getElementById('item-modal');
@@ -917,9 +903,6 @@
                 item.style.display = 'none';
             }
         });
-        
-        // Log visible items count
-        console.log(`${visibleCount} von ${items.length} Elementen werden angezeigt`);
         
         // Show first visible card
         if (visibleCount > 0) {
