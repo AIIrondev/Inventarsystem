@@ -24,7 +24,7 @@
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
-                    <label>Filter 1:</label>
+                    <label>Unterrichtsfach:</label>
                     <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter1-dropdown')">▼</button>
                     <button type="button" class="clear-filter" onclick="clearFilter(1)">Clear</button>
                 </div>
@@ -38,7 +38,7 @@
             
             <div class="filter-group">
                 <div class="filter-header">
-                    <label>Filter 2:</label>
+                    <label>Jahrgangsstufe:</label>
                     <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter2-dropdown')">▼</button>
                     <button type="button" class="clear-filter" onclick="clearFilter(2)">Clear</button>
                 </div>
@@ -52,7 +52,7 @@
             
             <div class="filter-group">
                 <div class="filter-header">
-                    <label>Filter 3:</label>
+                    <label>Thema:</label>
                     <button type="button" class="filter-toggle" onclick="toggleFilterDropdown('filter3-dropdown')">▼</button>
                     <button type="button" class="clear-filter" onclick="clearFilter(3)">Clear</button>
                 </div>
@@ -94,7 +94,7 @@
             
             <!-- Updated filter inputs with multiple fields per category -->
             <div class="filter-inputs">
-                <h3>Filter 1:</h3>
+                <h3>Unterrichtsfach:</h3>
                 <div class="multi-filter">
                     <div class="form-group">
                         <label for="filter1-1">Wert 1:</label>
@@ -114,7 +114,7 @@
                     </div>
                 </div>
                 
-                <h3>Filter 2:</h3>
+                <h3>Jahrgangsstufe:</h3>
                 <div class="multi-filter">
                     <div class="form-group">
                         <label for="filter2-1">Wert 1:</label>
@@ -134,7 +134,7 @@
                     </div>
                 </div>
                 
-                <h3>Filter 3:</h3>
+                <h3>Thema:</h3>
                 <div class="multi-filter">
                     <div class="form-group">
                         <label for="filter3-1">Wert 1:</label>
@@ -207,7 +207,7 @@
                 
                 <!-- Updated filter inputs for edit form -->
                 <div class="filter-inputs">
-                    <h3>Filter 1:</h3>
+                    <h3>Unterrichtsfach:</h3>
                     <div class="multi-filter">
                         <div class="form-group">
                             <label for="edit-filter1-1">Wert 1:</label>
@@ -227,7 +227,7 @@
                         </div>
                     </div>
                     
-                    <h3>Filter 2:</h3>
+                    <h3>Jahrgangsstufe:</h3>
                     <div class="multi-filter">
                         <div class="form-group">
                             <label for="edit-filter2-1">Wert 1:</label>
@@ -247,7 +247,7 @@
                         </div>
                     </div>
                     
-                    <h3>Filter 3:</h3>
+                    <h3>Thema:</h3>
                     <div class="multi-filter">
                         <div class="form-group">
                             <label for="edit-filter3-1">Wert 1:</label>
@@ -470,9 +470,9 @@
                         <div class="card-content" data-item-id="${item._id}">
                             <h3>${item.Name}</h3>
                             <p><strong>Ort:</strong> ${item.Ort || '-'}</p>
-                            <p><strong>Filter 1:</strong> ${filter1Display}${filter1More}</p>
-                            <p><strong>Filter 2:</strong> ${filter2Display}${filter2More}</p>
-                            <p><strong>Filter 3:</strong> ${filter3Display}${filter3More}</p>
+                            <p><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
+                            <p><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
+                            <p><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
                             <div class="image-container">
                                 ${imagesHtml}
                                 <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -884,15 +884,15 @@
                         <div class="detail-value">${itemData.Ort || '-'}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Filter 1:</div>
+                        <div class="detail-label">Unterrichtsfach:</div>
                         <div class="detail-value">${filter1Value}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Filter 2:</div>
+                        <div class="detail-label">Jahrgangsstufe: </div>
                         <div class="detail-value">${filter2Value}</div>
                     </div>
                     <div class="detail-group">
-                        <div class="detail-label">Filter 3:</div>
+                        <div class="detail-label">Thema:</div>
                         <div class="detail-value">${filter3Value}</div>
                     </div>
                 </div>
