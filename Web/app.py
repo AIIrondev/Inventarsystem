@@ -42,6 +42,7 @@ import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import json
 from pymongo import MongoClient
+import time
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -424,7 +425,7 @@ def upload_item():
     for image in images:
         if image and allowed_file(image.filename):
             filename = secure_filename(image.filename)
-            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename + time.strftime("%Y%m%d%H%M%S")))
             image_filenames.append(filename)
         else:
             flash('Invalid file type', 'error')

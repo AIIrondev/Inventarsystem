@@ -493,7 +493,7 @@
                                 `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                             }
                             <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
-                            <a href="{{ url_for('delete_item', id='') }}${item._id}" class="delete-button">Delete</a>
+                            <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Delete</a>
                         </div>
                     `;
                     itemsContainer.appendChild(card);
@@ -934,7 +934,7 @@
                 }
                 <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
                 <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
-                <a href="/delete_item/${itemData._id}" class="delete-button">Delete</a>
+                <a href="#" class="delete-button" onclick="confirmDelete('${itemData._id}', '${itemData.Name}', event)">Delete</a>
             </div>
         `;
         
@@ -1327,6 +1327,18 @@
         images[currentIndex].style.display = 'none';
         currentIndex = (currentIndex + 1) % images.length;
         images[currentIndex].style.display = 'block';
+    }
+
+    function confirmDelete(itemId, itemName, event) {
+        event.preventDefault();
+        
+        const confirmMessage = itemName 
+            ? `Sind Sie sicher, dass Sie "${itemName}" löschen möchten?` 
+            : "Sind Sie sicher, dass Sie diesen Artikel löschen möchten?";
+        
+        if (confirm(confirmMessage)) {
+            window.location.href = `{{ url_for('delete_item', id='') }}${itemId}`;
+        }
     }
 </script>
 
