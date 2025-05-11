@@ -292,7 +292,10 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="edit-new-images">Neue Bilder hinzufügen:</label>
+                    <label for="edit-new-images">
+                        <span>Neue Bilder hinzufügen:</span>
+                        <span>(Bilder werden vom Original übernommen)</span>
+                    </label>
                     <input type="file" id="edit-new-images" name="new_images" accept="image/*" multiple>
                 </div>
                 
@@ -493,6 +496,7 @@
                                 `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                             }
                             <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
+                            <a href="#" class="duplicate-button" onclick="duplicateItem('${item._id}', event)">Duplizieren</a>
                             <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Delete</a>
                         </div>
                     `;
@@ -725,28 +729,54 @@
             });
     }
 
-    // Update the edit form display function to handle multiple filter values better
-    function showEditItemForm(itemData) {
-        
-        // Set form action
+    function showEditItemForm(itemData, isDuplicating = false) {
         const form = document.getElementById('edit-item-form');
-        form.action = `/edit_item/${itemData._id}`;
-        
-        // Populate form fields
-        document.getElementById('edit-item-id').value = itemData._id;
+
+        // Set form action and UI text based on mode
+        if (isDuplicating) {
+            form.action = `/upload_item`; 
+            document.querySelector('#edit-modal h2').textContent = "Objekt duplizieren";
+            document.querySelector('#edit-modal .save-button').textContent = "Neuen Datensatz speichern";
+            
+            // Add a hidden field to indicate this is a duplication
+            let hiddenField = document.createElement('input');
+            hiddenField.type = 'hidden';
+            hiddenField.name = 'is_duplicating';
+            hiddenField.value = 'true';
+            form.appendChild(hiddenField);
+            
+            // Add hidden fields for original images when duplicating
+            if (itemData.Images && itemData.Images.length > 0) {
+                itemData.Images.forEach(imageName => {
+                    // Extract just the filename from the full path if it contains one
+                    const imageFileName = imageName.includes('/') ? imageName.split('/').pop() : imageName;
+                    
+                    const imageField = document.createElement('input');
+                    imageField.type = 'hidden';
+                    imageField.name = 'duplicate_images';
+                    imageField.value = imageFileName;
+                    form.appendChild(imageField);
+                });
+            }
+        } else {
+            form.action = `/edit_item/${itemData._id}`;
+            document.querySelector('#edit-modal h2').textContent = "Objekt bearbeiten";
+            document.querySelector('#edit-modal .save-button').textContent = "Speichern";
+        }
+
+        // Set form fields - same for both edit and duplicate modes
+        document.getElementById('edit-item-id').value = isDuplicating ? '' : itemData._id;
         document.getElementById('edit-name').value = itemData.Name || '';
         document.getElementById('edit-ort').value = itemData.Ort || '';
         document.getElementById('edit-beschreibung').value = itemData.Beschreibung || '';
-        
-        // Populate Anschaffungskosten and Code_4 fields
         document.getElementById('edit-anschaffungskosten').value = itemData.Anschaffungskosten || '';
-        document.getElementById('edit-code4').value = itemData.Code_4 || '';
         
-        // Set date if available
+        // For duplication, clear the Code_4 field
+        document.getElementById('edit-code4').value = isDuplicating ? '' : (itemData.Code_4 || '');
+
+        // Handle date fields
         if (itemData.Anschaffungsjahr) {
-            // Format date to YYYY-MM-DD for input[type="date"]
             if (typeof itemData.Anschaffungsjahr === 'string' && itemData.Anschaffungsjahr.includes('T')) {
-                // Handle ISO date string format
                 document.getElementById('edit-anschaffungsjahr').value = itemData.Anschaffungsjahr.split('T')[0];
             } else {
                 document.getElementById('edit-anschaffungsjahr').value = itemData.Anschaffungsjahr;
@@ -754,68 +784,65 @@
         } else {
             document.getElementById('edit-anschaffungsjahr').value = '';
         }
-        
-        // Handle filter values which could be arrays or strings
+
+        // Handle filter values
         const filter1Values = Array.isArray(itemData.Filter) ? itemData.Filter : 
                              (itemData.Filter ? [itemData.Filter] : []);
         const filter2Values = Array.isArray(itemData.Filter2) ? itemData.Filter2 : 
                              (itemData.Filter2 ? [itemData.Filter2] : []);
         const filter3Values = Array.isArray(itemData.Filter3) ? itemData.Filter3 : 
                              (itemData.Filter3 ? [itemData.Filter3] : []);
-        
-        
-        // Populate filter fields - up to 4 values per filter
+
         for (let i = 1; i <= 4; i++) {
             document.getElementById(`edit-filter1-${i}`).value = filter1Values[i-1] || '';
             document.getElementById(`edit-filter2-${i}`).value = filter2Values[i-1] || '';
             document.getElementById(`edit-filter3-${i}`).value = filter3Values[i-1] || '';
         }
-        
-        // Load existing images
+
+        // Populate existing images section
         const existingImagesContainer = document.getElementById('edit-existing-images');
         existingImagesContainer.innerHTML = '';
-        
-        // Check if the item has images
+
         if (itemData.Images && itemData.Images.length > 0) {
             itemData.Images.forEach(imageName => {
                 const imageUrl = `/uploads/${imageName}`;
-                
+
                 const imageDiv = document.createElement('div');
                 imageDiv.className = 'existing-image-item';
-                
+
                 const img = document.createElement('img');
                 img.src = imageUrl;
                 img.alt = itemData.Name;
                 img.className = 'edit-thumbnail';
-                
+
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.name = 'existing_images';
                 checkbox.value = imageName;
                 checkbox.id = `img-${imageName}`;
-                checkbox.checked = true; // Default to keeping the image
-                
+                checkbox.checked = true;
+
                 const label = document.createElement('label');
                 label.htmlFor = checkbox.id;
                 label.textContent = 'Behalten';
-                
+
                 const labelDiv = document.createElement('div');
                 labelDiv.className = 'image-keep-controls';
                 labelDiv.appendChild(checkbox);
                 labelDiv.appendChild(label);
-                
+
                 imageDiv.appendChild(img);
                 imageDiv.appendChild(labelDiv);
-                
+
                 existingImagesContainer.appendChild(imageDiv);
             });
         } else {
             existingImagesContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
         }
-        
+
         // Reset the file input for new images
         document.getElementById('edit-new-images').value = '';
-        
+
         // Show the modal
         document.getElementById('edit-modal').style.display = 'block';
     }
@@ -933,6 +960,7 @@
                     `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
                 <a href="#" class="edit-button" onclick="editItem('${itemData._id}', event)">Bearbeiten</a>
+                <a href="#" class="duplicate-button" onclick="duplicateItem('${itemData._id}', event)">Duplizieren</a>
                 <a href="/get_qr_code/${itemData._id}" class="qr-download-button">QR-Code</a>
                 <a href="#" class="delete-button" onclick="confirmDelete('${itemData._id}', '${itemData.Name}', event)">Delete</a>
             </div>
@@ -1339,6 +1367,28 @@
         if (confirm(confirmMessage)) {
             window.location.href = `{{ url_for('delete_item', id='') }}${itemId}`;
         }
+    }
+
+    function duplicateItem(itemId, event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        document.getElementById('item-modal').style.display = 'none';
+
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load item data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showEditItemForm(data.item, true);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Laden der Objektdaten');
+            });
     }
 </script>
 
@@ -1783,7 +1833,6 @@ input[type="file"] {
     text-align: center;
 }
 
-/* Modal Styles */
 .item-modal {
     display: none;
     position: fixed;
@@ -1835,7 +1884,6 @@ input[type="file"] {
     color: #000;
 }
 
-/* Enhanced image navigation */
 .modal-image-container {
     text-align: center;
     margin: 20px 0;
@@ -1915,7 +1963,6 @@ input[type="file"] {
     grid-column: 1 / -1;
 }
 
-/* Borrower badge on item cards */
 .borrower-badge {
     background-color: #fff3cd;
     color: #856404;
@@ -1934,7 +1981,6 @@ input[type="file"] {
     margin-top: 3px;
 }
 
-/* Borrower panel in modal view */
 .borrower-info-panel {
     margin: 15px 0;
     padding: 15px;
@@ -1960,7 +2006,6 @@ input[type="file"] {
     font-weight: bold;
 }
 
-/* Borrowing details modal styles */
 #borrowing-details-modal .modal-content {
     max-width: 600px;
 }
@@ -1988,7 +2033,6 @@ input[type="file"] {
     background-color: #138496;
 }
 
-/* Add this CSS for the edit button */
 .edit-button {
     flex: 1;
     padding: 10px;
@@ -2005,7 +2049,6 @@ input[type="file"] {
     background-color: #e0a800;
 }
 
-/* Edit form modal styles */
 .form-row {
     display: flex;
     gap: 15px;
@@ -2049,7 +2092,6 @@ input[type="file"] {
     background-color: #5a6268;
 }
 
-/* Modal improvements for better responsiveness */
 @media (max-width: 768px) {
     .form-row {
         flex-direction: column;
@@ -2062,7 +2104,6 @@ input[type="file"] {
     }
 }
 
-/* Styles for image management in edit form */
 .existing-images-container {
     display: flex;
     flex-wrap: wrap;
@@ -2098,7 +2139,6 @@ input[type="file"] {
     font-size: 0.9em;
 }
 
-/* Updated styles for multi-filter inputs */
 .multi-filter {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -2113,7 +2153,6 @@ input[type="file"] {
     color: #495057;
 }
 
-/* Add styles for clickable cards */
 .clickable-card {
     cursor: pointer;
     position: relative;
@@ -2129,6 +2168,22 @@ input[type="file"] {
     cursor: pointer;
     z-index: 1;
     position: relative;
+}
+
+.duplicate-button {
+    flex: 1;
+    padding: 10px;
+    background-color: #17a2b8;
+    color: white;
+    text-align: center;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.duplicate-button:hover {
+    background-color: #138496;
 }
 </style>
 {% endblock %}

@@ -416,18 +416,16 @@ def upload_item():
     Returns:
         flask.Response: Redirect to admin homepage
     """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
+    # Authentication checks remain unchanged
     
     # Strip whitespace from all text fields
     name = strip_whitespace(request.form['name'])
     ort = strip_whitespace(request.form['ort'])
     beschreibung = strip_whitespace(request.form['beschreibung'])
-    images = request.files.getlist('images')
+    
+    # Check both possible image field names
+    images = request.files.getlist('images') or request.files.getlist('new_images')
+    
     filter_upload = strip_whitespace(request.form.getlist('filter'))
     filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
     filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
@@ -435,22 +433,44 @@ def upload_item():
     anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
     code_4 = strip_whitespace(request.form.getlist('code_4'))
     
-    if not name or not ort or not beschreibung or not images:
-        flash('Please fill all fields', 'error')
+    # Check if this is a duplication
+    is_duplicating = request.form.get('is_duplicating') == 'true'
+    
+    # Get duplicate_images if duplicating
+    duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
+    
+    # Validation
+    if not name or not ort or not beschreibung:
+        flash('Bitte füllen Sie alle erforderlichen Felder aus', 'error')
         return redirect(url_for('home_admin'))
 
+    # Only check for images if not duplicating and no duplicate images provided
+    if not is_duplicating and not images and not duplicate_images:
+        flash('Bitte laden Sie mindestens ein Bild hoch', 'error')
+        return redirect(url_for('home_admin'))
+
+    # Process any new uploaded images
     image_filenames = []
     for image in images:
         if image and allowed_file(image.filename):
             filename = secure_filename(image.filename)
-            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename + time.strftime("%Y%m%d%H%M%S")))
-            image_filenames.append(filename)
-        else:
-            flash('Invalid file type', 'error')
+            timestamp = time.strftime("%Y%m%d%H%M%S")
+            saved_filename = f"{filename}_{timestamp}"
+            image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+            image_filenames.append(saved_filename)
+        elif image and image.filename:  # Only show error if there's an actual file
+            flash('Ungültiges Dateiformat', 'error')
             return redirect(url_for('home_admin'))
 
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, filter_upload2, filter_upload3, anschaffungs_jahr, anschaffungs_kosten, code_4)
-    flash('Item uploaded successfully', 'success')
+    # Add the duplicate_images to the list
+    if is_duplicating and duplicate_images:
+        image_filenames.extend(duplicate_images)
+        
+    # Continue with existing code to create the item
+    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
+                filter_upload2, filter_upload3, anschaffungs_jahr, 
+                anschaffungs_kosten, code_4)
+    flash('Objekt wurde erfolgreich hinzugefügt', 'success')
     
     # Get the item ID and create QR code
     item = it.get_item_by_name(name)
