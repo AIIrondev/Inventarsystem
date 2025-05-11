@@ -1,9 +1,10 @@
 .venv
 certs
+uploads
+__pycache__
 *.log
 *.cpython-312.pyc
 *.png
 *.jpg
 *.jpeg
-__pycache__
 config.json
