@@ -904,6 +904,19 @@ def license():
     return render_template('license.html')
 
 
+# Add a specific route for favicon.ico to prevent 403 errors
+@app.route('/favicon.ico')
+def favicon():
+    """
+    Serve favicon from static folder or return a 204 No Content response
+    """
+    try:
+        return send_from_directory(app.config['STATIC_FOLDER'], 'favicon.ico')
+    except:
+        # Return a 204 No Content if favicon.ico doesn't exist
+        return '', 204
+
+
 '''----------------------------------------------------------------------BOOKING ROUTES-----------------------------------------------------------------------------------------------------------------'''
 
 @app.route('/get_bookings')
