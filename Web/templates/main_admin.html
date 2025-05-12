@@ -341,6 +341,32 @@
         }
     });
 
+    function saveFilterState() {
+        localStorage.setItem('inventarSystemFilters', JSON.stringify(activeFilters));
+    }
+    
+    function loadFilterState() {
+        const savedFilters = localStorage.getItem('inventarSystemFilters');
+        if (savedFilters) {
+            try {
+                // Parse saved filters
+                const parsedFilters = JSON.parse(savedFilters);
+                
+                // Restore to active filters
+                if (parsedFilters.filter1) activeFilters.filter1 = parsedFilters.filter1;
+                if (parsedFilters.filter2) activeFilters.filter2 = parsedFilters.filter2;
+                if (parsedFilters.filter3) activeFilters.filter3 = parsedFilters.filter3;
+                
+                // Update the selected filters display for each filter category
+                updateSelectedFilters(1);
+                updateSelectedFilters(2);
+                updateSelectedFilters(3);
+            } catch (e) {
+                console.error("Error loading saved filters:", e);
+            }
+        }
+    }
+
     // Check if a new item was just created to show download link
     const urlParams = new URLSearchParams(window.location.search);
     const newItemId = urlParams.get('new_item_id');
@@ -366,6 +392,9 @@
     let currentUsername = '';
 
     document.addEventListener('DOMContentLoaded', function() {
+        // First load saved filters
+        loadFilterState();
+        
         // Fetch user status to get current username
         fetch('/user_status')
             .then(response => response.json())
@@ -1029,25 +1058,27 @@
         dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
     
-    // Add missing filter clear function
     function clearFilter(filterNum) {
         // Reset the active filters for this category
         activeFilters[`filter${filterNum}`] = [];
-        
+
         // Clear the selected filters display
         document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
-        
+
         // Uncheck all checkboxes
         const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
         checkboxes.forEach(checkbox => {
             checkbox.checked = false;
         });
-        
+
         // Apply the updated filters
         applyFilters();
+
+        // Save filter state
+        saveFilterState();
     }
     
-    // Add function to update filter when checkbox changes
+    // Update this function to save filter state
     function updateFilter(filterNum, value, isChecked, group = '') {
         const filterKey = `filter${filterNum}`;
         // Add group prefix if provided
@@ -1068,6 +1099,9 @@
         
         // Apply the filters
         applyFilters();
+        
+        // Save filter state
+        saveFilterState();
     }
     
     // Add function to display selected filters
@@ -1134,6 +1168,8 @@
         
         // Apply the filters
         applyFilters();
+
+        saveFilterState();
     }
 
     // Fix populateFilterOptions to correctly set up filter checkboxes
@@ -1233,6 +1269,19 @@
             });
         }
         
+        // After creating all the checkboxes, ensure they're correctly checked based on activeFilters
+        setTimeout(() => {
+            // Find all checkboxes in this filter category
+            document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(checkbox => {
+                const value = checkbox.value;
+                const group = checkbox.dataset.group || '';
+                const filterValue = group ? `${group}:${value}` : value;
+                
+                // Set checked state based on activeFilters
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
+            });
+        }, 0);
+
         // Update the selected filters display
         updateSelectedFilters(filterNum);
     }
