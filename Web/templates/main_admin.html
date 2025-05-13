@@ -328,6 +328,8 @@
     window.serverVars = {
         highlightItemId: {% if highlight_item is defined and highlight_item %}"{{ highlight_item }}"{% else %}null{% endif %}
     };
+    
+    window.isDebug = false; // Set to true only for development environment
 </script>
 
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
@@ -730,9 +732,9 @@
         // Calculate scroll position to center the card
         const scrollPosition = card.offsetLeft - (containerRect.width/2) + (cardRect.width/2);
         
-        // Debug the centering calculation
-        if (isDebug) {
-            debugLog('Card positioning details:', {
+        // Debug the centering calculation if in debug mode
+        if (window.isDebug) {
+            console.log('Card positioning details:', {
                 cardName: card.querySelector('h3')?.textContent,
                 containerWidth: containerRect.width,
                 cardWidth: cardRect.width,
@@ -1030,6 +1032,163 @@
         
         // Apply filters to show all matching items
         applyFilters();
+    }
+
+    function openItemModal(item) {
+        // Get modal elements
+        const modal = document.getElementById('item-modal');
+        const modalContent = document.getElementById('modal-content-wrapper');
+        
+        // Format filter values for display
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+        
+        // Build image HTML
+        const imagesHtml = item.Images ? item.Images.map((image, index) => 
+            `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
+             style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
+        
+        // Check if item is borrowed
+        const isBorrowed = !item.Verfuegbar;
+        
+        // Build borrower info panel if applicable
+        let borrowerInfoHtml = '';
+        if (isBorrowed && item.BorrowerInfo) {
+            borrowerInfoHtml = `
+                <div class="borrower-info-panel">
+                    <h4>Ausleihstatus</h4>
+                    <p class="borrower-name">Ausgeliehen von: ${item.BorrowerInfo.username}</p>
+                    <p class="borrow-time">Seit: ${item.BorrowerInfo.borrowTime || 'Unbekannt'}</p>
+                </div>
+            `;
+        }
+        
+        // Build modal content HTML
+        modalContent.innerHTML = `
+            <h2>${item.Name}</h2>
+            ${borrowerInfoHtml}
+            
+            <div class="modal-image-container">
+                ${imagesHtml}
+                ${item.Images && item.Images.length > 1 ? `
+                    <button class="modal-image-nav modal-prev-image" onclick="changeModalImage(-1)">&#10094;</button>
+                    <button class="modal-image-nav modal-next-image" onclick="changeModalImage(1)">&#10095;</button>
+                    <div class="image-counter">1/${item.Images.length}</div>
+                ` : ''}
+            </div>
+            
+            <div class="modal-details">
+                <div class="detail-group">
+                    <div class="detail-label">Ort:</div>
+                    <div class="detail-value">${item.Ort || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Status:</div>
+                    <div class="detail-value ${isBorrowed ? 'status-borrowed' : ''}">
+                        ${isBorrowed ? 'Ausgeliehen' : 'Verfügbar'}
+                    </div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Unterrichtsfach:</div>
+                    <div class="detail-value">${filter1Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Jahrgangsstufe:</div>
+                    <div class="detail-value">${filter2Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Thema:</div>
+                    <div class="detail-value">${filter3Array.join(', ') || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Code:</div>
+                    <div class="detail-value">${item.Code_4 || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungsjahr:</div>
+                    <div class="detail-value">${item.Anschaffungsjahr || '-'}</div>
+                </div>
+                
+                <div class="detail-group">
+                    <div class="detail-label">Anschaffungskosten:</div>
+                    <div class="detail-value">${item.Anschaffungskosten || '-'}</div>
+                </div>
+                
+                <div class="detail-group full-width">
+                    <div class="detail-label">Beschreibung:</div>
+                    <div class="detail-value">${item.Beschreibung || '-'}</div>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                ${item.Verfuegbar ? 
+                    `<form method="POST" action="/ausleihen/${item._id}">
+                        <button class="ausleihen" type="submit">Ausleihen</button>
+                    </form>` 
+                    : (item.User === currentUsername) ?
+                    `<form method="POST" action="/zurueckgeben/${item._id}">
+                        <button class="ausleihen" type="submit">Zurückgeben</button>
+                    </form>`
+                    : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                }
+                <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
+                <a href="#" class="duplicate-button" onclick="duplicateItem('${item._id}', event)">Duplizieren</a>
+                <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Löschen</a>
+                <a href="/qr_code/${item._id}" class="qr-download-button">QR-Code</a>
+            </div>
+        `;
+        
+        // Show the modal
+        modal.style.display = 'block';
+        
+        // Set up close button
+        const closeButton = modal.querySelector('.close-modal');
+        closeButton.onclick = function() {
+            modal.style.display = 'none';
+        };
+        
+        // Store current image index for navigation
+        window.currentModalImageIndex = 0;
+        window.totalModalImages = item.Images ? item.Images.length : 0;
+        
+        // Set up click outside to close
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        };
+    }
+
+    // Add this helper function for modal image navigation
+    function changeModalImage(direction) {
+        const currentIndex = window.currentModalImageIndex;
+        const total = window.totalModalImages;
+        
+        if (total <= 1) return;
+        
+        // Hide current image
+        document.getElementById(`modal-image-${currentIndex}`).style.display = 'none';
+        
+        // Calculate new index
+        let newIndex = (currentIndex + direction) % total;
+        if (newIndex < 0) newIndex = total - 1;
+        
+        // Show new image
+        document.getElementById(`modal-image-${newIndex}`).style.display = 'block';
+        
+        // Update counter
+        const counter = document.querySelector('.image-counter');
+        if (counter) counter.textContent = `${newIndex + 1}/${total}`;
+        
+        // Update current index
+        window.currentModalImageIndex = newIndex;
     }
 </script>
 
