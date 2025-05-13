@@ -1,8 +1,0 @@
-flask
-werkzeug
-gunicorn
-pillow
-qrcode
-apscheduler
-python-dateutil
-pytz
