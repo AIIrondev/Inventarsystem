@@ -229,6 +229,13 @@
                     itemsContainer.innerHTML = '<div class="no-items-message">Keine Objekte gefunden</div>';
                     return;
                 }
+
+                // Sort items by name in descending order (Z-A)
+                data.items.sort((a, b) => {
+                    const nameA = a.Name ? a.Name.toLowerCase() : '';
+                    const nameB = b.Name ? b.Name.toLowerCase() : '';
+                    return nameB.localeCompare(nameA); // Descending order
+                });
                 
                 data.items.forEach(item => {
                     try {
@@ -309,6 +316,7 @@
                                 <p><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
                                 <p><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
                                 <p><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <div class="image-container">
                                     ${imagesHtml}
                                     <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
@@ -366,11 +374,8 @@
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
                 
-                // Center the first card
-                const cardWidth = itemsContainer.querySelector('.item-card')?.offsetWidth || 0;
-                if (cardWidth > 0) {
-                    itemsContainer.scrollLeft = (itemsContainer.scrollWidth - cardWidth) / 2;
-                }
+                // Start display from leftmost position (first card, which is now Z)
+                itemsContainer.scrollLeft = 0;
                 
                 // Apply filters
                 applyFilters();
