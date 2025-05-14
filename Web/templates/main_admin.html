@@ -78,7 +78,7 @@
             </div>
         </div>
         <div class="qr-container">
-            <button id="scanButton" class="scan-button">QR-Code scannen</button>
+            <button id="scanButton" class="scan-button">Barcode scannen</button>
             <div id="qr-reader" style="width: 500px; display: none;"></div>
         </div>
 
@@ -362,17 +362,25 @@
                 html5QrcodeScanner.clear();
                 qrReader.style.display = 'none';
                 
-                // Navigate to the item
-                window.location.href = decodedText;
+                // Instead of navigating to the URL, put the scanned code in the search box
+                const searchInput = document.getElementById('code-search');
+                if (searchInput) {
+                    searchInput.value = decodedText;
+                    // Trigger search automatically
+                    searchByCode();
+                }
+                
+                // Reset the button text
+                document.getElementById('scanButton').textContent = 'Barcode scannen';
             });
             
-            this.textContent = 'Scanner schließen';
+            this.textContent = 'Barcode Scanner schließen';
         } else {
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.clear();
             }
             qrReader.style.display = 'none';
-            this.textContent = 'QR-Code scannen';
+            this.textContent = 'Barcode scannen';
         }
     });
 
@@ -565,16 +573,6 @@
                         `;
                         itemsContainer.appendChild(card);
 
-                        // Add QR code download link to each card
-                        const qrLink = document.createElement('a');
-                        qrLink.href = `{{ url_for('get_qr_code', id='') }}${item._id}`;
-                        qrLink.className = 'qr-download-button';
-                        qrLink.textContent = 'QR-Code';
-                        
-                        // Add the QR code link to the actions div
-                        const actionsDiv = card.querySelector('.actions');
-                        actionsDiv.appendChild(qrLink);
-                        
                         // Add direct click event listeners to the card content area
                         const cardContent = card.querySelector('.card-content');
                         if (cardContent) {
@@ -1146,7 +1144,6 @@
                 <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
                 <a href="#" class="duplicate-button" onclick="duplicateItem('${item._id}', event)">Duplizieren</a>
                 <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Löschen</a>
-                <a href="/qr_code/${item._id}" class="qr-download-button">QR-Code</a>
             </div>
         `;
         
@@ -1194,6 +1191,242 @@
         
         // Update current index
         window.currentModalImageIndex = newIndex;
+    }
+    
+    // Add the missing editItem function
+    function editItem(itemId, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        // Close the item modal if it's open
+        document.getElementById('item-modal').style.display = 'none';
+        
+        // Fetch the item data
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load item data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showEditItemForm(data.item, false);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Laden der Objektdaten');
+            });
+    }
+    
+    // Function to show the edit item form and populate it with data
+    function showEditItemForm(item, isDuplicate) {
+        const modal = document.getElementById('edit-modal');
+        const form = document.getElementById('edit-item-form');
+        
+        // Update form action based on whether we're editing or duplicating
+        if (isDuplicate) {
+            form.action = "{{ url_for('upload_item') }}";
+            form.innerHTML += `<input type="hidden" name="is_duplicating" value="true">`;
+        } else {
+            form.action = `/edit_item/${item._id}`;
+        }
+        
+        // Set item ID for editing
+        document.getElementById('edit-item-id').value = item._id;
+        
+        // Populate basic fields
+        document.getElementById('edit-name').value = item.Name || '';
+        document.getElementById('edit-ort').value = item.Ort || '';
+        document.getElementById('edit-beschreibung').value = item.Beschreibung || '';
+        document.getElementById('edit-anschaffungsjahr').value = item.Anschaffungsjahr || '';
+        document.getElementById('edit-anschaffungskosten').value = item.Anschaffungskosten || '';
+        document.getElementById('edit-code4').value = item.Code_4 || '';
+        
+        // Populate filter fields
+        populateFilterInputs('edit-filter1-', item.Filter || []);
+        populateFilterInputs('edit-filter2-', item.Filter2 || []);
+        populateFilterInputs('edit-filter3-', item.Filter3 || []);
+        
+        // Handle existing images
+        const imagesContainer = document.getElementById('edit-existing-images');
+        imagesContainer.innerHTML = '';
+        
+        if (isDuplicate) {
+            // For duplicates, add hidden inputs to copy the images
+            if (item.Images && item.Images.length > 0) {
+                item.Images.forEach(image => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'duplicate_images';
+                    input.value = image;
+                    form.appendChild(input);
+                });
+                
+                // Show a message about duplicated images
+                imagesContainer.innerHTML = `<p>Die Bilder des Originalartikels (${item.Images.length}) werden übernommen.</p>`;
+            }
+        } else {
+            // For edits, show checkboxes to keep/remove images
+            if (item.Images && item.Images.length > 0) {
+                item.Images.forEach(image => {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'existing-image-item';
+                    
+                    const imgPath = "{{ url_for('uploaded_file', filename='') }}" + image;
+                    imgDiv.innerHTML = `
+                        <img src="${imgPath}" alt="Image" class="edit-thumbnail">
+                        <div class="image-keep-controls">
+                            <input type="checkbox" id="keep-${image}" name="existing_images" value="${image}" checked>
+                            <label for="keep-${image}">Behalten</label>
+                        </div>
+                    `;
+                    imagesContainer.appendChild(imgDiv);
+                });
+            } else {
+                imagesContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+            }
+        }
+        
+        // Display the modal
+        modal.style.display = 'block';
+    }
+    
+    // Add function to populate filter inputs
+    function populateFilterInputs(idPrefix, values) {
+        // Clear existing values
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`${idPrefix}${i}`).value = '';
+        }
+        
+        // Populate with new values
+        if (Array.isArray(values)) {
+            values.forEach((value, index) => {
+                if (index < 4 && value) {
+                    document.getElementById(`${idPrefix}${index + 1}`).value = value;
+                }
+            });
+        } else if (values) {
+            // Handle single value
+            document.getElementById(`${idPrefix}1`).value = values;
+        }
+    }
+    
+    // Add the closeEditModal function
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+
+    // Add missing toggleFilterDropdown function
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown.style.display === 'block') {
+            dropdown.style.display = 'none';
+        } else {
+            // Close all other dropdowns first
+            const dropdowns = document.querySelectorAll('.filter-dropdown');
+            dropdowns.forEach(d => d.style.display = 'none');
+            
+            // Open this dropdown
+            dropdown.style.display = 'block';
+        }
+    }
+
+    // Add missing updateFilter function
+    function updateFilter(filterNum, value, isActive, group) {
+        // Construct filter value with group prefix if needed
+        const filterValue = group ? `${group}:${value}` : value;
+        const filterKey = `filter${filterNum}`;
+        
+        if (isActive) {
+            // Add to active filters if not already present
+            if (!activeFilters[filterKey].includes(filterValue)) {
+                activeFilters[filterKey].push(filterValue);
+            }
+        } else {
+            // Remove from active filters
+            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+        }
+        
+        // Update the selected filters display
+        updateSelectedFiltersDisplay(filterNum);
+        
+        // Apply filters to items
+        applyFilters();
+        
+        // Save filter state
+        saveFilterState();
+    }
+
+    // Add function to update selected filters display
+    function updateSelectedFiltersDisplay(filterNum) {
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
+        
+        activeFilters[`filter${filterNum}`].forEach(filterValue => {
+            // Check if it has a group prefix
+            let displayText = filterValue;
+            let groupText = '';
+            
+            if (filterValue.includes(':')) {
+                const [group, value] = filterValue.split(':', 2);
+                displayText = value;
+                groupText = group;
+            }
+            
+            const tag = document.createElement('span');
+            tag.className = 'filter-tag';
+            
+            // Add group prefix if present
+            if (groupText) {
+                tag.innerHTML = `<span class="filter-tag-group">${groupText}:</span>`;
+            }
+            
+            tag.innerHTML += `${displayText}<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filterValue}')">×</button>`;
+            container.appendChild(tag);
+        });
+    }
+
+    // Add function to remove filter
+    function removeFilter(filterNum, filterValue) {
+        const filterKey = `filter${filterNum}`;
+        activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+        
+        // Update the selected filters display
+        updateSelectedFiltersDisplay(filterNum);
+        
+        // Update checkbox state if dropdown is visible
+        const checkbox = document.querySelector(`#filter${filterNum}-options input[value="${filterValue.split(':')[1] || filterValue}"]`);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        
+        // Apply filters to items
+        applyFilters();
+        
+        // Save filter state
+        saveFilterState();
+    }
+
+    // Add function to clear filter
+    function clearFilter(filterNum) {
+        activeFilters[`filter${filterNum}`] = [];
+        
+        // Update the selected filters display
+        updateSelectedFiltersDisplay(filterNum);
+        
+        // Update checkbox states
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Apply filters to items
+        applyFilters();
+        
+        // Save filter state
+        saveFilterState();
     }
 </script>
 
@@ -1581,37 +1814,6 @@ input[type="file"] {
     max-width: 100%;
 }
 
-.qr-download-button {
-    display: inline-block;
-    margin-left: 5px;
-    padding: 5px 10px;
-    background-color: #28a745;
-    color: white;
-    text-decoration: none;
-    border-radius: 3px;
-    font-size: 0.8em;
-}
-
-.qr-notification {
-    background-color: #d4edda;
-    color: #155724;
-    padding: 10px;
-    margin-bottom: 15px;
-    border-radius: 5px;
-    text-align: center;
-    transition: opacity 1s ease;
-}
-
-.qr-download {
-    display: inline-block;
-    padding: 5px 15px;
-    background-color: #28a745;
-    color: white;
-    text-decoration: none;
-    border-radius: 3px;
-    margin-left: 10px;
-}
-
 .highlight-item {
     border: 3px solid gold !important;
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
@@ -1776,8 +1978,7 @@ input[type="file"] {
 }
 
 .modal-actions .ausleihen,
-.modal-actions .delete-button,
-.modal-actions .qr-download-button {
+.modal-actions .delete-button {
     padding: 10px 20px;
 }
 

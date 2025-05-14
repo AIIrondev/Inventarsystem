@@ -78,7 +78,7 @@
             </div>
         </div>
         <div class="qr-container">
-            <button id="scanButton" class="scan-button">QR-Code scannen</button>
+            <button id="scanButton" class="scan-button">Barcode scannen</button>
             <div id="qr-reader" style="width: 500px; display: none;"></div>
         </div>
         <div id="items-container" class="items-container">
@@ -140,17 +140,25 @@
                 html5QrcodeScanner.clear();
                 qrReader.style.display = 'none';
                 
-                // Navigate to the item
-                window.location.href = decodedText;
+                // Instead of navigating to the URL, put the scanned code in the search box
+                const searchInput = document.getElementById('code-search');
+                if (searchInput) {
+                    searchInput.value = decodedText;
+                    // Trigger search automatically
+                    searchByCode();
+                }
+                
+                // Reset the button text
+                document.getElementById('scanButton').textContent = 'Barcode scannen';
             });
             
-            this.textContent = 'Scanner schließen';
+            this.textContent = 'Barcode Scanner schließen';
         } else {
             if (html5QrcodeScanner) {
                 html5QrcodeScanner.clear();
             }
             qrReader.style.display = 'none';
-            this.textContent = 'QR-Code scannen';
+            this.textContent = 'Barcode scannen';
         }
     });
 
