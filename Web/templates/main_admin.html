@@ -479,11 +479,11 @@
                     return;
                 }
                 
-                // Sort items by name in descending order (Z-A)
+                // Sort items by name in ascending order (A-Z)
                 data.items.sort((a, b) => {
                     const nameA = a.Name ? a.Name.toLowerCase() : '';
                     const nameB = b.Name ? b.Name.toLowerCase() : '';
-                    return nameB.localeCompare(nameA); // Descending order
+                    return nameA.localeCompare(nameB); // Ascending order
                 });
                 
                 data.items.forEach(item => {
