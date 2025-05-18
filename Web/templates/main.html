@@ -183,9 +183,28 @@
         }
     }
     
+    // Function to clear filter state from localStorage
+    function clearFilterState() {
+        localStorage.removeItem('inventarSystemFilters');
+        // Reset active filters
+        activeFilters = {
+            filter1: [],
+            filter2: [],
+            filter3: []
+        };
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
         // Load saved filters
         loadFilterState();
+        
+        // Find and attach event listener to all logout links
+        const logoutLinks = document.querySelectorAll('a[href*="logout"]');
+        logoutLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                clearFilterState(); // Clear filters when logging out
+            });
+        });
         
         // Fetch user status to get current username
         fetch('/user_status')
