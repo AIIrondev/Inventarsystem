@@ -1906,3 +1906,45 @@ def change_password():
     
     # Display form
     return render_template('change_password.html')
+
+@app.route('/admin/reset_user_password', methods=['POST'])
+def admin_reset_user_password():
+    """
+    Admin route to reset a user's password.
+    
+    Returns:
+        flask.Response: Redirect to user management page with status message
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    username = request.form.get('username')
+    new_password = request.form.get('new_password')
+    
+    if not username or not new_password:
+        flash('Bitte füllen Sie alle Felder aus', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Check if user exists
+    user = us.get_user(username)
+    if not user:
+        flash('Benutzer existiert nicht', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Check password strength
+    if not us.check_password_strength(new_password):
+        flash('Das neue Passwort ist zu schwach', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Update the password
+    try:
+        us.update_password(username, new_password)
+        flash(f'Passwort für {username} wurde erfolgreich geändert', 'success')
+    except Exception as e:
+        flash(f'Fehler beim Ändern des Passworts: {str(e)}', 'error')
+    
+    return redirect(url_for('user_del'))
