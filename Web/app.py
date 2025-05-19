@@ -1832,3 +1832,26 @@ def process_booking_activation(booking_id, item_id, user, start_date, end_date, 
         import traceback
         traceback.print_exc()
         return False
+
+@app.route('/my_borrowed_items')
+def my_borrowed_items():
+    """
+    Show a list of items currently borrowed by the logged-in user.
+    
+    Returns:
+        flask.Response: Rendered template with borrowed items
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    # Get all items
+    all_items = it.get_items()
+    
+    # Filter for items borrowed by the current user
+    borrowed_items = []
+    for item in all_items:
+        if not item.get('Verfuegbar', True) and item.get('User') == session['username']:
+            borrowed_items.append(item)
+    
+    return render_template('my_borrowed_items.html', username=session['username'], borrowed_items=borrowed_items)

@@ -1,0 +1,177 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+{% extends "base.html" %}
+
+{% block title %}Meine Ausleihen{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="content">
+        <h1>Meine ausgeliehenen Gegenstände</h1>
+        
+        <div class="borrowed-items-container">
+            {% if borrowed_items %}
+                <div class="items-list">
+                    {% for item in borrowed_items %}
+                        <div class="borrowed-item">
+                            <div class="item-details">
+                                <h3>{{ item.Name }}</h3>
+                                <p><strong>Ort:</strong> {{ item.Ort|default('-', true) }}</p>
+                                
+                                {% set filter1_value = item.Filter %}
+                                {% if item.Filter is iterable and item.Filter is not string %}
+                                    {% set filter1_value = item.Filter[0] if item.Filter|length > 0 else '-' %}
+                                {% endif %}
+                                <p><strong>Unterrichtsfach:</strong> {{ filter1_value|default('-', true) }}</p>
+                                
+                                {% set filter2_value = item.Filter2 %}
+                                {% if item.Filter2 is iterable and item.Filter2 is not string %}
+                                    {% set filter2_value = item.Filter2[0] if item.Filter2|length > 0 else '-' %}
+                                {% endif %}
+                                <p><strong>Jahrgangsstufe:</strong> {{ filter2_value|default('-', true) }}</p>
+                                
+                                {% if item.BorrowerInfo and item.BorrowerInfo.borrowTime %}
+                                <p><strong>Ausgeliehen seit:</strong> {{ item.BorrowerInfo.borrowTime }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="item-image-container">
+                                {% if item.Images and item.Images[0] %}
+                                    <img src="{{ url_for('uploaded_file', filename=item.Images[0]) }}" alt="{{ item.Name }}" class="item-thumbnail">
+                                {% else %}
+                                    <div class="no-image">Kein Bild</div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="item-actions">
+                                <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                                    <button type="submit" class="return-button">Zurückgeben</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="no-items-message">
+                    <p>Sie haben derzeit keine Gegenstände ausgeliehen.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .borrowed-items-container {
+        margin-top: 20px;
+    }
+    
+    .items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .borrowed-item {
+        display: flex;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        background-color: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        align-items: center;
+    }
+    
+    .item-details {
+        flex: 2;
+    }
+    
+    .item-details h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    
+    .item-image-container {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 15px;
+    }
+    
+    .item-thumbnail {
+        max-width: 100px;
+        max-height: 100px;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+    
+    .no-image {
+        width: 100px;
+        height: 100px;
+        background-color: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        border-radius: 4px;
+    }
+    
+    .item-actions {
+        flex: 1;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+    }
+    
+    .return-button {
+        padding: 10px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .return-button:hover {
+        background-color: #0056b3;
+    }
+    
+    .no-items-message {
+        text-align: center;
+        padding: 30px;
+        background-color: #f5f5f5;
+        border-radius: 5px;
+        color: #666;
+    }
+    
+    @media (max-width: 768px) {
+        .borrowed-item {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .item-image-container {
+            margin: 15px 0;
+        }
+        
+        .item-actions {
+            justify-content: center;
+            margin-top: 15px;
+        }
+    }
+</style>
+{% endblock %}
