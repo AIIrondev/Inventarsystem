@@ -1855,3 +1855,54 @@ def my_borrowed_items():
             borrowed_items.append(item)
     
     return render_template('my_borrowed_items.html', username=session['username'], borrowed_items=borrowed_items)
+
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    """
+    Allow users to change their password.
+    Requires current password verification and confirmation of new password.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+        
+    # If form is submitted
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate inputs
+        if not all([current_password, new_password, confirm_password]):
+            flash('Bitte füllen Sie alle Felder aus.', 'error')
+            return render_template('change_password.html')
+            
+        # Verify current password
+        if not us.check_nm_pwd(session['username'], current_password):
+            flash('Das aktuelle Passwort ist nicht korrekt.', 'error')
+            return render_template('change_password.html')
+            
+        # Check if new passwords match
+        if new_password != confirm_password:
+            flash('Die neuen Passwörter stimmen nicht überein.', 'error')
+            return render_template('change_password.html')
+            
+        # Check password strength
+        if not us.check_password_strength(new_password):
+            flash('Das neue Passwort ist zu schwach. Bitte verwenden Sie mindestens 8 Zeichen mit Groß- und Kleinbuchstaben, Zahlen und Sonderzeichen.', 'error')
+            return render_template('change_password.html')
+            
+        # Change password
+        try:
+            us.update_password(session['username'], new_password)
+            flash('Ihr Passwort wurde erfolgreich aktualisiert.', 'success')
+            return redirect(url_for('home'))
+        except Exception as e:
+            flash(f'Fehler bei der Passwortänderung: {str(e)}', 'error')
+            return render_template('change_password.html')
+    
+    # Display form
+    return render_template('change_password.html')

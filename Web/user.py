@@ -312,3 +312,37 @@ def get_all_users():
         return all_users
     except Exception as e:
         return []
+
+def update_password(username, new_password):
+    """
+    Update a user's password with a new one.
+    
+    Args:
+        username (str): Username of the user
+        new_password (str): New password to set
+        
+    Returns:
+        bool: True if password was updated successfully, False otherwise
+    """
+    try:
+        if not check_password_strength(new_password):
+            return False
+            
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        
+        # Hash the new password
+        hashed_password = hashing(new_password)
+        
+        # Update the user's password
+        result = users.update_one(
+            {'Username': username}, 
+            {'$set': {'Password': hashed_password}}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error updating password: {e}")
+        return False

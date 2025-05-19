@@ -86,7 +86,16 @@
                 <div class="d-flex">
                     {% if 'username' in session %}
                         <span class="navbar-text text-light me-3">Welcome, {{ session['username'] }}</span>
-                        <a class="btn btn-danger" href="{{ url_for('logout') }}">Logout</a>
+                        <div class="dropdown me-2">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Account
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </div>
                     {% endif %}
                 </div>
             </div>
