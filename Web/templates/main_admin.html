@@ -338,6 +338,7 @@
     let html5QrcodeScanner = null;
     let codeSearchTerm = '';
     let currentUsername = '';
+    let allItems = []; // Cache for all items
     
     // Get the highlight item ID from the pre-processed server variables
     let highlightItemId = window.serverVars.highlightItemId;
@@ -384,6 +385,89 @@
         }
     });
 
+    // New function to rebuild Filter 3 based on Filter 1 and Filter 2 selections
+    function rebuildFilter3Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 and filter 2 selections
+        const filter1Selections = activeFilters.filter1;
+        const filter2Selections = activeFilters.filter2;
+        
+        // If both filters are empty, show all filter3 values
+        if (filter1Selections.length === 0 && filter2Selections.length === 0) {
+            // Get all unique filter3 values
+            const allFilter3Values = new Set();
+            allItems.forEach(item => {
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : 
+                                     (item.Filter3 ? [item.Filter3] : []);
+                
+                filter3Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter3Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 3 dropdown with all values
+            populateFilterOptions('filter3-options', [...allFilter3Values].sort(), 3);
+            return;
+        }
+        
+        // Filter items based on filter1 and filter2 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            const filter1Match = filter1Selections.length === 0 || 
+                filter1Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter1Array.includes(filterValue);
+                });
+            
+            // Check if item passes Filter 2
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            const filter2Match = filter2Selections.length === 0 || 
+                filter2Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter2Array.includes(filterValue);
+                });
+            
+            return filter1Match && filter2Match;
+        });
+        
+        // Get unique Filter 3 values from filtered items
+        const availableFilter3Values = new Set();
+        filteredItems.forEach(item => {
+            const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+            filter3Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter3Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 3 selections that are still valid
+        const validFilter3Selections = [];
+        activeFilters.filter3.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter3Values.has(filterValue)) {
+                validFilter3Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 3 selections (remove invalid ones)
+        if (validFilter3Selections.length !== activeFilters.filter3.length) {
+            activeFilters.filter3 = validFilter3Selections;
+            updateSelectedFiltersDisplay(3);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Populate filter 3 dropdown with only available values
+        populateFilterOptions('filter3-options', [...availableFilter3Values].sort(), 3);
+    }
+
     function saveFilterState() {
         localStorage.setItem('inventarSystemFilters', JSON.stringify(activeFilters));
     }
@@ -399,6 +483,8 @@
                 if (parsedFilters.filter1) activeFilters.filter1 = parsedFilters.filter1;
                 if (parsedFilters.filter2) activeFilters.filter2 = parsedFilters.filter2;
                 if (parsedFilters.filter3) activeFilters.filter3 = parsedFilters.filter3;
+                
+                // We'll rebuild Filter 3 options after items are loaded
             } catch (e) {
                 console.error("Error loading saved filters:", e);
             }
@@ -470,6 +556,9 @@
                 const filter1Values = new Set();
                 const filter2Values = new Set();
                 const filter3Values = new Set();
+                
+                // Store all items data globally
+                allItems = data.items || [];
                 
                 // Clear the container first
                 itemsContainer.innerHTML = '';
@@ -627,7 +716,7 @@
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
                 
-                // Start display from leftmost position (first card, which is now Z)
+                // Start display from leftmost position (first card, which is now A)
                 itemsContainer.scrollLeft = 0;
                 
                 // Apply filters
@@ -639,6 +728,89 @@
                 itemsContainer.innerHTML = 
                     '<div class="error-message">Fehler beim Laden der Objekte. Bitte versuchen Sie es später erneut.</div>';
             });
+    }
+
+    // New function to rebuild Filter 3 based on Filter 1 and Filter 2 selections
+    function rebuildFilter3Options() {
+        if (!allItems || allItems.length === 0) return;
+        
+        // Get current filter 1 and filter 2 selections
+        const filter1Selections = activeFilters.filter1;
+        const filter2Selections = activeFilters.filter2;
+        
+        // If both filters are empty, show all filter3 values
+        if (filter1Selections.length === 0 && filter2Selections.length === 0) {
+            // Get all unique filter3 values
+            const allFilter3Values = new Set();
+            allItems.forEach(item => {
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : 
+                                     (item.Filter3 ? [item.Filter3] : []);
+                
+                filter3Array.forEach(value => {
+                    if (value && typeof value === 'string' && value.trim() !== '') {
+                        allFilter3Values.add(value);
+                    }
+                });
+            });
+            
+            // Populate filter 3 dropdown with all values
+            populateFilterOptions('filter3-options', [...allFilter3Values].sort(), 3);
+            return;
+        }
+        
+        // Filter items based on filter1 and filter2 selections
+        const filteredItems = allItems.filter(item => {
+            // Check if item passes Filter 1
+            const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+            const filter1Match = filter1Selections.length === 0 || 
+                filter1Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter1Array.includes(filterValue);
+                });
+            
+            // Check if item passes Filter 2
+            const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+            const filter2Match = filter2Selections.length === 0 || 
+                filter2Selections.some(filter => {
+                    // Extract value from filter (remove group prefix if exists)
+                    const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+                    return filter2Array.includes(filterValue);
+                });
+            
+            return filter1Match && filter2Match;
+        });
+        
+        // Get unique Filter 3 values from filtered items
+        const availableFilter3Values = new Set();
+        filteredItems.forEach(item => {
+            const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+            filter3Array.forEach(value => {
+                if (value && typeof value === 'string' && value.trim() !== '') {
+                    availableFilter3Values.add(value);
+                }
+            });
+        });
+        
+        // Keep track of current filter 3 selections that are still valid
+        const validFilter3Selections = [];
+        activeFilters.filter3.forEach(filter => {
+            // Extract value from filter (remove group prefix if exists)
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            if (availableFilter3Values.has(filterValue)) {
+                validFilter3Selections.push(filter);
+            }
+        });
+        
+        // Update active filter 3 selections (remove invalid ones)
+        if (validFilter3Selections.length !== activeFilters.filter3.length) {
+            activeFilters.filter3 = validFilter3Selections;
+            updateSelectedFiltersDisplay(3);
+            // No need to call applyFilters() here as it will be called after this function
+        }
+        
+        // Populate filter 3 dropdown with only available values
+        populateFilterOptions('filter3-options', [...availableFilter3Values].sort(), 3);
     }
 
     function searchByCode() {
@@ -1353,99 +1525,66 @@
     }
 
     // Add missing updateFilter function
-    function updateFilter(filterNum, value, isActive, group) {
-        // Construct filter value with group prefix if needed
-        const filterValue = group ? `${group}:${value}` : value;
+    function updateFilter(filterNum, value, isChecked, group = '') {
         const filterKey = `filter${filterNum}`;
+        // Add group prefix if provided
+        const filterValue = group ? `${group}:${value}` : value;
         
-        if (isActive) {
-            // Add to active filters if not already present
+        if (isChecked) {
+            // Add filter value if not already present
             if (!activeFilters[filterKey].includes(filterValue)) {
                 activeFilters[filterKey].push(filterValue);
             }
         } else {
-            // Remove from active filters
+            // Remove filter value
             activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
         }
         
-        // Update the selected filters display
+        // Update the filter display
         updateSelectedFiltersDisplay(filterNum);
         
-        // Apply filters to items
-        applyFilters();
+        // If Filter 1 or Filter 2 changed, rebuild Filter 3 options
+        if (filterNum === 1 || filterNum === 2) {
+            rebuildFilter3Options();
+        }
         
-        // Save filter state
+        // Save and apply the filters
         saveFilterState();
+        applyFilters();
     }
 
-    // Add function to update selected filters display
+    // Add missing updateSelectedFiltersDisplay function
     function updateSelectedFiltersDisplay(filterNum) {
         const container = document.getElementById(`selected-filter${filterNum}`);
         container.innerHTML = '';
         
-        activeFilters[`filter${filterNum}`].forEach(filterValue => {
-            // Check if it has a group prefix
-            let displayText = filterValue;
-            let groupText = '';
+        activeFilters[`filter${filterNum}`].forEach(filter => {
+            // Extract display value from filter
+            let displayValue = filter;
+            let groupName = '';
             
-            if (filterValue.includes(':')) {
-                const [group, value] = filterValue.split(':', 2);
-                displayText = value;
-                groupText = group;
+            // Handle group:value format
+            if (filter.includes(':')) {
+                [groupName, displayValue] = filter.split(':');
             }
             
-            const tag = document.createElement('span');
+            // Create filter tag
+            const tag = document.createElement('div');
             tag.className = 'filter-tag';
             
-            // Add group prefix if present
-            if (groupText) {
-                tag.innerHTML = `<span class="filter-tag-group">${groupText}:</span>`;
+            // Show group if present
+            let tagContent = '';
+            if (groupName) {
+                tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
             }
             
-            tag.innerHTML += `${displayText}<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filterValue}')">×</button>`;
+            // Add filter value and remove button
+            tagContent += displayValue;
+            tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
+            
+            tag.innerHTML = tagContent;
             container.appendChild(tag);
         });
-    }
-
-    // Add function to remove filter
-    function removeFilter(filterNum, filterValue) {
-        const filterKey = `filter${filterNum}`;
-        activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
-        
-        // Update the selected filters display
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // Update checkbox state if dropdown is visible
-        const checkbox = document.querySelector(`#filter${filterNum}-options input[value="${filterValue.split(':')[1] || filterValue}"]`);
-        if (checkbox) {
-            checkbox.checked = false;
-        }
-        
-        // Apply filters to items
-        applyFilters();
-        
-        // Save filter state
-        saveFilterState();
-    }
-
-    // Add function to clear filter
-    function clearFilter(filterNum) {
-        activeFilters[`filter${filterNum}`] = [];
-        
-        // Update the selected filters display
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // Update checkbox states
-        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = false;
-        });
-        
-        // Apply filters to items
-        applyFilters();
-        
-        // Save filter state
-        saveFilterState();
     }
 </script>
 
@@ -2258,7 +2397,6 @@ input[type="file"] {
     min-width: 250px;
 }
 
-/* Retain search feedback styles */
 #code-search.searching {
     background-color: #fff3cd;
     transition: background-color 0.3s;
@@ -2266,7 +2404,6 @@ input[type="file"] {
     box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
 }
 
-/* Add styles for error and empty state messages */
 .error-message, .no-items-message {
     padding: 20px;
     text-align: center;
