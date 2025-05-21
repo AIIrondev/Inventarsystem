@@ -209,6 +209,22 @@
                 <label for="images">Bilder:</label>
                 <input type="file" id="images" name="images" accept="image/*" multiple>
             </div>
+            
+            <!-- Add ISBN and exemplar count fields to upload form -->
+            <div class="form-group">
+                <label for="isbn">ISBN:</label>
+                <div class="isbn-input-group">
+                    <input type="text" id="isbn" name="isbn" placeholder="ISBN eingeben...">
+                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Buchinformationen abrufen</button>
+                </div>
+                <div id="book-info-container" class="book-info-container"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="exemplare">Exemplare:</label>
+                <input type="number" id="exemplare" name="exemplare" min="1" value="1">
+            </div>
+            
             <button type="submit">Upload</button>
         </form>
     </div>
@@ -328,6 +344,22 @@
                             <input type="text" id="edit-filter3-4" name="filter3">
                         </div>
                     </div>
+                </div>
+                
+                <!-- Add ISBN and exemplar count fields -->
+                <div class="form-group">
+                    <label for="edit-isbn">ISBN:</label>
+                    <div class="isbn-input-group">
+                        <input type="text" id="edit-isbn" name="isbn" placeholder="ISBN eingeben...">
+                        <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('edit')">Buchinformationen abrufen</button>
+                    </div>
+                    <div id="edit-book-info-container" class="book-info-container"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-exemplare">Exemplare:</label>
+                    <input type="number" id="edit-exemplare" name="exemplare" min="1" value="1">
+                    <div id="edit-exemplare-status" class="exemplare-status"></div>
                 </div>
                 
                 <div class="form-row">
@@ -1514,6 +1546,15 @@
         setFilterValuesInForm('edit-filter2', filter2Values);
         setFilterValuesInForm('edit-filter3', filter3Values);
         
+        // Add ISBN and exemplar values if they exist
+        document.getElementById('edit-isbn').value = item.ISBN || '';
+        document.getElementById('edit-exemplare').value = item.Exemplare || 1;
+        
+        // Update exemplare status if this is an edit (not duplicate)
+        if (!isDuplicate && item.ExemplareStatus) {
+            updateExemplareStatus('edit', item.ExemplareStatus);
+        }
+        
         // Show the edit modal
         document.getElementById('edit-modal').style.display = 'block';
         
@@ -1744,6 +1785,543 @@
                 }
             }
         });
+    }
+    
+    // Function to fetch book information by ISBN
+    function fetchBookInfo(formType) {
+        // Determine which form we're working with (upload or edit)
+        const isbnField = formType === 'edit' ? document.getElementById('edit-isbn') : document.getElementById('isbn');
+        const infoContainer = formType === 'edit' ? document.getElementById('edit-book-info-container') : document.getElementById('book-info-container');
+        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Fehler beim Abrufen der Buchinformationen');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Display book information
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                        <button type="button" class="use-book-info-button" onclick="useBookInfo('${formType}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">Informationen übernehmen</button>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                infoContainer.innerHTML = `<div class="error-message">Fehler: ${error.message}</div>`;
+            });
+    }
+    
+    // Function to apply fetched book information to the form
+    function useBookInfo(formType, bookData) {
+        // Determine which form we're updating
+        const nameField = formType === 'edit' ? document.getElementById('edit-name') : document.getElementById('name');
+        const descField = formType === 'edit' ? document.getElementById('edit-beschreibung') : document.getElementById('beschreibung');
+        
+        // Update form fields with book data
+        nameField.value = bookData.title || '';
+        
+        // Create a description that includes book metadata and the actual description
+        let fullDescription = '';
+        if (bookData.authors) fullDescription += `Autor(en): ${bookData.authors}\n`;
+        if (bookData.publisher) fullDescription += `Verlag: ${bookData.publisher}\n`;
+        if (bookData.publishedDate) fullDescription += `Erscheinungsdatum: ${bookData.publishedDate}\n`;
+        if (bookData.pageCount) fullDescription += `Seitenanzahl: ${bookData.pageCount}\n`;
+        if (bookData.description) fullDescription += `\nBeschreibung:\n${bookData.description}`;
+        
+        descField.value = fullDescription;
+        
+        // Set appropriate filter values for books
+        setFilterValuesForBook(formType, 'Buch');
+        
+        // Show confirmation
+        alert('Buchinformationen wurden übernommen!');
+    }
+    
+    // Function to set appropriate filter values for books
+    function setFilterValuesForBook(formType, bookType) {
+        const prefix = formType === 'edit' ? 'edit-' : '';
+        
+        // Set filter1 (Unterrichtsfach) to 'Buch' if available in options
+        const filter1Select = document.getElementById(`${prefix}filter1-1`);
+        if (filter1Select) {
+            for (let i = 0; i < filter1Select.options.length; i++) {
+                if (filter1Select.options[i].value === bookType) {
+                    filter1Select.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Function to update exemplare status display
+    function updateExemplareStatus(formType, borrowedData) {
+        const statusContainer = formType === 'edit' ? document.getElementById('edit-exemplare-status') : null;
+        if (!statusContainer) return;
+        
+        if (borrowedData && borrowedData.length > 0) {
+            let statusHtml = '<h5>Ausleihstatus der Exemplare:</h5><ul>';
+            borrowedData.forEach((item, index) => {
+                statusHtml += `<li>Exemplar ${index + 1}: ${item.available ? 
+                    '<span class="available-status">Verfügbar</span>' : 
+                    `<span class="borrowed-status">Ausgeliehen an ${item.user}</span>`}</li>`;
+            });
+            statusHtml += '</ul>';
+            statusContainer.innerHTML = statusHtml;
+        } else {
+            statusContainer.innerHTML = '';
+        }
+    }
+    
+    // Update edit item function to handle exemplare data
+    function showEditItemForm(item, isDuplicate) {
+        // Reset the form
+        const form = document.getElementById('edit-item-form');
+        form.reset();
+        
+        // Set form action based on duplicate or edit
+        // Fix: Use upload_item endpoint for duplicating and add a hidden field to indicate duplication
+        const formAction = isDuplicate 
+            ? "{{ url_for('upload_item') }}" 
+            : "{{ url_for('edit_item', id='') }}" + item._id;
+        form.setAttribute('action', formAction);
+        
+        // Add a hidden field to indicate this is a duplication if needed
+        if (isDuplicate) {
+            // Remove any existing is_duplicating field
+            const existingField = form.querySelector('input[name="is_duplicating"]');
+            if (existingField) {
+                existingField.remove();
+            }
+            
+            // Add hidden field to indicate duplication
+            const hiddenField = document.createElement('input');
+            hiddenField.type = 'hidden';
+            hiddenField.name = 'is_duplicating';
+            hiddenField.value = 'true';
+            form.appendChild(hiddenField);
+            
+            // Also add duplicate_images fields for any existing images
+            if (item.Images && item.Images.length > 0) {
+                item.Images.forEach(image => {
+                    // Extract just the filename without the path
+                    const imageName = image.split('/').pop();
+                    const imageField = document.createElement('input');
+                    imageField.type = 'hidden';
+                    imageField.name = 'duplicate_images';
+                    imageField.value = imageName;
+                    form.appendChild(imageField);
+                });
+            }
+        }
+        
+        // Fill in the form fields
+        document.getElementById('edit-item-id').value = item._id;
+        document.getElementById('edit-name').value = item.Name;
+        document.getElementById('edit-ort').value = item.Ort;
+        document.getElementById('edit-beschreibung').value = item.Beschreibung;
+        document.getElementById('edit-anschaffungsjahr').value = item.Anschaffungsjahr ? item.Anschaffungsjahr.split('T')[0] : '';
+        document.getElementById('edit-anschaffungskosten').value = item.Anschaffungskosten;
+        document.getElementById('edit-code4').value = item.Code_4;
+        
+        // Handle filters - split by comma and trim spaces
+        const filter1Values = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Values = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Values = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+        
+        // Clear existing filter selections
+        activeFilters.filter1 = [];
+        activeFilters.filter2 = [];
+        activeFilters.filter3 = [];
+        
+        // Set filter values in the form
+        setFilterValuesInForm('edit-filter1', filter1Values);
+        setFilterValuesInForm('edit-filter2', filter2Values);
+        setFilterValuesInForm('edit-filter3', filter3Values);
+        
+        // Add ISBN and exemplar values if they exist
+        document.getElementById('edit-isbn').value = item.ISBN || '';
+        document.getElementById('edit-exemplare').value = item.Exemplare || 1;
+        
+        // Update exemplare status if this is an edit (not duplicate)
+        if (!isDuplicate && item.ExemplareStatus) {
+            updateExemplareStatus('edit', item.ExemplareStatus);
+        }
+        
+        // Show the edit modal
+        document.getElementById('edit-modal').style.display = 'block';
+        
+        // Center the modal in the viewport
+        const modal = document.getElementById('edit-modal');
+        modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // Close modals and reset forms
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+
+    function closeItemModal() {
+        document.getElementById('item-modal').style.display = 'none';
+    }
+
+    // Update selected filters display function
+    function updateSelectedFiltersDisplay(filterNum) {
+        const container = document.getElementById(`selected-filter${filterNum}`);
+        container.innerHTML = '';
+        
+        activeFilters[`filter${filterNum}`].forEach(filter => {
+            // Extract display value from filter
+            let displayValue = filter;
+            let groupName = '';
+            
+            // Handle group:value format
+            if (filter.includes(':')) {
+                [groupName, displayValue] = filter.split(':');
+            }
+            
+            // Create filter tag
+            const tag = document.createElement('div');
+            tag.className = 'filter-tag';
+            
+            // Show group if present
+            let tagContent = '';
+            if (groupName) {
+                tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
+            }
+            
+            // Add filter value and remove button
+            tagContent += displayValue;
+            tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
+            
+            tag.innerHTML = tagContent;
+            container.appendChild(tag);
+        });
+    }
+
+    function searchByCode() {
+        const searchInput = document.getElementById('code-search');
+        const rawSearchTerm = searchInput.value;
+        codeSearchTerm = rawSearchTerm.trim().toLowerCase();
+        
+        // Add visual feedback when searching
+        searchInput.classList.add('searching');
+        
+        // Reset highlighting
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
+        });
+        
+        // Apply filters which will handle highlighting
+        applyFilters(true); // Pass true to indicate this is a direct search
+        
+        // Remove visual feedback after a delay
+        setTimeout(() => {
+            searchInput.classList.remove('searching');
+        }, 500);
+    }
+
+    function applyFilters(isDirectSearch = false) {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
+        
+        let visibleCount = 0;
+        let codeMatchCount = 0;
+        let exactMatchCount = 0;
+        let firstMatchedCard = null;
+        let exactMatchCard = null;
+        
+        // Process search term
+        const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
+        const isCodeSearch = searchTerm.length > 0;
+        
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            const rawCode = item.dataset.code || '';
+            const itemCode = rawCode.trim().toLowerCase();
+            
+            // Check if item matches all active filters
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
+            const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
+            
+            // Check for code match (special logic for exact matches)
+            let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
+            let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
+            
+            if (passesAllFilters && matchesCodeSearch) {
+                // Show item if it matches all filters and code search
+                item.style.display = 'block';
+                visibleCount++;
+                
+                // Add appropriate highlight classes for code matches
+                if (exactCodeMatch) {
+                    item.classList.add('highlight-item', 'exact-code-match');
+                    exactMatchCount++;
+                    if (!exactMatchCard) {
+                        exactMatchCard = item;
+                    }
+                } else if (isCodeSearch && itemCode.includes(searchTerm)) {
+                    item.classList.add('code-match');
+                    codeMatchCount++;
+                    if (!firstMatchedCard) {
+                        firstMatchedCard = item;
+                    }
+                }
+            } else {
+                // Hide non-matching items
+                item.style.display = 'none';
+            }
+        });
+        
+        // Handle scrolling and highlighting for code searches
+        if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
+            setTimeout(() => {
+                // Prefer exact match, fallback to partial match
+                const cardToHighlight = exactMatchCard || firstMatchedCard;
+                
+                if (cardToHighlight) {
+                    // Center the matched card in view
+                    centerCardInView(cardToHighlight, itemsContainer);
+                    
+                    // Add stronger attention-grabbing animation
+                    applyAttentionAnimation(cardToHighlight);
+                }
+            }, 300);
+        } else if (isDirectSearch && isCodeSearch && visibleCount === 0) {
+            debugLog(`No matches found for search term "${searchTerm}"`, {
+                allCodes: Array.from(items).map(item => item.dataset.code?.trim() || 'empty')
+            });
+        }
+    }
+
+    // Add function to toggle filter dropdowns
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown.style.display === 'block') {
+            dropdown.style.display = 'none';
+        } else {
+            // Close all other dropdowns first
+            const dropdowns = document.querySelectorAll('.filter-dropdown');
+            dropdowns.forEach(d => d.style.display = 'none');
+            
+            // Open this dropdown
+            dropdown.style.display = 'block';
+        }
+    }
+    
+    // Function to load predefined filter values into dropdowns
+    function loadPredefinedFilterValues(filterNum) {
+        fetch(`/get_predefined_filter_values/${filterNum}`)
+            .then(response => response.json())
+            .then(data => {
+                // Get all dropdowns for this filter
+                const selector = filterNum === 1 ? 
+                    'select[id^="filter1-"], select[id^="edit-filter1-"]' : 
+                    'select[id^="filter2-"], select[id^="edit-filter2-"]';
+                const dropdowns = document.querySelectorAll(selector);
+                
+                // Populate each dropdown
+                dropdowns.forEach(dropdown => {
+                    // Preserve the first option (placeholder)
+                    const firstOption = dropdown.options[0];
+                    
+                    // Clear existing options except the first one
+                    dropdown.innerHTML = '';
+                    dropdown.appendChild(firstOption);
+                    
+                    // Add options for each value
+                    data.values.forEach(value => {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = value;
+                        dropdown.appendChild(option);
+                    });
+                });
+            })
+            .catch(error => {
+                console.error(`Error loading filter ${filterNum} values:`, error);
+            });
+    }
+    
+    // Update the setFilterValuesInForm function to handle selects
+    function setFilterValuesInForm(prefix, values) {
+        values.forEach((value, index) => {
+            const input = document.getElementById(`${prefix}-${index + 1}`);
+            if (input) {
+                if (input.tagName === 'SELECT') {
+                    // Find and select the matching option
+                    const options = input.options;
+                    for (let i = 0; i < options.length; i++) {
+                        if (options[i].value === value) {
+                            input.selectedIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    // If not found, try to add it (might be a legacy value)
+                    if (input.selectedIndex === 0 && value) {
+                        const option = document.createElement('option');
+                        option.value = value;
+                        option.textContent = value + ' (Legacy)';
+                        input.appendChild(option);
+                        input.selectedIndex = input.options.length - 1;
+                    }
+                } else {
+                    // For regular inputs
+                    input.value = value;
+                }
+            }
+        });
+    }
+    
+    // Function to fetch book information by ISBN
+    function fetchBookInfo(formType) {
+        // Determine which form we're working with (upload or edit)
+        const isbnField = formType === 'edit' ? document.getElementById('edit-isbn') : document.getElementById('isbn');
+        const infoContainer = formType === 'edit' ? document.getElementById('edit-book-info-container') : document.getElementById('book-info-container');
+        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Fehler beim Abrufen der Buchinformationen');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Display book information
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                        <button type="button" class="use-book-info-button" onclick="useBookInfo('${formType}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">Informationen übernehmen</button>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                infoContainer.innerHTML = `<div class="error-message">Fehler: ${error.message}</div>`;
+            });
+    }
+    
+    // Function to apply fetched book information to the form
+    function useBookInfo(formType, bookData) {
+        // Determine which form we're updating
+        const nameField = formType === 'edit' ? document.getElementById('edit-name') : document.getElementById('name');
+        const descField = formType === 'edit' ? document.getElementById('edit-beschreibung') : document.getElementById('beschreibung');
+        
+        // Update form fields with book data
+        nameField.value = bookData.title || '';
+        
+        // Create a description that includes book metadata and the actual description
+        let fullDescription = '';
+        if (bookData.authors) fullDescription += `Autor(en): ${bookData.authors}\n`;
+        if (bookData.publisher) fullDescription += `Verlag: ${bookData.publisher}\n`;
+        if (bookData.publishedDate) fullDescription += `Erscheinungsdatum: ${bookData.publishedDate}\n`;
+        if (bookData.pageCount) fullDescription += `Seitenanzahl: ${bookData.pageCount}\n`;
+        if (bookData.description) fullDescription += `\nBeschreibung:\n${bookData.description}`;
+        
+        descField.value = fullDescription;
+        
+        // Set appropriate filter values for books
+        setFilterValuesForBook(formType, 'Buch');
+        
+        // Show confirmation
+        alert('Buchinformationen wurden übernommen!');
+    }
+    
+    // Function to set appropriate filter values for books
+    function setFilterValuesForBook(formType, bookType) {
+        const prefix = formType === 'edit' ? 'edit-' : '';
+        
+        // Set filter1 (Unterrichtsfach) to 'Buch' if available in options
+        const filter1Select = document.getElementById(`${prefix}filter1-1`);
+        if (filter1Select) {
+            for (let i = 0; i < filter1Select.options.length; i++) {
+                if (filter1Select.options[i].value === bookType) {
+                    filter1Select.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Function to update exemplare status display
+    function updateExemplareStatus(formType, borrowedData) {
+        const statusContainer = formType === 'edit' ? document.getElementById('edit-exemplare-status') : null;
+        if (!statusContainer) return;
+        
+        if (borrowedData && borrowedData.length > 0) {
+            let statusHtml = '<h5>Ausleihstatus der Exemplare:</h5><ul>';
+            borrowedData.forEach((item, index) => {
+                statusHtml += `<li>Exemplar ${index + 1}: ${item.available ? 
+                    '<span class="available-status">Verfügbar</span>' : 
+                    `<span class="borrowed-status">Ausgeliehen an ${item.user}</span>`}</li>`;
+            });
+            statusHtml += '</ul>';
+            statusContainer.innerHTML = statusHtml;
+        } else {
+            statusContainer.innerHTML = '';
+        }
     }
 </script>
 
@@ -2009,7 +2587,7 @@
     }
 
     button.ausleihen {
-        flex: 1;
+flex: 1;
         padding: 10px;
         background-color: #007bff;
         color: #fff;
@@ -2587,3 +3165,4 @@
     }
 </style>
 {% endblock %}
+--
