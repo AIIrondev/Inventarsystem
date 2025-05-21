@@ -1948,3 +1948,97 @@ def admin_reset_user_password():
         flash(f'Fehler beim Ändern des Passworts: {str(e)}', 'error')
     
     return redirect(url_for('user_del'))
+
+# New routes for filter management
+
+@app.route('/manage_filters')
+def manage_filters():
+    """
+    Admin page to manage predefined filter values.
+    
+    Returns:
+        flask.Response: Rendered filter management template or redirect
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    # Get predefined filter values
+    filter1_values = it.get_predefined_filter_values(1)
+    filter2_values = it.get_predefined_filter_values(2)
+    
+    return render_template('manage_filters.html', 
+                          filter1_values=filter1_values, 
+                          filter2_values=filter2_values)
+
+@app.route('/add_filter_value/<int:filter_num>', methods=['POST'])
+def add_filter_value(filter_num):
+    """
+    Add a new predefined value to the specified filter.
+    
+    Args:
+        filter_num (int): Filter number (1 or 2)
+        
+    Returns:
+        flask.Response: Redirect to filter management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    value = strip_whitespace(request.form.get('value'))
+    
+    if not value:
+        flash('Bitte geben Sie einen Wert ein', 'error')
+        return redirect(url_for('manage_filters'))
+    
+    # Add the value to the filter
+    success = it.add_predefined_filter_value(filter_num, value)
+    
+    if success:
+        flash(f'Wert "{value}" wurde zu Filter {filter_num} hinzugefügt', 'success')
+    else:
+        flash(f'Wert "{value}" existiert bereits in Filter {filter_num}', 'error')
+    
+    return redirect(url_for('manage_filters'))
+
+@app.route('/remove_filter_value/<int:filter_num>/<string:value>', methods=['POST'])
+def remove_filter_value(filter_num, value):
+    """
+    Remove a predefined value from the specified filter.
+    
+    Args:
+        filter_num (int): Filter number (1 or 2)
+        value (str): Value to remove
+        
+    Returns:
+        flask.Response: Redirect to filter management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    # Remove the value from the filter
+    success = it.remove_predefined_filter_value(filter_num, value)
+    
+    if success:
+        flash(f'Wert "{value}" wurde aus Filter {filter_num} entfernt', 'success')
+    else:
+        flash(f'Fehler beim Entfernen des Wertes "{value}" aus Filter {filter_num}', 'error')
+    
+    return redirect(url_for('manage_filters'))
+
+@app.route('/get_predefined_filter_values/<int:filter_num>')
+def get_predefined_filter_values(filter_num):
+    """
+    API endpoint to get predefined values for a specific filter.
+    
+    Args:
+        filter_num (int): Filter number (1 or 2)
+        
+    Returns:
+        dict: Dictionary containing predefined filter values
+    """
+    values = it.get_predefined_filter_values(filter_num)
+    return jsonify({'values': values})

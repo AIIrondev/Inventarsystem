@@ -518,3 +518,101 @@ def unstuck_item(id):
     except Exception as e:
         print(f"Error unsticking item: {e}")
         return False
+
+
+def get_predefined_filter_values(filter_num):
+    """
+    Get predefined values for a specific filter.
+    
+    Args:
+        filter_num (int): Filter number (1 for Unterrichtsfach, 2 for Jahrgangsstufe)
+        
+    Returns:
+        list: List of predefined filter values
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    
+    # Use a dedicated collection for filter presets
+    filter_presets = db['filter_presets']
+    
+    # Find the document for the specified filter
+    filter_doc = filter_presets.find_one({'filter_num': filter_num})
+    
+    client.close()
+    
+    if filter_doc and 'values' in filter_doc:
+        # Sort values alphabetically
+        return sorted(filter_doc['values'])
+    else:
+        # Create empty document if it doesn't exist
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        filter_presets = db['filter_presets']
+        filter_presets.update_one(
+            {'filter_num': filter_num},
+            {'$set': {'values': []}},
+            upsert=True
+        )
+        client.close()
+        return []
+
+def add_predefined_filter_value(filter_num, value):
+    """
+    Add a new predefined value to a filter.
+    
+    Args:
+        filter_num (int): Filter number (1 for Unterrichtsfach, 2 for Jahrgangsstufe)
+        value (str): Value to add
+        
+    Returns:
+        bool: True if value was added, False if it already existed
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    filter_presets = db['filter_presets']
+    
+    # Check if value already exists
+    filter_doc = filter_presets.find_one({
+        'filter_num': filter_num,
+        'values': value
+    })
+    
+    if filter_doc:
+        # Value already exists
+        client.close()
+        return False
+    
+    # Add the value to the filter
+    result = filter_presets.update_one(
+        {'filter_num': filter_num},
+        {'$push': {'values': value}},
+        upsert=True
+    )
+    
+    client.close()
+    return result.modified_count > 0 or result.upserted_id is not None
+
+def remove_predefined_filter_value(filter_num, value):
+    """
+    Remove a predefined value from a filter.
+    
+    Args:
+        filter_num (int): Filter number (1 for Unterrichtsfach, 2 for Jahrgangsstufe)
+        value (str): Value to remove
+        
+    Returns:
+        bool: True if value was removed, False otherwise
+    """
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    filter_presets = db['filter_presets']
+    
+    # Remove the value from the filter
+    result = filter_presets.update_one(
+        {'filter_num': filter_num},
+        {'$pull': {'values': value}}
+    )
+    
+    client.close()
+    return result.modified_count > 0
