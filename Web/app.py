@@ -43,6 +43,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import json
 from pymongo import MongoClient
 import time
+import requests
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -352,10 +353,21 @@ def get_items():
         for borrowing in all_borrowings:
             item_id = str(borrowing.get('Item'))
             if item_id:
-                active_borrowings[item_id] = {
-                    'user': borrowing.get('User'),
-                    'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else ''
-                }
+                # Handle both regular items and exemplar items
+                if '_' in item_id:  # Format is parent_id_exemplar_number
+                    parent_id = item_id.split('_')[0]
+                    if parent_id not in active_borrowings:
+                        active_borrowings[parent_id] = []
+                    active_borrowings[parent_id].append({
+                        'user': borrowing.get('User'),
+                        'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else '',
+                        'exemplar': borrowing.get('ExemplarData', {}).get('exemplar_number', '')
+                    })
+                else:
+                    active_borrowings[item_id] = [{
+                        'user': borrowing.get('User'),
+                        'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else ''
+                    }]
     except Exception as e:
         print(f"Error fetching active borrowings: {e}")
     
@@ -363,14 +375,43 @@ def get_items():
     for item in items:
         item_id = str(item['_id'])
         
+        # Add exemplar availability info
+        if 'Exemplare' in item and item['Exemplare'] > 1:
+            # Get exemplar status if available
+            exemplare_status = item.get('ExemplareStatus', [])
+            borrowed_count = len(exemplare_status)
+            available_count = item['Exemplare'] - borrowed_count
+            
+            item['AvailableExemplare'] = available_count
+            item['BorrowedExemplare'] = borrowed_count
+            
+            # Count exemplars borrowed by current user
+            current_user = session.get('username')
+            if current_user:
+                borrowed_by_me = [ex for ex in exemplare_status if ex.get('user') == current_user]
+                item['BorrowedByMeCount'] = len(borrowed_by_me)
+            
+            # If some exemplars are available, mark the item as available
+            if available_count > 0:
+                item['Verfuegbar'] = True
+        
         # Add borrower information if item is borrowed
         if not item.get('Verfuegbar', True):
             # Try to get detailed borrowing info
             if item_id in active_borrowings:
-                item['BorrowerInfo'] = {
-                    'username': active_borrowings[item_id]['user'],
-                    'borrowTime': active_borrowings[item_id]['start_date']
-                }
+                borrowers = active_borrowings[item_id]
+                if len(borrowers) == 1:
+                    item['BorrowerInfo'] = {
+                        'username': borrowers[0]['user'],
+                        'borrowTime': borrowers[0]['start_date']
+                    }
+                else:
+                    # Multiple borrowers - format differently
+                    users = set(b['user'] for b in borrowers)
+                    item['BorrowerInfo'] = {
+                        'username': f"{len(users)} users ({', '.join(users)})",
+                        'borrowTime': 'Multiple borrowing times'
+                    }
             # Fallback to basic info from item record
             elif 'User' in item:
                 item['BorrowerInfo'] = {
@@ -380,7 +421,8 @@ def get_items():
     
     # Filter items if needed
     if available_only:
-        items = [item for item in items if item.get('Verfuegbar', False)]
+        items = [item for item in items if item.get('Verfuegbar', False) or 
+                 (item.get('Exemplare', 1) > 1 and item.get('AvailableExemplare', 0) > 0)]
     
     return {'items': items}
 
@@ -608,19 +650,86 @@ def ausleihen(id):
         return redirect(url_for('login'))
     
     item = it.get_item(id)
-    if item and item['Verfuegbar']:
-        it.update_item_status(id, False, session['username'])
+    if not item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home'))
+    
+    # Get number of exemplars to borrow (default to 1)
+    exemplare_count = request.form.get('exemplare_count', 1)
+    try:
+        exemplare_count = int(exemplare_count)
+        if exemplare_count < 1:
+            exemplare_count = 1
+    except (ValueError, TypeError):
+        exemplare_count = 1
+        
+    # Check if the item has exemplars defined
+    total_exemplare = item.get('Exemplare', 1)
+    
+    # Get current exemplar status
+    exemplare_status = item.get('ExemplareStatus', [])
+    
+    # Count how many exemplars are currently available
+    borrowed_count = len(exemplare_status)
+    available_count = total_exemplare - borrowed_count
+    
+    if available_count < exemplare_count:
+        flash(f'Not enough copies available. Requested: {exemplare_count}, Available: {available_count}', 'error')
+        return redirect(url_for('home'))
+    
+    # If we reach here, we can borrow the requested number of exemplars
+    username = session['username']
+    current_date = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+    
+    # If the item doesn't use exemplars (single item)
+    if total_exemplare <= 1:
+        it.update_item_status(id, False, username)
         start_date = datetime.datetime.now()
-        au.add_ausleihung(id, session['username'], start_date)
-
+        au.add_ausleihung(id, username, start_date)
         flash('Item borrowed successfully', 'success')
     else:
-        flash('Item is not available', 'error')
+        # Handle multi-exemplar item
+        new_borrowed_exemplars = []
+        
+        # Create new entries for borrowed exemplars
+        for i in range(exemplare_count):
+            # Find the next available exemplar number
+            exemplar_number = 1
+            used_numbers = [ex.get('number') for ex in exemplare_status]
+            
+            while exemplar_number in used_numbers:
+                exemplar_number += 1
+                
+            new_borrowed_exemplars.append({
+                'number': exemplar_number,
+                'user': username,
+                'date': current_date
+            })
+        
+        # Add new borrowed exemplars to the status
+        updated_status = exemplare_status + new_borrowed_exemplars
+        
+        # Update the item with the new status
+        it.update_item_exemplare_status(id, updated_status)
+        
+        # Update the item's availability if all exemplars are borrowed
+        if len(updated_status) >= total_exemplare:
+            it.update_item_status(id, False, username)
+        
+        # Create ausleihung records for each borrowed exemplar
+        start_date = datetime.datetime.now()
+        for exemplar in new_borrowed_exemplars:
+            exemplar_id = f"{id}_{exemplar['number']}"
+            au.add_ausleihung(exemplar_id, username, start_date, exemplar_data={
+                'parent_id': id,
+                'exemplar_number': exemplar['number']
+            })
+        
+        flash(f'{exemplare_count} copies borrowed successfully', 'success')
     
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
-
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])
 def zurueckgeben(id): 
@@ -639,52 +748,95 @@ def zurueckgeben(id):
         return redirect(url_for('login'))
     
     item = it.get_item(id)
-    if item and not item['Verfuegbar']:
-        if not us.check_admin(session['username']) and item['User'] != session['username']:
-            flash('You are not authorized to return this item', 'error')
-            return redirect(url_for('home'))
+    if not item:
+        flash('Item not found', 'error')
+        return redirect(url_for('home'))
+    
+    # Get number of exemplars to return (default to 1)
+    exemplare_count = request.form.get('exemplare_count', 1)
+    try:
+        exemplare_count = int(exemplare_count)
+        if exemplare_count < 1:
+            exemplare_count = 1
+    except (ValueError, TypeError):
+        exemplare_count = 1
         
-        try:
-            # Get existing borrowing record BEFORE updating the item status
-            ausleihung_data = au.get_ausleihung_by_item(id)
-            end_date = datetime.datetime.now()
-            
-            # Store the borrower's username before updating item status
-            original_user = item.get('User', session['username'])
-            
-            if ausleihung_data and '_id' in ausleihung_data:
-                # Update existing record
-                ausleihung_id = str(ausleihung_data['_id'])
-                user = ausleihung_data.get('User', original_user)
-                start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
+    # Get current exemplar status
+    exemplare_status = item.get('ExemplareStatus', [])
+    total_exemplare = item.get('Exemplare', 1)
+    
+    username = session['username']
+    
+    # If it's a simple item without exemplars
+    if total_exemplare <= 1 or not exemplare_status:
+        if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
+            try:
+                # Get existing borrowing record BEFORE updating the item status
+                ausleihung_data = au.get_ausleihung_by_item(id)
+                end_date = datetime.datetime.now()
                 
-                # Update the ausleihung first
-                au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
+                # Store the borrower's username before updating item status
+                original_user = item.get('User', username)
                 
-                # Then update the item status (only once)
-                return_it = it.update_item_status(id, True, original_user)
-                flash('Item returned successfully', 'success')
-            else:
-                # Only create a new record if we absolutely can't find an existing one
-                # This should rarely happen
-                start_time = datetime.datetime.now() - datetime.timedelta(hours=1)
-                
-                # Update the item status first
-                it.update_item_status(id, True, original_user)
-                
-                # Log a warning about missing record
-                print(f"Warning: No borrowing record found for item {id} when returning. Creating new record.")
-                
-                # Create a historical record
-                au.add_ausleihung(id, original_user, start_time, end_date, notes="Auto-generated return record", status="completed")
-                flash('Item returned successfully (new record created)', 'success')
-        except Exception as e:
-            # If there's an error in record keeping, still make the item available
-            it.update_item_status(id, True, user=original_user)
-            flash('Item returned but encountered an error in record-keeping', 'warning')
-            print(f"Error updating borrowing record: {e}")
+                if ausleihung_data and '_id' in ausleihung_data:
+                    # Update existing record
+                    ausleihung_id = str(ausleihung_data['_id'])
+                    user = ausleihung_data.get('User', original_user)
+                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
+                    
+                    # Update the ausleihung first
+                    au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
+                    
+                    # Then update the item status (only once)
+                    it.update_item_status(id, True, original_user)
+                    flash('Item returned successfully', 'success')
+                else:
+                    # Fallback for missing record
+                    it.update_item_status(id, True, original_user)
+                    flash('Item returned successfully (new record created)', 'success')
+            except Exception as e:
+                it.update_item_status(id, True)
+                flash(f'Item returned but encountered an error in record-keeping: {str(e)}', 'warning')
+        else:
+            flash('You are not authorized to return this item or it is already available', 'error')
     else:
-        flash('Item is already available or does not exist', 'error')
+        # Handle multi-exemplar item
+        # Filter exemplars borrowed by current user
+        user_exemplars = [ex for ex in exemplare_status if ex.get('user') == username]
+        
+        # Check if user has borrowed enough exemplars to return
+        if len(user_exemplars) < exemplare_count:
+            flash(f'You can only return up to {len(user_exemplars)} copies', 'error')
+            exemplare_count = len(user_exemplars)
+            
+        if exemplare_count > 0:
+            # Get the exemplars to return (limited to requested count)
+            exemplars_to_return = user_exemplars[:exemplare_count]
+            
+            # Remove these exemplars from the status list
+            updated_status = [ex for ex in exemplare_status if ex not in exemplars_to_return]
+            
+            # Update the item status
+            it.update_item_exemplare_status(id, updated_status)
+            
+            # If all exemplars were borrowed but now some are available, update item status
+            if not item.get('Verfuegbar', True) and len(updated_status) < total_exemplare:
+                it.update_item_status(id, True)
+            
+            # Complete the ausleihungen for each returned exemplar
+            end_date = datetime.datetime.now()
+            for exemplar in exemplars_to_return:
+                exemplar_id = f"{id}_{exemplar['number']}"
+                ausleihung_data = au.get_ausleihung_by_item(exemplar_id, include_exemplar_id=True)
+                
+                if ausleihung_data and '_id' in ausleihung_data:
+                    ausleihung_id = str(ausleihung_data['_id'])
+                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
+                    au.update_ausleihung(ausleihung_id, exemplar_id, username, start, end_date, status='completed')
+            
+            flash(f'{exemplare_count} copies returned successfully', 'success')
+        else:
+            flash('You have no copies to return', 'error')
     
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
@@ -1723,6 +1875,7 @@ def process_bookings():
                 # Check if today's booking date matches the period
                 if start_date and start_date.date() == current_date:
                     # Process the booking - activate it
+
                     process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period)
                 else:
                     # For bookings from previous days, mark as cancelled
@@ -1926,7 +2079,7 @@ def admin_reset_user_password():
     new_password = request.form.get('new_password')
     
     if not username or not new_password:
-        flash('Bitte füllen Sie alle Felder aus', 'error')
+        flash('No user selected', 'error')
         return redirect(url_for('user_del'))
     
     # Check if user exists
@@ -2042,3 +2195,65 @@ def get_predefined_filter_values(filter_num):
     """
     values = it.get_predefined_filter_values(filter_num)
     return jsonify({'values': values})
+
+@app.route('/fetch_book_info/<isbn>')
+def fetch_book_info(isbn):
+    """
+    API endpoint to fetch book information by ISBN using Google Books API
+    
+    Args:
+        isbn (str): ISBN to look up
+        
+    Returns:
+        dict: Book information or error message
+    """
+    try:
+        # Clean the ISBN (remove hyphens and spaces)
+        clean_isbn = isbn.replace('-', '').replace(' ', '')
+        
+        # Query the Google Books API
+        response = requests.get(f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}")
+        
+        # Check if the request was successful
+        if response.status_code != 200:
+            return jsonify({"error": f"API request failed with status code: {response.status_code}"}), 500
+        
+        # Parse the response
+        data = response.json()
+        
+        # Check if books were found
+        if data.get('totalItems', 0) == 0:
+            return jsonify({"error": f"No books found for ISBN: {isbn}"}), 404
+        
+        # Get the first book's information
+        book_info = data['items'][0]['volumeInfo']
+        sale_info = data['items'][0].get('saleInfo', {})
+        
+        # Extract price information if available
+        price = None
+        retail_price = sale_info.get('retailPrice', {})
+        list_price = sale_info.get('listPrice', {})
+        
+        if retail_price and 'amount' in retail_price:
+            price = f"{retail_price['amount']} {retail_price.get('currencyCode', '€')}"
+        elif list_price and 'amount' in list_price:
+            price = f"{list_price['amount']} {list_price.get('currencyCode', '€')}"
+        
+        # Extract relevant information
+        result = {
+            "title": book_info.get('title', 'Unknown Title'),
+            "authors": ', '.join(book_info.get('authors', ['Unknown Author'])),
+            "publisher": book_info.get('publisher', 'Unknown Publisher'),
+            "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
+            "description": book_info.get('description', 'No description available'),
+            "pageCount": book_info.get('pageCount', 'Unknown'),
+            "thumbnail": book_info.get('imageLinks', {}).get('thumbnail', ''),
+            "price": price
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        print(f"Error fetching book data: {e}")
+        return jsonify({"error": f"Failed to fetch book information: {str(e)}"}), 500

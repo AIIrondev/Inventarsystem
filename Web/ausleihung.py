@@ -51,57 +51,54 @@ def ensure_timezone_aware(dt):
 
 # === AUSLEIHUNG MANAGEMENT ===
 
-def add_ausleihung(item_id, user_id, start, end=None, notes="", status="active", period=None):
+def add_ausleihung(item_id, user, start_date, end_date=None, notes="", status="active", period=None, exemplar_data=None):
     """
-    Erstellt einen neuen Ausleihungsdatensatz in der Datenbank.
-    Je nach Status wird eine aktive Ausleihe oder eine geplante Reservierung erstellt.
+    Add a new borrowing record for an item.
     
     Args:
-        item_id (str): ID des auszuleihenden Gegenstands
-        user_id (str): ID oder Benutzername des Ausleihers
-        start (datetime): Startdatum/-zeit der Ausleihperiode
-        end (datetime, optional): Enddatum/-zeit der Ausleihperiode
-        notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
-        status (str, optional): Status der Ausleihe ('planned', 'active', 'completed', 'cancelled')
-        period (int, optional): Schulstunde (1-10) der Ausleihung
+        item_id (str): ID of the item borrowed
+        user (str): Username of the borrower
+        start_date (datetime): Start date and time of the borrowing
+        end_date (datetime, optional): End date and time if already returned
+        notes (str, optional): Additional notes about the borrowing
+        status (str, optional): Status of the borrowing (active, completed, planned)
+        period (str, optional): School period for the borrowing
+        exemplar_data (dict, optional): Information about specific exemplar borrowed
         
     Returns:
-        ObjectId: ID des neuen Ausleihungsdatensatzes
+        ObjectId: ID of the new borrowing record or None if failed
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        # Keep everything as naive datetime objects
-        if start and hasattr(start, 'tzinfo') and start.tzinfo:
-            start = start.replace(tzinfo=None)
-        if end and hasattr(end, 'tzinfo') and end.tzinfo:
-            end = end.replace(tzinfo=None)
-        now = datetime.datetime.now()
-        
-        ausleihung_data = {
+        ausleihung = {
             'Item': item_id,
-            'User': user_id,
-            'Start': start,
-            'End': end,
-            'Notes': notes,
-            'Status': status,
-            'Created': now,
-            'LastUpdated': now
+            'User': user,
+            'Start': start_date,
+            'Status': status
         }
         
-        # Add period if provided
-        if period is not None:
-            ausleihung_data['Period'] = int(period)
+        if end_date:
+            ausleihung['End'] = end_date
+            
+        if notes:
+            ausleihung['Notes'] = notes
+            
+        if period:
+            ausleihung['Period'] = period
+            
+        if exemplar_data:
+            ausleihung['ExemplarData'] = exemplar_data
         
-        result = ausleihungen.insert_one(ausleihung_data)
+        result = ausleihungen.insert_one(ausleihung)
         ausleihung_id = result.inserted_id
         
         client.close()
         return ausleihung_id
     except Exception as e:
-        # print(f"Error adding ausleihung: {e}") # Log the error
+        print(f"Error adding ausleihung: {e}")
         return None
 
 def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None, period=None):
@@ -435,61 +432,53 @@ def get_ausleihung_by_user(user_id, status=None):
         return []
 
 
-def get_ausleihung_by_item(item_id, status=None, include_history=False):
+def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=False):
     """
-    Ruft Ausleihungen für einen bestimmten Gegenstand ab.
+    Get active borrowing record for an item.
     
     Args:
-        item_id (str): ID des Gegenstands
-        status (str/list, optional): Status(se) der Ausleihungen
-        include_history (bool): Bei True werden alle Ausleihungen zurückgegeben,
-                               bei False nur die aktive/geplante
+        item_id (str): ID of the item
+        include_history (bool): Whether to include completed records
+        include_exemplar_id (bool): Whether to match exact exemplar IDs
         
     Returns:
-        dict/list: Die aktive Ausleihe (wenn include_history=False) 
-                 oder alle Ausleihungen für diesen Gegenstand (wenn include_history=True)
+        dict: Borrowing record or None if not found
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        if include_history:
-            # Alle Ausleihungen für diesen Gegenstand abrufen
-            query = {'Item': item_id}
-            if status is not None:
-                if isinstance(status, list):
-                    query['Status'] = {'$in': status}
-                else:
-                    query['Status'] = status
-                    
-            results = list(ausleihungen.find(query).sort('Start', -1))  # Sort by start date, newest first
-            client.close()
-            return results
-        else:
-            # Nur die aktive Ausleihe oder geplante Reservierung abrufen
-            query = {'Item': item_id}
-            if status is not None:
-                if isinstance(status, list):
-                    query['Status'] = {'$in': status}
-                else:
-                    query['Status'] = status
-            else:
-                # Prioritize finding active borrowings first
-                query['Status'] = 'active'
-                
+        query = {'Item': item_id}
+        
+        # If not checking history, only look for active borrowings
+        if not include_history:
+            query['Status'] = 'active'
+            
+        # If considering exemplar IDs specifically
+        if include_exemplar_id:
             ausleihung = ausleihungen.find_one(query)
-            
-            # If no active borrowing found, try planned
-            if not ausleihung:
-                query['Status'] = 'planned'
+        else:
+            # Check for both exact ID match and parent_id match for exemplars
+            if '_' in item_id:
+                # It's an exemplar ID, so find by exact match
                 ausleihung = ausleihungen.find_one(query)
-            
-            client.close()
-            return ausleihung
+            else:
+                # It's a parent ID, so also check for exemplar records
+                parent_query = {'$or': [
+                    {'Item': item_id},  # Exact match
+                    {'ExemplarData.parent_id': item_id}  # Parent ID match
+                ]}
+                if not include_history:
+                    parent_query['Status'] = 'active'
+                
+                ausleihung = ausleihungen.find_one(parent_query)
+        
+        client.close()
+        return ausleihung
     except Exception as e:
-        print(f"Error retrieving ausleihungen for item {item_id}: {e}")  # Log the error
-        return [] if include_history else None
+        print(f"Error getting ausleihung by item: {e}")
+        return None
 
 
 def get_ausleihungen_by_date_range(start_date, end_date, status=None):
@@ -924,6 +913,9 @@ def mark_booking_active(booking_id, ausleihung_id=None):
 def mark_booking_completed(booking_id):
     """Kompatibilitätsfunktion - markiert eine Ausleihe als abgeschlossen"""
     return complete_ausleihung(booking_id)
+
+def get_bookings_starting_now(current_time):
+    """Kompatibilitätsfunktion - ruft startende Ausleihungen ab"""
 
 def get_bookings_starting_now(current_time):
     """Kompatibilitätsfunktion - ruft startende Ausleihungen ab"""

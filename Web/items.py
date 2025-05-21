@@ -214,6 +214,39 @@ def update_item_status(id, verfuegbar, user=None):
         return False
 
 
+def update_item_exemplare_status(id, exemplare_status):
+    """
+    Update the exemplar status of an inventory item.
+    
+    Args:
+        id (str): ID of the item to update
+        exemplare_status (list): List of status objects for each exemplar
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        
+        update_data = {
+            'ExemplareStatus': exemplare_status,
+            'LastUpdated': datetime.datetime.now()
+        }
+        
+        result = items.update_one(
+            {'_id': ObjectId(id)},
+            {'$set': update_data}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error updating exemplar status: {e}")
+        return False
+
+
 # === ITEM RETRIEVAL ===
 
 def get_items():

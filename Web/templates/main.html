@@ -1252,6 +1252,64 @@
         // Populate filter 2 dropdown with only available values
         populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
     }
+    
+    // Add ISBN fetch functionality
+    function fetchBookInfo(formType) {
+        // Determine which form we're working with (upload or edit)
+        const isbnField = document.getElementById('isbn');
+        const infoContainer = document.getElementById('book-info-container');
+        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Buch nicht gefunden. Überprüfen Sie die ISBN.');
+                    } else {
+                        throw new Error('Fehler beim Abrufen der Buchinformationen');
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Display book information
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.price ? `<p><strong>Preis:</strong> ${data.price}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                infoContainer.innerHTML = `<div class="error-message">Fehler: ${error.message}</div>`;
+            });
+    }
 </script>
 
 <style>
@@ -1841,53 +1899,15 @@
         color: #383d41;
         background-color: #e2e3e5;
         border-color: #d6d8db;
-    }
+    }   
 
-    /* Responsive styles */
-    @media (max-width: 768px) {
-        .modal-content {
-            width: 95%;
-            padding: 15px;
-        }
-        
-        .items-container {
-            padding: 10px 0;
-        }
-        
-        .item-card {
-            max-width: 250px;
-        }
-        
-        .filter-group {
-            min-width: 150px;
-        }
+    .item-card {
+        max-width: 250px;
     }
 
     @media (max-width: 480px) {
-        .container {
-            width: 98%;
-            padding: 10px;
-        }
-        
-        .item-card {
-            min-width: 200px;
-            padding: 15px;
-        }
-        
-        .actions {
-            flex-direction: column;
-        }
-        
-        .modal-details {
-            grid-template-columns: 1fr;
-        }
-        
         .filter-container {
             flex-direction: column;
-        }
-        
-        .filter-group {
-            width: 100%;
         }
     }
 </style>
