@@ -2304,25 +2304,6 @@
             }
         }
     }
-    
-    // Function to update exemplare status display
-    function updateExemplareStatus(formType, borrowedData) {
-        const statusContainer = formType === 'edit' ? document.getElementById('edit-exemplare-status') : null;
-        if (!statusContainer) return;
-        
-        if (borrowedData && borrowedData.length > 0) {
-            let statusHtml = '<h5>Ausleihstatus der Exemplare:</h5><ul>';
-            borrowedData.forEach((item, index) => {
-                statusHtml += `<li>Exemplar ${index + 1}: ${item.available ? 
-                    '<span class="available-status">Verfügbar</span>' : 
-                    `<span class="borrowed-status">Ausgeliehen an ${item.user}</span>`}</li>`;
-            });
-            statusHtml += '</ul>';
-            statusContainer.innerHTML = statusHtml;
-        } else {
-            statusContainer.innerHTML = '';
-        }
-    }
 </script>
 
 <style>
