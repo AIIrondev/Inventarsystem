@@ -208,6 +208,8 @@
             <div class="form-group">
                 <label for="images">Bilder:</label>
                 <input type="file" id="images" name="images" accept="image/*" multiple>
+                <!-- Add image preview area -->
+                <div class="image-preview-container" id="image-preview-container"></div>
             </div>
             
             <!-- Add ISBN and exemplar count fields to upload form -->
@@ -368,6 +370,17 @@
                         <span>(Bilder werden vom Original übernommen)</span>
                     </label>
                     <input type="file" id="edit-new-images" name="new_images" accept="image/*" multiple>
+                    <!-- Add image preview container -->
+                    <div class="image-preview-container" id="edit-image-preview-container"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-isbn">ISBN:</label>
+                    <div class="isbn-input-group">
+                        <input type="text" id="edit-isbn" name="isbn" placeholder="ISBN eingeben...">
+                        <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('edit')">Buchinformationen abrufen</button>
+                    </div>
+                    <div id="edit-book-info-container" class="book-info-container"></div>
                 </div>
                 
                 <div class="form-actions">
@@ -1825,6 +1838,34 @@
             });
     }
     
+    // Function to set filter values specifically for books
+    function setFilterValuesForBook(formType, bookType) {
+        const prefix = formType === 'edit' ? 'edit-' : '';
+        
+        // Set filter1 (Unterrichtsfach) to 'Buch' if available in options
+        const filter1Select = document.getElementById(`${prefix}filter1-1`);
+        if (filter1Select) {
+            let foundBookOption = false;
+            // Try to find and select the matching option
+            for (let i = 0; i < filter1Select.options.length; i++) {
+                if (filter1Select.options[i].value === bookType) {
+                    filter1Select.selectedIndex = i;
+                    foundBookOption = true;
+                    break;
+                }
+            }
+            
+            // If 'Buch' option doesn't exist, add it
+            if (!foundBookOption) {
+                const option = document.createElement('option');
+                option.value = bookType;
+                option.textContent = bookType;
+                filter1Select.appendChild(option);
+                filter1Select.value = bookType;
+            }
+        }
+    }
+    
     function useBookInfo(formType, bookData) {
         // Determine which form we're updating
         const nameField = formType === 'edit' ? document.getElementById('edit-name') : document.getElementById('name');
@@ -1852,44 +1893,196 @@
         // Set appropriate filter values for books
         setFilterValuesForBook(formType, 'Buch');
         
+        // Handle book thumbnail if available
+        if (bookData.thumbnail) {
+            const previewContainer = formType === 'edit' 
+                ? document.getElementById('edit-image-preview-container') 
+                : document.getElementById('image-preview-container');
+            
+            // Clear previous previews
+            if (previewContainer) {
+                previewContainer.innerHTML = '<div class="loading-image">Bild wird geladen...</div>';
+            }
+            
+            // Fetch image from URL and add to form
+            fetchImageAndAddToForm(bookData.thumbnail, formType);
+        }
+        
         // Show confirmation
         alert('Buchinformationen wurden übernommen!');
     }
     
-    // Function to set appropriate filter values for books
-    function setFilterValuesForBook(formType, bookType) {
-        const prefix = formType === 'edit' ? 'edit-' : '';
+    // Function to fetch an image from a URL and add it to the form
+    function fetchImageAndAddToForm(imageUrl, formType) {
+        // Use our proxy endpoint instead of direct fetching
+        const proxyUrl = `/proxy_image?url=${encodeURIComponent(imageUrl)}`;
         
-        // Set filter1 (Unterrichtsfach) to 'Buch' if available in options
-        const filter1Select = document.getElementById(`${prefix}filter1-1`);
-        if (filter1Select) {
-            for (let i = 0; i < filter1Select.options.length; i++) {
-                if (filter1Select.options[i].value === bookType) {
-                    filter1Select.selectedIndex = i;
-                    break;
+        // Fetch the image through the proxy
+        fetch(proxyUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Fehler beim Laden des Bildes');
                 }
-            }
-        }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create a file object from the blob
+                const fileName = `book_cover_${new Date().getTime()}.jpg`;
+                const bookCoverFile = new File([blob], fileName, { type: 'image/jpeg' });
+                
+                // Get the file input element
+                const fileInput = formType === 'edit' 
+                    ? document.getElementById('edit-new-images') 
+                    : document.getElementById('images');
+                
+                // Create a new FileList containing our file
+                const dataTransfer = new DataTransfer();
+                
+                // Add existing files if any
+                if (fileInput.files) {
+                    Array.from(fileInput.files).forEach(file => {
+                        dataTransfer.items.add(file);
+                    });
+                }
+                
+                // Add the new file
+                dataTransfer.items.add(bookCoverFile);
+                
+                // Update the file input with our new FileList
+                fileInput.files = dataTransfer.files;
+                
+                // Update preview
+                updateImagePreview(bookCoverFile, formType);
+                
+                console.log('Book cover image added to form', fileName);
+            })
+            .catch(error => {
+                console.error('Error fetching image:', error);
+                // Show error in preview container
+                const previewContainer = formType === 'edit' 
+                    ? document.getElementById('edit-image-preview-container') 
+                    : document.getElementById('image-preview-container');
+                
+                if (previewContainer) {
+                    previewContainer.innerHTML = `<div class="error-message">Fehler beim Laden des Bildes: ${error.message}</div>`;
+                }
+            });
     }
     
-    // Function to update exemplare status display
-    function updateExemplareStatus(formType, borrowedData) {
-        const statusContainer = formType === 'edit' ? document.getElementById('edit-exemplare-status') : null;
-        if (!statusContainer) return;
+    // Function to update the image preview
+    function updateImagePreview(file, formType) {
+        const previewContainer = formType === 'edit' 
+            ? document.getElementById('edit-image-preview-container') 
+            : document.getElementById('image-preview-container');
         
-        if (borrowedData && borrowedData.length > 0) {
-            let statusHtml = '<h5>Ausleihstatus der Exemplare:</h5><ul>';
-            borrowedData.forEach((item, index) => {
-                statusHtml += `<li>Exemplar ${index + 1}: ${item.available ? 
-                    '<span class="available-status">Verfügbar</span>' : 
-                    `<span class="borrowed-status">Ausgeliehen an ${item.user}</span>`}</li>`;
-            });
-            statusHtml += '</ul>';
-            statusContainer.innerHTML = statusHtml;
-        } else {
-            statusContainer.innerHTML = '';
-        }
+        if (!previewContainer) return;
+        
+        // Clear loading message
+        previewContainer.innerHTML = '';
+        
+        // Create a preview item
+        const previewItem = document.createElement('div');
+        previewItem.className = 'preview-image-item';
+        
+        // Create an image element
+        const img = document.createElement('img');
+        img.file = file;
+        img.alt = 'Buchcover Vorschau';
+        previewItem.appendChild(img);
+        
+        // Add file name
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = file.name;
+        previewItem.appendChild(fileName);
+        
+        // Add the preview to the container
+        previewContainer.appendChild(previewItem);
+        
+        // Use FileReader to read the file and set the image source
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
     }
+    
+    // Add file input change listeners to show previews for manually uploaded images
+    document.addEventListener('DOMContentLoaded', function() {
+        // For upload form
+        const uploadImagesInput = document.getElementById('images');
+        if (uploadImagesInput) {
+            uploadImagesInput.addEventListener('change', function() {
+                handleFileInputChange(this, 'upload');
+            });
+        }
+        
+        // For edit form
+        const editImagesInput = document.getElementById('edit-new-images');
+        if (editImagesInput) {
+            editImagesInput.addEventListener('change', function() {
+                handleFileInputChange(this, 'edit');
+            });
+        }
+        
+        // Load saved filters
+        loadFilterState();
+        
+        // Load predefined filter values for dropdowns
+        loadPredefinedFilterValues(1);
+        loadPredefinedFilterValues(2);
+        
+        // Find and attach event listener to all logout links
+        const logoutLinks = document.querySelectorAll('a[href*="logout"]');
+        logoutLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                clearFilterState(); // Clear filters when logging out
+            });
+        });
+        
+        // Fetch user status to get current username
+        fetch('/user_status')
+            .then(response => response.json())
+            .then(data => {
+                currentUsername = data.username;
+                // Now load items with username information
+                loadItems();
+            })
+            .catch(error => {
+                console.error('Error fetching user status:', error);
+                loadItems(); // Load items anyway in case of error
+            });
+
+        // Add event listener for code search input
+        const codeSearchInput = document.getElementById('code-search');
+        if (codeSearchInput) {
+            codeSearchInput.addEventListener('input', function() {
+                // Use a small delay to avoid excessive filtering while typing
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    searchByCode();
+                }, 300);
+            });
+        }
+    });
+
+    // Function to handle file input changes and update previews
+    function handleFileInputChange(input, formType) {
+        const previewContainer = formType === 'edit' 
+            ? document.getElementById('edit-image-preview-container') 
+            : document.getElementById('image-preview-container');
+            
+        if (!previewContainer) return;
+        
+        // Clear existing previews
+        previewContainer.innerHTML = '';
+        
+        // Create previews for each file
+        Array.from(input.files).forEach(file => {
+            updateImagePreview(file, formType);
+        });
+    }
+    
 </script>
 
 <style>
@@ -2678,6 +2871,49 @@ flex: 1;
         cursor: pointer;
     }
 
+    /* Image preview styles */
+    .image-preview-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .preview-image-item {
+        position: relative;
+        width: 100px;
+        height: 120px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .preview-image-item img {
+        width: 100%;
+        height: 100px;
+        object-fit: contain;
+    }
+    
+    .preview-image-item .file-name {
+        font-size: 0.7rem;
+        padding: 2px 4px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .loading-image {
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
     /* Responsive styles */
     @media (max-width: 768px) {
         .form-row {

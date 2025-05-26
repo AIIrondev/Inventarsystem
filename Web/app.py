@@ -32,18 +32,23 @@ Features:
 - Booking and reservation of items
 """
 
-import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response
 from werkzeug.utils import secure_filename
 import user as us
 import items as it
 import ausleihung as au
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-import json
 from pymongo import MongoClient
-import time
+from urllib.parse import urlparse, urlunparse
 import requests
+import os
+import json
+import datetime
+import time
+import traceback
+import qrcode
+from qrcode.constants import ERROR_CORRECT_L
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -494,7 +499,7 @@ def upload_item():
     # Process any new uploaded images
     image_filenames = []
     for image in images:
-        if image and allowed_file(image.filename):
+        if image and image.filename and allowed_file(image.filename):
             filename = secure_filename(image.filename)
             timestamp = time.strftime("%Y%m%d%H%M%S")
             saved_filename = f"{filename}_{timestamp}"
@@ -516,11 +521,15 @@ def upload_item():
     
     # Get the item ID and create QR code
     item = it.get_item_by_name(name)
-    item_id = str(item['_id'])
-    create_qr_code(item_id)
-    
-    # Pass the item ID to download the QR code
-    return redirect(url_for('home_admin', new_item_id=item_id))
+    if item:  # Check if item exists before trying to access its properties
+        item_id = str(item['_id'])
+        create_qr_code(item_id)
+        # Pass the item ID to download the QR code
+        return redirect(url_for('home_admin', new_item_id=item_id))
+    else:
+        # Handle case where item couldn't be retrieved
+        flash('QR-Code konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.', 'warning')
+        return redirect(url_for('home_admin'))
 
 
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
@@ -851,7 +860,7 @@ def get_filter():
     Returns:
         dict: Dictionary of available filters
     """
-    return it.get_filter()
+    return it.get_filters()
     
 
 @app.route('/get_ausleihung_by_item/<id>')
@@ -899,15 +908,9 @@ def create_qr_code(id):
     Returns:
         str: Filename of the generated QR code, or None if item not found
     """
-    import qrcode
-    from urllib.parse import urlparse, urlunparse
-    
-    if not os.path.exists(app.config['QR_CODE_FOLDER']):
-        os.makedirs(app.config['QR_CODE_FOLDER'])
-        
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=ERROR_CORRECT_L,  # Use imported constant
         box_size=10,
         border=4,
     )
@@ -933,354 +936,14 @@ def create_qr_code(id):
     img = qr.make_image(fill_color="black", back_color="white")
     filename = f"{item['Name']}_{id}.png"
     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
-    img.save(qr_path)
+    
+    # Fix the file handling - save to file object, not string
+    with open(qr_path, 'wb') as f:
+        img.save(f)
     
     return filename
 
-
-@app.route('/item/<id>')
-def show_item(id):
-    """
-    Route to display a specific item.
-    When accessing via QR code, this highlights the item in the UI.
-    
-    Args:
-        id (str): ID of the item to display
-        
-    Returns:
-        flask.Response: Rendered template with item highlighted
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-        
-    item = it.get_item(id)
-    if not item:
-        flash('Item not found', 'error')
-        if us.check_admin(session['username']):
-            return redirect(url_for('home_admin'))
-        return redirect(url_for('home'))
-    
-    # Pass the item ID to template to highlight it
-    if us.check_admin(session['username']):
-        return render_template('main_admin.html', highlight_item=str(id))
-    return render_template('main.html', highlight_item=str(id))
-
-
-@app.route('/user_status', methods=['GET'])
-def user_status():
-    """
-    API endpoint to retrieve current user status.
-    Used by frontend to adapt UI based on user role.
-    
-    Returns:
-        dict: User status information including login state and admin status
-    """
-    if 'username' not in session:
-        return {'logged_in': False}
-    
-    has_active = us.has_active_borrowing(session['username'])
-    return {
-        'logged_in': True,
-        'username': session['username'],
-        'is_admin': us.check_admin(session['username']),
-        'has_active_borrowing': has_active
-    }
-
-
-@app.route('/admin/reset_item/<id>', methods=['POST'])
-def admin_reset_item(id):
-    """
-    Admin route to reset an item's status.
-    Used to fix stuck or problematic items.
-    
-    Args:
-        id (str): ID of the item to reset
-        
-    Returns:
-        flask.Response: Redirect to admin homepage
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    
-    try:
-        it.update_item_status(id, True)
-        
-        it.unstuck_item(id)
-        
-        flash('Item status has been reset successfully', 'success')
-    except Exception as e:
-        flash(f'Error resetting item: {e}', 'error')
-    
-    return redirect(url_for('home_admin'))
-
-
-@app.route('/qr_code/<id>')
-def get_qr_code(id):
-    """
-    Route to download the QR code for an item.
-    
-    Args:
-        id (str): ID of the item to get QR code for
-        
-    Returns:
-        flask.Response: QR code image file for download
-    """
-    item = it.get_item(id)
-    if not item:
-        flash('Item not found', 'error')
-        return redirect(url_for('home_admin'))
-    
-    filename = f"{item['Name']}_{id}.png"
-    qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
-    
-    # If QR code doesn't exist yet, create it
-    if not os.path.exists(qr_path):
-        create_qr_code(id)
-    
-    return send_from_directory(app.config['QR_CODE_FOLDER'], filename, as_attachment=True)
-
-
-@app.route('/license')
-def license():
-    """
-    Route to display license information.
-    
-    Returns:
-        flask.Response: Rendered license template
-    """
-    return render_template('license.html')
-
-
-# Add a specific route for favicon.ico to prevent 403 errors
-@app.route('/favicon.ico')
-def favicon():
-    """
-    Serve favicon from static folder or return a 204 No Content response
-    """
-    try:
-        return send_from_directory(app.config['STATIC_FOLDER'], 'favicon.ico')
-    except:
-        # Return a 204 No Content if favicon.ico doesn't exist
-        return '', 204
-
-
-'''----------------------------------------------------------------------BOOKING ROUTES-----------------------------------------------------------------------------------------------------------------'''
-
-@app.route('/get_bookings')
-def get_bookings():
-    """
-    Get all bookings for calendar display
-    """
-    try:
-        if 'username' not in session:
-            flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-            return redirect(url_for('login'))
-            
-        start = request.args.get('start')
-        end = request.args.get('end')
-        
-        print(f"Fetching bookings from {start} to {end}, requested by {session['username']}")
-        
-        bookings = []
-        processed_items_with_status = set()  # Track item_id+status combinations instead of just items
-        
-        # Create a dictionary to track current borrowers of all items
-        current_borrowers = {}
-        all_items = it.get_items()
-        for item in all_items:
-            if not item.get('Verfuegbar', True) and 'User' in item:
-                item_id = str(item['_id'])
-                current_borrowers[item_id] = item['User']
-        
-        # Rest of the function remains the same until processing events...
-        
-        try:
-            # 1. Get PLANNED bookings first to ensure they appear
-            planned_bookings = au.get_planned_bookings(start, end) or []
-            print(f"Found {len(planned_bookings)} planned bookings")
-            for booking in planned_bookings:
-                item_id = booking.get('Item')
-                
-                item = it.get_item(item_id)
-                if not item:
-                    continue
-                    
-                # Format dates
-                start_date = booking.get('Start')
-                end_date = booking.get('End')
-                
-                # Determine period if not explicitly stored
-                period = booking.get('Period')
-                if not period and start_date:
-                    period = get_period(start_date)
-                
-                # Convert to string safely
-                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-                
-                # Track this item+status combination
-                processed_items_with_status.add(f"{item_id}_planned")
-                    
-                bookings.append({
-                    "id": str(booking.get('_id')),
-                    "title": item.get('Name', 'Unknown Item'),
-                    "start": start_str,
-                    "end": end_str,
-                    "itemId": item_id,
-                    "userName": booking.get('User'),
-                    "notes": booking.get('Notes', ''),
-                    "status": "planned",
-                    "period": period,
-                    "isCurrentUser": booking.get('User') == session['username'],
-                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
-                })
-            
-            # 2. Get ACTIVE bookings 
-            active_bookings = au.get_active_bookings(start, end) or []
-            print(f"Found {len(active_bookings)} active bookings")
-            for booking in active_bookings:
-                item_id = booking.get('Item')
-                
-                # Skip if this item already has a planned booking (avoid duplicates)
-                if f"{item_id}_planned" in processed_items_with_status:
-                    continue
-                    
-                item = it.get_item(booking.get('Item'))
-                if not item:
-                    continue
-                    
-                # Format dates
-                start_date = booking.get('Start') 
-                end_date = booking.get('End')
-                
-                # Determine period if not explicitly stored
-                period = booking.get('Period')
-                if not period and start_date:
-                    period = get_period(start_date)
-                
-                # Convert to string safely
-                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-                
-                # Track this item+status combination
-                processed_items_with_status.add(f"{item_id}_active")
-                
-                bookings.append({
-                    "id": str(booking.get('_id')),
-                    "title": item.get('Name', 'Unknown Item'),
-                    "start": start_str,
-                    "end": end_str,
-                    "itemId": item_id,
-                    "userName": booking.get('User'),
-                    "notes": booking.get('Notes', ''),
-                    "status": "current",
-                    "period": period,
-                    "isCurrentUser": booking.get('User') == session['username'],
-                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
-                })
-            
-            # 3. Get current borrowings from ausleihungen collection
-            current_borrowings = au.get_ausleihungen(status='active', start=start, end=end) or []
-            print(f"Found {len(current_borrowings)} current borrowings")
-            
-            # Format current borrowings for calendar
-            for borrowing in current_borrowings:
-                item_id = borrowing.get('Item')
-                
-                # Skip if this item already has an active or planned booking
-                if (f"{item_id}_active" in processed_items_with_status or 
-                    f"{item_id}_planned" in processed_items_with_status):
-                    continue
-                    
-                item = it.get_item(item_id)
-                if not item:
-                    continue
-                    
-                # Format dates
-                start_date = borrowing.get('Start')
-                end_date = borrowing.get('End')
-                
-                # Determine period if not explicitly stored
-                period = borrowing.get('Period')
-                if not period and start_date:
-                    period = get_period(start_date)
-                
-                # If end_date is None, set it to start_date + 1 hour
-                if end_date is None:
-                    end_date = start_date + datetime.timedelta(minutes=45)
-                
-                # Convert to string safely
-                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-                
-                bookings.append({
-                    "id": str(borrowing.get('_id')),
-                    "title": item.get('Name', 'Unknown Item'),
-                    "start": start_str,
-                    "end": end_str,
-                    "itemId": item_id,
-                    "userName": borrowing.get('User'),
-                    "notes": borrowing.get('Notes', ''),
-                    "status": "current",
-                    "period": period,
-                    "isCurrentUser": borrowing.get('User') == session['username'],
-                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
-                })
-            
-            # 4. Add completed bookings
-            completed_bookings = au.get_completed_bookings(start, end) or []
-            print(f"Found {len(completed_bookings)} completed bookings")
-            for booking in completed_bookings:
-                item_id = booking.get('Item')
-                item = it.get_item(item_id)
-                if not item:
-                    continue
-                    
-                # Format dates
-                start_date = booking.get('Start')
-                end_date = booking.get('End')
-                
-                # Determine period if not explicitly stored
-                period = booking.get('Period')
-                if not period and start_date:
-                    period = get_period(start_date)
-                
-                # Convert to string safely
-                start_str = start_date.isoformat() if hasattr(start_date, 'isoformat') else start_date
-                end_str = end_date.isoformat() if hasattr(end_date, 'isoformat') else end_date
-                    
-                bookings.append({
-                    "id": str(booking.get('_id')),
-                    "title": item.get('Name', 'Unknown Item'),
-                    "start": start_str,
-                    "end": end_str,
-                    "itemId": item_id,
-                    "userName": booking.get('User'),
-                    "notes": booking.get('Notes', ''),
-                    "status": "completed",
-                    "period": period,
-                    "isCurrentUser": booking.get('User') == session['username'],
-                    "itemBorrower": current_borrowers.get(item_id)  # Add current borrower info
-                })
-            
-        except Exception as e:
-            print(f"Error fetching specific booking type: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        print(f"Returning {len(bookings)} total bookings")
-        return {"bookings": bookings}
-    except Exception as e:
-        import traceback
-        print(f"Error in get_bookings: {e}")
-        traceback.print_exc()
-        return {"bookings": [], "error": str(e)}
-
+# Fix fromisoformat None value checks
 @app.route('/plan_booking', methods=['POST'])
 def plan_booking():
     """
@@ -1305,8 +968,15 @@ def plan_booking():
             
         # Parse dates
         try:
-            start_date = datetime.datetime.fromisoformat(start_date_str)
-            end_date = datetime.datetime.fromisoformat(end_date_str)
+            if start_date_str:
+                start_date = datetime.datetime.fromisoformat(start_date_str)
+            else:
+                return {"success": False, "error": "Missing start date"}, 400
+            
+            if end_date_str:
+                end_date = datetime.datetime.fromisoformat(end_date_str)
+            else:
+                return {"success": False, "error": "Missing end date"}, 400
             
             # For single day bookings, use the start date as the end date
             if booking_type == 'single':
@@ -1321,8 +991,11 @@ def plan_booking():
         
         # Handle period range
         periods = []
-        period_start_num = int(period_start)
-        
+        if period_start:
+            period_start_num = int(period_start)
+        else:
+            period_start_num = 1  # Default if None
+    
         # If period_end is provided, it's a range of periods
         if period_end:
             period_end_num = int(period_end)
@@ -1451,13 +1124,16 @@ def add_booking():
     # Parse dates as naive datetime objects
     try:
         # Simple datetime parsing without timezone
-        start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d %H:%M:%S')
+        if start_date_str:
+            start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d %H:%M:%S')
+        else:
+            return jsonify({'success': False, 'error': 'Missing start date'})
         
         if end_date_str:
             end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S')
         else:
             end_date = None
-            
+        
         # Continue with adding the booking
         booking_id = au.add_planned_booking(
             item_id=item_id,
@@ -1728,379 +1404,10 @@ def get_usernames():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('logout'))
     elif 'username' in session and us.check_admin(session['username']):
-        return us.get_users()
+        return jsonify(us.get_all_users())  # Fixed to use get_all_users
     else:
         flash('Please login to access this function', 'error')
-
-'''-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------'''
-
-def get_period(datetime_obj):
-    """
-    Determine which school period a given datetime falls into.
-    
-    Args:
-        datetime_obj (datetime): The datetime object to check
-        
-    Returns:
-        str: The period number (as a string) if the datetime falls within a period, None otherwise
-    """
-    if not datetime_obj:
-        return None
-        
-    # Extract the hour and minute from the datetime
-    current_hour = datetime_obj.hour
-    current_minute = datetime_obj.minute
-    current_time_str = f"{current_hour:02d}:{current_minute:02d}"
-    
-    # Find matching period
-    for period_num, period_info in SCHOOL_PERIODS.items():
-        period_start = period_info.get('start', '')
-        period_end = period_info.get('end', '')
-        
-        if period_start <= current_time_str <= period_end:
-            return period_num
-            
-    return None
-
-scheduler = BackgroundScheduler()
-
-def process_bookings():
-    """
-    Check for bookings that should start now and process them
-    Also check for any missed bookings that should have been processed earlier
-    """
-    # Create a proper datetime object
-    current_time = datetime.datetime.now()
-    print(f"Running scheduled booking check at {current_time}")
-    
-    # Define school periods
-    school_periods = SCHOOL_PERIODS  # Use the global school periods from config
-    
-    # Get current hour and minute
-    current_hour = current_time.hour
-    current_minute = current_time.minute
-    current_time_str = f"{current_hour:02d}:{current_minute:02d}"
-    
-    # Get current date (for date comparisons)
-    current_date = current_time.date()
-    
-    # Determine if we're currently in a school period
-    current_period = None
-    for period_num, period_info in school_periods.items():
-        period_start = period_info.get('start', '')
-        period_end = period_info.get('end', '')
-        if period_start <= current_time_str <= period_end:
-            current_period = int(period_num)
-            break
-    
-    print(f"Current time: {current_time_str}, Current period: {current_period}")
-    
-    # Get bookings that should start now
-    bookings = au.get_bookings_starting_now(current_time)
-    print(f"Found {len(bookings)} bookings that might need activation")
-    
-    # Process the bookings
-    for booking in bookings:
-        try:
-            booking_id = str(booking.get('_id'))
-            item_id = booking.get('Item')
-            user = booking.get('User')
-            start_date = booking.get('Start')
-            end_date = booking.get('End')
-            notes = booking.get('Notes', '')
-            period = booking.get('Period')
-            
-            print(f"Processing booking {booking_id} for item {item_id}, period {period}")
-            
-            # Only activate bookings if we're in the right period or within the booking time window
-            booking_period = period
-            should_activate = False
-            
-            if booking_period and current_period and int(booking_period) == current_period:
-                # We're in the exact period, so activate
-                should_activate = True
-                print(f"Activating booking {booking_id} - we're in the correct period {booking_period}")
-            elif start_date and end_date and start_date <= current_time <= end_date:
-                # We're within the exact booking time window
-                should_activate = True
-                print(f"Activating booking {booking_id} - current time is within booking window")
-            elif start_date and start_date.date() == current_date and start_date <= current_time:
-                # Same day and past the start time - this catches missed bookings
-                should_activate = True
-                print(f"Activating booking {booking_id} - we're past the start time on the same day")
-                
-            if not should_activate:
-                print(f"Skipping booking {booking_id} - not time to activate yet")
-                continue
-            
-            # Process the booking activation
-            process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period)
-            
-        except Exception as e:
-            print(f"Error processing booking: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # Also look for any missed bookings (still planned but should be active)
-    try:
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        ausleihungen = db['ausleihungen']
-        
-        # Find bookings that:
-        # 1. Are still planned
-        # 2. Have a start time in the past (over 10 minutes ago)
-        time_threshold = current_time - datetime.timedelta(minutes=10)
-        missed_bookings_query = {
-            'Status': 'planned',
-            'Start': {'$lt': time_threshold}
-        }
-        
-        missed_bookings = list(ausleihungen.find(missed_bookings_query))
-        print(f"Found {len(missed_bookings)} missed bookings that should have been activated")
-        
-        for booking in missed_bookings:
-            try:
-                booking_id = str(booking.get('_id'))
-                item_id = booking.get('Item')
-                user = booking.get('User')
-                start_date = booking.get('Start')
-                end_date = booking.get('End')
-                notes = booking.get('Notes', '')
-                period = booking.get('Period')
-                
-                print(f"Processing missed booking {booking_id} for item {item_id}, period {period}")
-                print(f"  - Should have started at {start_date}")
-                
-                # Check if today's booking date matches the period
-                if start_date and start_date.date() == current_date:
-                    # Process the booking - activate it
-
-                    process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period)
-                else:
-                    # For bookings from previous days, mark as cancelled
-                    print(f"Booking {booking_id} is from a previous day ({start_date.date()}), marking as cancelled")
-                    au.cancel_booking(booking_id)
-            except Exception as e:
-                print(f"Error processing missed booking: {e}")
-                continue
-        
-        client.close()
-    except Exception as e:
-        print(f"Error in missed bookings processing: {e}")
-        import traceback
-        traceback.print_exc()
-
-def get_period_times(booking_date, period_num):
-    """
-    Get the start and end times for a given period on a specific date
-    
-    Args:
-        booking_date: The date for the booking
-        period_num: The period number
-    
-    Returns:
-        dict: {"start": datetime, "end": datetime} or None if invalid
-    """
-    try:
-        # Convert period_num to string for lookup in SCHOOL_PERIODS
-        period_str = str(period_num)
-        
-        if period_str not in SCHOOL_PERIODS:
-            return None
-            
-        period_info = SCHOOL_PERIODS[period_str]
-        
-        # Extract start and end times from period info
-        start_time_str = period_info.get('start')
-        end_time_str = period_info.get('end')
-        
-        if not start_time_str or not end_time_str:
-            return None
-            
-        # Parse hours and minutes
-        start_hour, start_min = map(int, start_time_str.split(':'))
-        end_hour, end_min = map(int, end_time_str.split(':'))
-        
-        # Create datetime objects for start and end times
-        start_datetime = datetime.datetime.combine(
-            booking_date.date(),
-            datetime.time(start_hour, start_min)
-        )
-        
-        end_datetime = datetime.datetime.combine(
-            booking_date.date(),
-            datetime.time(end_hour, end_min)
-        )
-        
-        return {
-            'start': start_datetime,
-            'end': end_datetime
-        }
-    except Exception as e:
-        print(f"Error getting period times: {e}")
-        return None
-
-def process_booking_activation(booking_id, item_id, user, start_date, end_date, notes, period):
-    """
-    Activates a planned booking by marking it as active in the database
-    and updating the item's status.
-    
-    Args:
-        booking_id (str): ID of the booking to activate
-        item_id (str): ID of the item being booked
-        user (str): Username of the person booking the item
-        start_date (datetime): When the booking starts
-        end_date (datetime): When the booking ends
-        notes (str): Any notes attached to the booking
-        period (int): School period number (if applicable)
-        
-    Returns:
-        bool: True if activation was successful, False otherwise
-    """
-    try:
-        print(f"Activating booking {booking_id} for item {item_id} by user {user}")
-        
-        # Import modules locally to avoid circular imports
-        import ausleihung as au
-        import items as it
-        
-        # 1. Mark the booking as active in the ausleihungen collection
-        booking_activated = au.mark_booking_active(booking_id)
-        if not booking_activated:
-            print(f"Failed to mark booking {booking_id} as active")
-            return False
-            
-        # 2. Update the item status to show it's borrowed
-        item_updated = it.update_item_status(item_id, False, user)
-        if not item_updated:
-            print(f"Failed to update item {item_id} status")
-            return False
-            
-        print(f"Successfully activated booking {booking_id} for item {item_id}")
-        return True
-        
-    except Exception as e:
-        print(f"Error activating booking {booking_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-@app.route('/my_borrowed_items')
-def my_borrowed_items():
-    """
-    Show a list of items currently borrowed by the logged-in user.
-    
-    Returns:
-        flask.Response: Rendered template with borrowed items
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    
-    # Get all items
-    all_items = it.get_items()
-    
-    # Filter for items borrowed by the current user
-    borrowed_items = []
-    for item in all_items:
-        if not item.get('Verfuegbar', True) and item.get('User') == session['username']:
-            borrowed_items.append(item)
-    
-    return render_template('my_borrowed_items.html', username=session['username'], borrowed_items=borrowed_items)
-
-@app.route('/change_password', methods=['GET', 'POST'])
-def change_password():
-    """
-    Allow users to change their password.
-    Requires current password verification and confirmation of new password.
-    
-    Returns:
-        flask.Response: Rendered template or redirect
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-        
-    # If form is submitted
-    if request.method == 'POST':
-        current_password = request.form.get('current_password')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
-        
-        # Validate inputs
-        if not all([current_password, new_password, confirm_password]):
-            flash('Bitte füllen Sie alle Felder aus.', 'error')
-            return render_template('change_password.html')
-            
-        # Verify current password
-        if not us.check_nm_pwd(session['username'], current_password):
-            flash('Das aktuelle Passwort ist nicht korrekt.', 'error')
-            return render_template('change_password.html')
-            
-        # Check if new passwords match
-        if new_password != confirm_password:
-            flash('Die neuen Passwörter stimmen nicht überein.', 'error')
-            return render_template('change_password.html')
-            
-        # Check password strength
-        if not us.check_password_strength(new_password):
-            flash('Das neue Passwort ist zu schwach. Bitte verwenden Sie mindestens 8 Zeichen mit Groß- und Kleinbuchstaben, Zahlen und Sonderzeichen.', 'error')
-            return render_template('change_password.html')
-            
-        # Change password
-        try:
-            us.update_password(session['username'], new_password)
-            flash('Ihr Passwort wurde erfolgreich aktualisiert.', 'success')
-            return redirect(url_for('home'))
-        except Exception as e:
-            flash(f'Fehler bei der Passwortänderung: {str(e)}', 'error')
-            return render_template('change_password.html')
-    
-    # Display form
-    return render_template('change_password.html')
-
-@app.route('/admin/reset_user_password', methods=['POST'])
-def admin_reset_user_password():
-    """
-    Admin route to reset a user's password.
-    
-    Returns:
-        flask.Response: Redirect to user management page with status message
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    
-    username = request.form.get('username')
-    new_password = request.form.get('new_password')
-    
-    if not username or not new_password:
-        flash('No user selected', 'error')
-        return redirect(url_for('user_del'))
-    
-    # Check if user exists
-    user = us.get_user(username)
-    if not user:
-        flash('Benutzer existiert nicht', 'error')
-        return redirect(url_for('user_del'))
-    
-    # Check password strength
-    if not us.check_password_strength(new_password):
-        flash('Das neue Passwort ist zu schwach', 'error')
-        return redirect(url_for('user_del'))
-    
-    # Update the password
-    try:
-        us.update_password(username, new_password)
-        flash(f'Passwort für {username} wurde erfolgreich geändert', 'success')
-    except Exception as e:
-        flash(f'Fehler beim Ändern des Passworts: {str(e)}', 'error')
-    
-    return redirect(url_for('user_del'))
+        return redirect(url_for('login'))  # Added proper return
 
 # New routes for filter management
 
@@ -2247,13 +1554,104 @@ def fetch_book_info(isbn):
             "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
             "description": book_info.get('description', 'No description available'),
             "pageCount": book_info.get('pageCount', 'Unknown'),
-            "thumbnail": book_info.get('imageLinks', {}).get('thumbnail', ''),
             "price": price
         }
+        
+        # Ensure thumbnail URL uses HTTPS
+        thumbnail = book_info.get('imageLinks', {}).get('thumbnail', '')
+        if thumbnail:
+            thumbnail = thumbnail.replace('http:', 'https:')
+        result["thumbnail"] = thumbnail
         
         return jsonify(result)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
         print(f"Error fetching book data: {e}")
         return jsonify({"error": f"Failed to fetch book information: {str(e)}"}), 500
+
+@app.route('/proxy_image')
+def proxy_image():
+    """
+    Proxy endpoint to fetch images from external sources,
+    bypassing CORS restrictions
+    
+    Returns:
+        flask.Response: The image data or an error response
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    
+    try:
+        # Fetch the image from the external source
+        response = requests.get(url, stream=True, timeout=5)
+        
+        # Check if the request was successful
+        if response.status_code != 200:
+            return jsonify({"error": f"Failed to fetch image: Status {response.status_code}"}), response.status_code
+        
+        # Get the content type
+        content_type = response.headers.get('Content-Type', 'image/jpeg')
+        
+        # Return the image data with appropriate headers
+        return Response(
+            response=response.content,
+            status=200,
+            headers={
+                'Content-Type': content_type
+            }
+        )
+    except Exception as e:
+        print(f"Error in proxy_image: {e}")
+        return jsonify({"error": f"Error fetching image: {str(e)}"}), 500
+
+# Add missing get_period_times function
+def get_period_times(booking_date, period_num):
+    """
+    Get the start and end times for a given period on a specific date
+    
+    Args:
+        booking_date (datetime): The date for the booking
+        period_num (int): The period number
+    
+    Returns:
+        dict: {"start": datetime, "end": datetime} or None if invalid
+    """
+    try:
+        # Convert period_num to string for lookup in SCHOOL_PERIODS
+        period_str = str(period_num)
+        
+        if period_str not in SCHOOL_PERIODS:
+            return None
+            
+        period_info = SCHOOL_PERIODS[period_str]
+        
+        # Extract start and end times from period info
+        start_time_str = period_info.get('start')
+        end_time_str = period_info.get('end')
+        
+        if not start_time_str or not end_time_str:
+            return None
+            
+        # Parse hours and minutes
+        start_hour, start_min = map(int, start_time_str.split(':'))
+        end_hour, end_min = map(int, end_time_str.split(':'))
+        
+        # Create datetime objects for start and end times
+        start_datetime = datetime.datetime.combine(
+            booking_date.date(),
+            datetime.time(start_hour, start_min)
+        )
+        
+        end_datetime = datetime.datetime.combine(
+            booking_date.date(),
+            datetime.time(end_hour, end_min)
+        )
+        
+        return {
+            'start': start_datetime,
+            'end': end_datetime
+        }
+    except Exception as e:
+        print(f"Error getting period times: {e}")
+        return None
