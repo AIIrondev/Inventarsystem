@@ -1849,3 +1849,13 @@ def my_borrowed_items():
     return render_template('my_borrowed_items.html', 
                           items=borrowed_items, 
                           username=username)
+
+@app.route('/favicon.ico')
+def favicon():
+    """
+    Serve the favicon directly from the static directory.
+    
+    Returns:
+        flask.Response: The favicon.ico file
+    """
+    return send_from_directory(app.config['STATIC_FOLDER'], 'favicon.ico')

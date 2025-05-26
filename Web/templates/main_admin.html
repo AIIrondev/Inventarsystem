@@ -1470,6 +1470,14 @@
                 alert('Fehler beim Laden der Objektdaten');
             });
     }
+    
+    // Add missing function to close edit modal
+    function closeEditModal() {
+        const modal = document.getElementById('edit-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
 
     function showEditItemForm(item, isDuplicate) {
         // Reset the form
@@ -1512,16 +1520,34 @@
             }
         }
         
-        // Fill in the form fields
-        document.getElementById('edit-item-id').value = item._id;
-        document.getElementById('edit-name').value = item.Name;
-        document.getElementById('edit-ort').value = item.Ort;
-        document.getElementById('edit-beschreibung').value = item.Beschreibung;
-        document.getElementById('edit-anschaffungsjahr').value = (item.Anschaffungsjahr && typeof item.Anschaffungsjahr === 'string') 
-    ? item.Anschaffungsjahr.split('T')[0] 
-    : (item.Anschaffungsjahr || '');
-        document.getElementById('edit-anschaffungskosten').value = item.Anschaffungskosten;
-        document.getElementById('edit-code4').value = item.Code_4;
+        // Safely set form field values with null checks
+        const setFieldValueSafely = (fieldId, value) => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = value;
+            }
+        };
+        
+        // Fill in the form fields with null checks
+        setFieldValueSafely('edit-item-id', item._id);
+        setFieldValueSafely('edit-name', item.Name);
+        setFieldValueSafely('edit-ort', item.Ort);
+        setFieldValueSafely('edit-beschreibung', item.Beschreibung);
+        
+        // Handle date format for anschaffungsjahr
+        let anschaffungsjahr = '';
+        if (item.Anschaffungsjahr) {
+            if (typeof item.Anschaffungsjahr === 'string') {
+                // Split by 'T' to get just the date part if it's in ISO format
+                anschaffungsjahr = item.Anschaffungsjahr.split('T')[0];
+            } else {
+                anschaffungsjahr = item.Anschaffungsjahr;
+            }
+        }
+        setFieldValueSafely('edit-anschaffungsjahr', anschaffungsjahr);
+        
+        setFieldValueSafely('edit-anschaffungskosten', item.Anschaffungskosten);
+        setFieldValueSafely('edit-code4', item.Code_4);
         
         // Handle filters - split by comma and trim spaces
         const filter1Values = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
@@ -1533,13 +1559,13 @@
         activeFilters.filter2 = [];
         activeFilters.filter3 = [];
         
-        // Set filter values in the form
-        setFilterValuesInForm('edit-filter1', filter1Values);
-        setFilterValuesInForm('edit-filter2', filter2Values);
-        setFilterValuesInForm('edit-filter3', filter3Values);
+        // Set filter values in the form using safer method
+        safeSetFilterValuesInForm('edit-filter1', filter1Values);
+        safeSetFilterValuesInForm('edit-filter2', filter2Values);
+        safeSetFilterValuesInForm('edit-filter3', filter3Values);
         
-        // Add ISBN and exemplar values if they exist
-        document.getElementById('edit-isbn').value = item.ISBN || '';
+        // Add ISBN value if it exists
+        setFieldValueSafely('edit-isbn', item.ISBN || '');
         
         // Update exemplare status if this is an edit (not duplicate)
         if (!isDuplicate && item.ExemplareStatus) {
@@ -1547,20 +1573,13 @@
         }
         
         // Show the edit modal
-        document.getElementById('edit-modal').style.display = 'block';
-        
-        // Center the modal in the viewport
         const modal = document.getElementById('edit-modal');
-        modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // Close modals and reset forms
-    function closeEditModal() {
-        document.getElementById('edit-modal').style.display = 'none';
-    }
-
-    function closeItemModal() {
-        document.getElementById('item-modal').style.display = 'none';
+        if (modal) {
+            modal.style.display = 'block';
+            
+            // Center the modal in the viewport
+            modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 
     // Update selected filters display function
@@ -1751,28 +1770,84 @@
     function setFilterValuesInForm(prefix, values) {
         values.forEach((value, index) => {
             const input = document.getElementById(`${prefix}-${index + 1}`);
-            if (input) {
-                if (input.tagName === 'SELECT') {
-                    // Find and select the matching option
-                    const options = input.options;
-                    for (let i = 0; i < options.length; i++) {
-                        if (options[i].value === value) {
-                            input.selectedIndex = i;
-                            break;
-                        }
+            if (!input) return; // Skip if element doesn't exist
+            
+            if (input.tagName === 'SELECT') {
+                // For select elements, find the matching option
+                let optionFound = false;
+                
+                // Check if the option exists
+                for (let j = 0; j < input.options.length; j++) {
+                    if (input.options[j].value === value) {
+                        input.selectedIndex = j;
+                        optionFound = true;
+                        break;
                     }
-                    
-                    // If not found, try to add it (might be a legacy value)
-                    if (input.selectedIndex === 0 && value) {
+                }
+                
+                // If option not found and value isn't empty, add it as a new option
+                if (!optionFound && value) {
+                    try {
                         const option = document.createElement('option');
                         option.value = value;
                         option.textContent = value + ' (Legacy)';
                         input.appendChild(option);
-                        input.selectedIndex = input.options.length - 1;
+                        input.value = value;
+                    } catch (e) {
+                        console.error('Error adding option:', e);
                     }
-                } else {
-                    // For regular inputs
-                    input.value = value;
+                }
+            } else {
+                // For regular inputs, just set the value
+                input.value = value;
+            }
+        });
+    }
+    
+    // Add safeSetFilterValuesInForm for safer handling of form values
+    function safeSetFilterValuesInForm(prefix, values) {
+        // Handle case where values is null or undefined
+        if (!values) {
+            return;
+        }
+        
+        // Make sure values is an array
+        const valueArray = Array.isArray(values) ? values : [values];
+        
+        // Set each value safely
+        valueArray.forEach((value, index) => {
+            if (value) { // Only set if value exists
+                const input = document.getElementById(`${prefix}-${index + 1}`);
+                if (input) { // Only set if element exists
+                    if (input.tagName === 'SELECT') {
+                        // For select elements, find the matching option
+                        let optionFound = false;
+                        
+                        // Check if the option exists
+                        for (let j = 0; j < input.options.length; j++) {
+                            if (input.options[j].value === value) {
+                                input.selectedIndex = j;
+                                optionFound = true;
+                                break;
+                            }
+                        }
+                        
+                        // If option not found and value isn't empty, add it as a new option
+                        if (!optionFound && value) {
+                            try {
+                                const option = document.createElement('option');
+                                option.value = value;
+                                option.textContent = value + ' (Legacy)';
+                                input.appendChild(option);
+                                input.value = value;
+                            } catch (e) {
+                                console.error('Error adding option:', e);
+                            }
+                        }
+                    } else {
+                        // For regular inputs, just set the value
+                        input.value = value;
+                    }
                 }
             }
         });
