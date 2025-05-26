@@ -99,7 +99,18 @@
             </div>
             <div class="form-group">
                 <label for="ort">Ort:</label>
-                <input type="text" id="ort" name="ort" required>
+                <select id="ort" name="ort" required>
+                    <option value="">-- Bitte Ort auswählen --</option>
+                    <!-- Options will be loaded by JavaScript -->
+                </select>
+                <button type="button" class="add-new-btn" id="add-new-location-btn">
+                    Neuen Ort hinzufügen
+                </button>
+                <div id="new-location-container" style="display: none; margin-top: 10px;">
+                    <input type="text" id="new-location-input" placeholder="Neuen Ort eingeben">
+                    <button type="button" onclick="addNewLocation()">Hinzufügen</button>
+                    <button type="button" onclick="cancelAddLocation()">Abbrechen</button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="beschreibung">Beschreibung:</label>
@@ -248,7 +259,18 @@
                     </div>
                     <div class="form-group">
                         <label for="edit-ort">Ort:</label>
-                        <input type="text" id="edit-ort" name="ort" required>
+                        <select id="edit-ort" name="ort" required>
+                            <option value="">-- Bitte Ort auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                        <button type="button" class="add-new-btn" id="edit-add-new-location-btn">
+                            Neuen Ort hinzufügen
+                        </button>
+                        <div id="edit-new-location-container" style="display: none; margin-top: 10px;">
+                            <input type="text" id="edit-new-location-input" placeholder="Neuen Ort eingeben">
+                            <button type="button" onclick="addNewLocation('edit')">Hinzufügen</button>
+                            <button type="button" onclick="cancelAddLocation('edit')">Abbrechen</button>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -1766,339 +1788,127 @@
             });
     }
     
-    // Update the setFilterValuesInForm function to handle selects
-    function setFilterValuesInForm(prefix, values) {
-        values.forEach((value, index) => {
-            const input = document.getElementById(`${prefix}-${index + 1}`);
-            if (!input) return; // Skip if element doesn't exist
-            
-            if (input.tagName === 'SELECT') {
-                // For select elements, find the matching option
-                let optionFound = false;
+    // Function to load predefined locations into dropdowns
+    function loadPredefinedLocations() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                // Get all location dropdowns
+                const dropdowns = document.querySelectorAll('select#ort, select#edit-ort');
                 
-                // Check if the option exists
-                for (let j = 0; j < input.options.length; j++) {
-                    if (input.options[j].value === value) {
-                        input.selectedIndex = j;
-                        optionFound = true;
-                        break;
-                    }
-                }
-                
-                // If option not found and value isn't empty, add it as a new option
-                if (!optionFound && value) {
-                    try {
+                // Populate each dropdown
+                dropdowns.forEach(dropdown => {
+                    // Preserve the first option (placeholder)
+                    const firstOption = dropdown.options[0];
+                    
+                    // Clear existing options except the first one
+                    dropdown.innerHTML = '';
+                    dropdown.appendChild(firstOption);
+                    
+                    // Add options for each value
+                    data.locations.forEach(value => {
                         const option = document.createElement('option');
                         option.value = value;
-                        option.textContent = value + ' (Legacy)';
-                        input.appendChild(option);
-                        input.value = value;
-                    } catch (e) {
-                        console.error('Error adding option:', e);
-                    }
-                }
-            } else {
-                // For regular inputs, just set the value
-                input.value = value;
-            }
-        });
-    }
-    
-    // Add safeSetFilterValuesInForm for safer handling of form values
-    function safeSetFilterValuesInForm(prefix, values) {
-        // Handle case where values is null or undefined
-        if (!values) {
-            return;
-        }
-        
-        // Make sure values is an array
-        const valueArray = Array.isArray(values) ? values : [values];
-        
-        // Set each value safely
-        valueArray.forEach((value, index) => {
-            if (value) { // Only set if value exists
-                const input = document.getElementById(`${prefix}-${index + 1}`);
-                if (input) { // Only set if element exists
-                    if (input.tagName === 'SELECT') {
-                        // For select elements, find the matching option
-                        let optionFound = false;
-                        
-                        // Check if the option exists
-                        for (let j = 0; j < input.options.length; j++) {
-                            if (input.options[j].value === value) {
-                                input.selectedIndex = j;
-                                optionFound = true;
-                                break;
-                            }
-                        }
-                        
-                        // If option not found and value isn't empty, add it as a new option
-                        if (!optionFound && value) {
-                            try {
-                                const option = document.createElement('option');
-                                option.value = value;
-                                option.textContent = value + ' (Legacy)';
-                                input.appendChild(option);
-                                input.value = value;
-                            } catch (e) {
-                                console.error('Error adding option:', e);
-                            }
-                        }
-                    } else {
-                        // For regular inputs, just set the value
-                        input.value = value;
-                    }
-                }
-            }
-        });
-    }
-    
-    // Remove duplicate fetchBookInfo and useBookInfo functions - keep only one version
-    
-    function fetchBookInfo(formType) {
-        // Determine which form we're working with (upload or edit)
-        const isbnField = formType === 'edit' ? document.getElementById('edit-isbn') : document.getElementById('isbn');
-        const infoContainer = formType === 'edit' ? document.getElementById('edit-book-info-container') : document.getElementById('book-info-container');
-        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
-        
-        if (!isbn) {
-            alert('Bitte geben Sie eine ISBN ein.');
-            return;
-        }
-        
-        // Show loading indicator
-        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
-        
-        // Make API request to fetch book data
-        fetch(`/fetch_book_info/${isbn}`)
-            .then(response => {
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        throw new Error('Buch nicht gefunden. Überprüfen Sie die ISBN.');
-                    } else {
-                        throw new Error('Fehler beim Abrufen der Buchinformationen');
-                    }
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
-                    return;
-                }
-                
-                // Display book information
-                infoContainer.innerHTML = `
-                    <div class="book-info">
-                        <h4>${data.title}</h4>
-                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
-                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
-                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
-                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
-                        ${data.price ? `<p><strong>Preis:</strong> ${data.price}</p>` : ''}
-                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
-                        ${data.description ? `
-                            <div class="book-description">
-                                <h5>Beschreibung:</h5>
-                                <p>${data.description}</p>
-                            </div>
-                        ` : ''}
-                        <button type="button" class="use-book-info-button" onclick="useBookInfo('${formType}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">Informationen übernehmen</button>
-                    </div>
-                `;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                infoContainer.innerHTML = `<div class="error-message">Fehler: ${error.message}</div>`;
-            });
-    }
-    
-    // Function to set filter values specifically for books
-    function setFilterValuesForBook(formType, bookType) {
-        const prefix = formType === 'edit' ? 'edit-' : '';
-        
-        // Set filter1 (Unterrichtsfach) to 'Buch' if available in options
-        const filter1Select = document.getElementById(`${prefix}filter1-1`);
-        if (filter1Select) {
-            let foundBookOption = false;
-            // Try to find and select the matching option
-            for (let i = 0; i < filter1Select.options.length; i++) {
-                if (filter1Select.options[i].value === bookType) {
-                    filter1Select.selectedIndex = i;
-                    foundBookOption = true;
-                    break;
-                }
-            }
-            
-            // If 'Buch' option doesn't exist, add it
-            if (!foundBookOption) {
-                const option = document.createElement('option');
-                option.value = bookType;
-                option.textContent = bookType;
-                filter1Select.appendChild(option);
-                filter1Select.value = bookType;
-            }
-        }
-    }
-    
-    function useBookInfo(formType, bookData) {
-        // Determine which form we're updating
-        const nameField = formType === 'edit' ? document.getElementById('edit-name') : document.getElementById('name');
-        const descField = formType === 'edit' ? document.getElementById('edit-beschreibung') : document.getElementById('beschreibung');
-        const priceField = formType === 'edit' ? document.getElementById('edit-anschaffungskosten') : document.getElementById('anschaffungskosten');
-        
-        // Update form fields with book data
-        nameField.value = bookData.title || '';
-        
-        // Create a description that includes book metadata and the actual description
-        let fullDescription = '';
-        if (bookData.authors) fullDescription += `Autor(en): ${bookData.authors}\n`;
-        if (bookData.publisher) fullDescription += `Verlag: ${bookData.publisher}\n`;
-        if (bookData.publishedDate) fullDescription += `Erscheinungsdatum: ${bookData.publishedDate}\n`;
-        if (bookData.pageCount) fullDescription += `Seitenanzahl: ${bookData.pageCount}\n`;
-        if (bookData.description) fullDescription += `\nBeschreibung:\n${bookData.description}`;
-        
-        descField.value = fullDescription;
-        
-        // Set the price field if price information is available
-        if (bookData.price) {
-            priceField.value = bookData.price;
-        }
-        
-        // Set appropriate filter values for books
-        setFilterValuesForBook(formType, 'Buch');
-        
-        // Handle book thumbnail if available
-        if (bookData.thumbnail) {
-            const previewContainer = formType === 'edit' 
-                ? document.getElementById('edit-image-preview-container') 
-                : document.getElementById('image-preview-container');
-            
-            // Clear previous previews
-            if (previewContainer) {
-                previewContainer.innerHTML = '<div class="loading-image">Bild wird geladen...</div>';
-            }
-            
-            // Fetch image from URL and add to form
-            fetchImageAndAddToForm(bookData.thumbnail, formType);
-        }
-        
-        // Show confirmation
-        alert('Buchinformationen wurden übernommen!');
-    }
-    
-    // Function to fetch an image from a URL and add it to the form
-    function fetchImageAndAddToForm(imageUrl, formType) {
-        // Use our proxy endpoint instead of direct fetching
-        const proxyUrl = `/proxy_image?url=${encodeURIComponent(imageUrl)}`;
-        
-        // Fetch the image through the proxy
-        fetch(proxyUrl)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Fehler beim Laden des Bildes');
-                }
-                return response.blob();
-            })
-            .then(blob => {
-                // Create a file object from the blob
-                const fileName = `book_cover_${new Date().getTime()}.jpg`;
-                const bookCoverFile = new File([blob], fileName, { type: 'image/jpeg' });
-                
-                // Get the file input element
-                const fileInput = formType === 'edit' 
-                    ? document.getElementById('edit-new-images') 
-                    : document.getElementById('images');
-                
-                // Create a new FileList containing our file
-                const dataTransfer = new DataTransfer();
-                
-                // Add existing files if any
-                if (fileInput.files) {
-                    Array.from(fileInput.files).forEach(file => {
-                        dataTransfer.items.add(file);
+                        option.textContent = value;
+                        dropdown.appendChild(option);
                     });
-                }
-                
-                // Add the new file
-                dataTransfer.items.add(bookCoverFile);
-                
-                // Update the file input with our new FileList
-                fileInput.files = dataTransfer.files;
-                
-                // Update preview
-                updateImagePreview(bookCoverFile, formType);
-                
-                console.log('Book cover image added to form', fileName);
+                });
             })
             .catch(error => {
-                console.error('Error fetching image:', error);
-                // Show error in preview container
-                const previewContainer = formType === 'edit' 
-                    ? document.getElementById('edit-image-preview-container') 
-                    : document.getElementById('image-preview-container');
-                
-                if (previewContainer) {
-                    previewContainer.innerHTML = `<div class="error-message">Fehler beim Laden des Bildes: ${error.message}</div>`;
-                }
+                console.error('Error loading location values:', error);
             });
     }
     
-    // Function to update the image preview
-    function updateImagePreview(file, formType) {
-        const previewContainer = formType === 'edit' 
-            ? document.getElementById('edit-image-preview-container') 
-            : document.getElementById('image-preview-container');
+    // Function to add a new location
+    function addNewLocation(formType = '') {
+        const prefix = formType ? `${formType}-` : '';
+        const input = document.getElementById(`${prefix}new-location-input`);
+        const value = input.value.trim();
         
-        if (!previewContainer) return;
+        if (!value) {
+            alert('Bitte geben Sie einen Ort ein');
+            return;
+        }
         
-        // Clear loading message
-        previewContainer.innerHTML = '';
-        
-        // Create a preview item
-        const previewItem = document.createElement('div');
-        previewItem.className = 'preview-image-item';
-        
-        // Create an image element
-        const img = document.createElement('img');
-        img.file = file;
-        img.alt = 'Buchcover Vorschau';
-        previewItem.appendChild(img);
-        
-        // Add file name
-        const fileName = document.createElement('div');
-        fileName.className = 'file-name';
-        fileName.textContent = file.name;
-        previewItem.appendChild(fileName);
-        
-        // Add the preview to the container
-        previewContainer.appendChild(previewItem);
-        
-        // Use FileReader to read the file and set the image source
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+        // Add to server via API
+        fetch('/add_location_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `value=${encodeURIComponent(value)}`
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Reload locations
+                loadPredefinedLocations();
+                
+                // Select the new value in the dropdown
+                setTimeout(() => {
+                    const dropdown = document.getElementById(`${prefix}ort`);
+                    for (let i = 0; i < dropdown.options.length; i++) {
+                        if (dropdown.options[i].value === value) {
+                            dropdown.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }, 300);
+                
+                // Hide the new location form
+                cancelAddLocation(formType);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            
+            // Add to dropdown temporarily (will be properly added next time)
+            const dropdown = document.getElementById(`${prefix}ort`);
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value + ' (New)';
+            dropdown.appendChild(option);
+            dropdown.value = value;
+            
+            // Hide the new location form
+            cancelAddLocation(formType);
+        });
     }
     
-    // Add file input change listeners to show previews for manually uploaded images
+    // Function to cancel adding a new location
+    function cancelAddLocation(formType = '') {
+        const prefix = formType ? `${prefix}-` : '';
+        document.getElementById(`${prefix}new-location-container`).style.display = 'none';
+        document.getElementById(`${prefix}new-location-input`).value = '';
+    }
+    
+    // Set up the "Add new location" buttons
     document.addEventListener('DOMContentLoaded', function() {
-        // For upload form
-        const uploadImagesInput = document.getElementById('images');
-        if (uploadImagesInput) {
-            uploadImagesInput.addEventListener('change', function() {
-                handleFileInputChange(this, 'upload');
+        // For main form
+        const addNewLocationBtn = document.getElementById('add-new-location-btn');
+        if (addNewLocationBtn) {
+            addNewLocationBtn.addEventListener('click', function() {
+                document.getElementById('new-location-container').style.display = 'block';
             });
         }
         
         // For edit form
-        const editImagesInput = document.getElementById('edit-new-images');
-        if (editImagesInput) {
-            editImagesInput.addEventListener('change', function() {
-                handleFileInputChange(this, 'edit');
+        const editAddNewLocationBtn = document.getElementById('edit-add-new-location-btn');
+        if (editAddNewLocationBtn) {
+            editAddNewLocationBtn.addEventListener('click', function() {
+                document.getElementById('edit-new-location-container').style.display = 'block';
             });
         }
+        
+        // Load locations
+        loadPredefinedLocations();
         
         // Load saved filters
         loadFilterState();
@@ -2906,6 +2716,21 @@ flex: 1;
 
     .edit-button:hover {
         background-color: #e0a800;
+    }
+
+    .add-new-btn {
+        margin-left: 10px;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    
+    .add-new-btn:hover {
+        background-color: #5a6268;
     }
 
     .existing-images-container {

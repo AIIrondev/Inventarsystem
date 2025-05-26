@@ -247,6 +247,39 @@ def update_item_exemplare_status(id, exemplare_status):
         return False
 
 
+def is_code_unique(code_4, exclude_id=None):
+    """
+    Check if a given code is unique (not used by any other item).
+    
+    Args:
+        code_4 (str): The code to check
+        exclude_id (str, optional): ID of item to exclude from the check (for edit operations)
+        
+    Returns:
+        bool: True if code is unique, False if already in use
+    """
+    if not code_4 or code_4.strip() == "":
+        # Empty codes are not considered unique
+        return False
+        
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    items = db['items']
+    
+    # Build query to find items with this code
+    query = {'Code_4': code_4}
+    
+    # If we're editing an item, exclude it from the uniqueness check
+    if exclude_id:
+        query['_id'] = {'$ne': ObjectId(exclude_id)}
+    
+    # Check if any items with this code exist
+    count = items.count_documents(query)
+    
+    client.close()
+    return count == 0
+
+
 # === ITEM RETRIEVAL ===
 
 def get_items():
@@ -649,3 +682,127 @@ def remove_predefined_filter_value(filter_num, value):
     
     client.close()
     return result.modified_count > 0
+
+
+# === LOCATION MANAGEMENT ===
+
+def get_predefined_locations():
+    """
+    Get list of all predefined locations/placement options.
+    
+    Returns:
+        list: List of predefined location strings
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        
+        # Check if settings collection exists, create if not
+        if 'settings' not in db.list_collection_names():
+            db.create_collection('settings')
+        
+        # Get settings document or create if it doesn't exist
+        settings_collection = db['settings']
+        location_settings = settings_collection.find_one({'setting_type': 'predefined_locations'})
+        
+        if not location_settings:
+            # Create default settings document if it doesn't exist
+            settings_collection.insert_one({
+                'setting_type': 'predefined_locations',
+                'locations': []
+            })
+            return []
+        
+        # Return the predefined locations
+        locations = location_settings.get('locations', [])
+        client.close()
+        return sorted(locations)
+        
+    except Exception as e:
+        print(f"Error getting predefined locations: {str(e)}")
+        return []
+
+
+def add_predefined_location(location):
+    """
+    Add a new predefined location.
+    
+    Args:
+        location (str): Location to add
+        
+    Returns:
+        bool: True if added successfully, False if already exists
+    """
+    if not location or not isinstance(location, str):
+        return False
+    
+    location = location.strip()
+    if not location:
+        return False
+        
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        settings_collection = db['settings']
+        
+        # Check if settings document exists, create if not
+        location_settings = settings_collection.find_one({'setting_type': 'predefined_locations'})
+        
+        if not location_settings:
+            # Create with the new location
+            settings_collection.insert_one({
+                'setting_type': 'predefined_locations',
+                'locations': [location]
+            })
+            client.close()
+            return True
+        
+        # Check if location already exists (case-insensitive)
+        current_locations = location_settings.get('locations', [])
+        if any(loc.lower() == location.lower() for loc in current_locations):
+            client.close()
+            return False
+        
+        # Add the new location
+        settings_collection.update_one(
+            {'setting_type': 'predefined_locations'},
+            {'$push': {'locations': location}}
+        )
+        
+        client.close()
+        return True
+        
+    except Exception as e:
+        print(f"Error adding predefined location: {str(e)}")
+        return False
+
+
+def remove_predefined_location(location):
+    """
+    Remove a predefined location.
+    
+    Args:
+        location (str): Location to remove
+        
+    Returns:
+        bool: True if removed successfully
+    """
+    if not location:
+        return False
+        
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        settings_collection = db['settings']
+        
+        result = settings_collection.update_one(
+            {'setting_type': 'predefined_locations'},
+            {'$pull': {'locations': location}}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+        
+    except Exception as e:
+        print(f"Error removing predefined location: {str(e)}")
+        return False

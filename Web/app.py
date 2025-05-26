@@ -577,6 +577,11 @@ def upload_item():
         flash('Bitte laden Sie mindestens ein Bild hoch', 'error')
         return redirect(url_for('home_admin'))
 
+    # Check if code is unique
+    if code_4 and not it.is_code_unique(code_4[0]):
+        flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
+        return redirect(url_for('home_admin'))
+
     # Process any new uploaded images
     image_filenames = []
     for image in images:
@@ -593,6 +598,12 @@ def upload_item():
     # Add the duplicate_images to the list
     if is_duplicating and duplicate_images:
         image_filenames.extend(duplicate_images)
+
+    # If location is not in the predefined list, maybe add it (depending on policy)
+    # For now, we allow new locations to be created when items are added
+    predefined_locations = it.get_predefined_locations()
+    if ort and ort not in predefined_locations:
+        it.add_predefined_location(ort)
         
     # Continue with existing code to create the item
     it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
@@ -669,6 +680,11 @@ def edit_item(id):
     anschaffungs_kosten = strip_whitespace(request.form.get('anschaffungskosten'))
     code_4 = strip_whitespace(request.form.get('code_4'))
     
+    # Check if code is unique (excluding the current item)
+    if code_4 and not it.is_code_unique(code_4, exclude_id=id):
+        flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
+        return redirect(url_for('home_admin'))
+    
     # Get current item to check availability status
     current_item = it.get_item(id)
     if not current_item:
@@ -696,6 +712,11 @@ def edit_item(id):
             filename = secure_filename(image.filename)
             image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             images.append(filename)
+
+    # If location is not in the predefined list, maybe add it (depending on policy)
+    predefined_locations = it.get_predefined_locations()
+    if ort and ort not in predefined_locations:
+        it.add_predefined_location(ort)
     
     # Update the item
     result = it.update_item(
@@ -1859,3 +1880,86 @@ def favicon():
         flask.Response: The favicon.ico file
     """
     return send_from_directory(app.config['STATIC_FOLDER'], 'favicon.ico')
+
+@app.route('/get_predefined_locations')
+def get_predefined_locations_route():
+    """
+    API endpoint to get predefined locations.
+    
+    Returns:
+        dict: Dictionary containing predefined location values
+    """
+    values = it.get_predefined_locations()
+    return jsonify({'locations': values})
+
+@app.route('/add_location_value', methods=['POST'])
+def add_location_value():
+    """
+    Add a new predefined location value.
+    
+    Returns:
+        flask.Response: Redirect to location management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    value = strip_whitespace(request.form.get('value'))
+    
+    if not value:
+        flash('Bitte geben Sie einen Wert ein', 'error')
+        return redirect(url_for('manage_locations'))
+    
+    # Add the value to locations
+    success = it.add_predefined_location(value)
+    
+    if success:
+        flash(f'Ort "{value}" wurde zur Liste hinzugefügt', 'success')
+    else:
+        flash(f'Ort "{value}" existiert bereits', 'error')
+    
+    return redirect(url_for('manage_locations'))
+
+@app.route('/remove_location_value/<string:value>', methods=['POST'])
+def remove_location_value(value):
+    """
+    Remove a predefined location value.
+    
+    Args:
+        value (str): Value to remove
+        
+    Returns:
+        flask.Response: Redirect to location management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    # Remove the value from locations
+    success = it.remove_predefined_location(value)
+    
+    if success:
+        flash(f'Ort "{value}" wurde aus der Liste entfernt', 'success')
+    else:
+        flash(f'Fehler beim Entfernen des Ortes "{value}"', 'error')
+    
+    return redirect(url_for('manage_locations'))
+
+@app.route('/manage_locations')
+def manage_locations():
+    """
+    Admin page to manage predefined location values.
+    
+    Returns:
+        flask.Response: Rendered location management template or redirect
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    # Get predefined location values
+    location_values = it.get_predefined_locations()
+    
+    return render_template('manage_locations.html', 
+                          location_values=location_values)
