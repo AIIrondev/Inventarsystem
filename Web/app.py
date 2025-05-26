@@ -245,6 +245,29 @@ def test_connection():
     return {'status': 'success', 'message': 'Connection successful', 'version': __version__, 'status_code': 200}
 
 
+@app.route('/user_status')
+def user_status():
+    """
+    API endpoint to get the current user's status (username, admin status).
+    Used by JavaScript in templates to personalize the UI.
+    
+    Returns:
+        JSON: User status information or error if not authenticated
+    """
+    if 'username' in session:
+        is_admin = us.check_admin(session['username'])
+        return jsonify({
+            'authenticated': True,
+            'username': session['username'],
+            'is_admin': is_admin
+        })
+    else:
+        return jsonify({
+            'authenticated': False,
+            'error': 'Not logged in'
+        }), 401
+
+
 @app.route('/')
 def home():
     """
@@ -322,6 +345,64 @@ def impressum():
         flask.Response: Redirect to impressum
     """
     return render_template('impressum.html')
+
+@app.route('/license')
+def license():
+    """
+    License information route.
+    Displays the Apache 2.0 license information.
+
+    Returns:
+        flask.Response: Rendered license template
+    """
+    return render_template('license.html')
+
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    """
+    Change password route.
+    Allows users to change their password if logged in.
+    
+    Returns:
+        flask.Response: Rendered form or redirect after password change
+    """
+    if 'username' not in session:
+        flash('Sie müssen angemeldet sein, um Ihr Passwort zu ändern.', 'error')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate inputs
+        if not all([current_password, new_password, confirm_password]):
+            flash('Bitte füllen Sie alle Felder aus.', 'error')
+            return render_template('change_password.html')
+            
+        if new_password != confirm_password:
+            flash('Die neuen Passwörter stimmen nicht überein.', 'error')
+            return render_template('change_password.html')
+            
+        # Verify current password
+        user = us.check_nm_pwd(session['username'], current_password)
+        if not user:
+            flash('Das aktuelle Passwort ist nicht korrekt.', 'error')
+            return render_template('change_password.html')
+            
+        # Check password strength
+        if not us.check_password_strength(new_password):
+            flash('Das neue Passwort ist zu schwach. Es sollte mindestens 6 Zeichen lang sein.', 'error')
+            return render_template('change_password.html')
+            
+        # Update the password
+        if us.update_password(session['username'], new_password):
+            flash('Ihr Passwort wurde erfolgreich geändert.', 'success')
+            return redirect(url_for('home'))
+        else:
+            flash('Fehler beim Ändern des Passworts. Bitte versuchen Sie es später erneut.', 'error')
+            
+    return render_template('change_password.html')
 
 @app.route('/logout')
 def logout():
@@ -1455,29 +1536,6 @@ def add_filter_value(filter_num):
         return redirect(url_for('manage_filters'))
     
     # Add the value to the filter
-    success = it.add_predefined_filter_value(filter_num, value)
-    
-    if success:
-        flash(f'Wert "{value}" wurde zu Filter {filter_num} hinzugefügt', 'success')
-    else:
-        flash(f'Wert "{value}" existiert bereits in Filter {filter_num}', 'error')
-    
-    return redirect(url_for('manage_filters'))
-
-@app.route('/remove_filter_value/<int:filter_num>/<string:value>', methods=['POST'])
-def remove_filter_value(filter_num, value):
-    """
-    Remove a predefined value from the specified filter.
-    
-    Args:
-        filter_num (int): Filter number (1 or 2)
-        value (str): Value to remove
-        
-    Returns:
-        flask.Response: Redirect to filter management page
-    """
-    if 'username' not in session or not us.check_admin(session['username']):
-        return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
     # Remove the value from the filter
     success = it.remove_predefined_filter_value(filter_num, value)
@@ -1655,3 +1713,71 @@ def get_period_times(booking_date, period_num):
     except Exception as e:
         print(f"Error getting period times: {e}")
         return None
+
+@app.route('/my_borrowed_items')
+def my_borrowed_items():
+    """
+    Display items currently borrowed by the logged-in user.
+    
+    Returns:
+        flask.Response: Rendered template of user's borrowed items
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    username = session['username']
+    
+    # Method 1: Get borrowed items directly from the items collection
+    borrowed_items = []
+    try:
+        # Get all items borrowed by this user
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_collection = db['items']
+        
+        # Find items borrowed by this user (single items)
+        single_borrowed_items = list(items_collection.find({
+            'Verfuegbar': False,
+            'User': username
+        }))
+        
+        # Find items with exemplar borrowings by this user
+        multi_borrowed_items = list(items_collection.find({
+            'ExemplareStatus': {
+                '$elemMatch': {
+                    'user': username
+                }
+            }
+        }))
+        
+        # Process multi-exemplar items to extract only the exemplars borrowed by this user
+        for item in multi_borrowed_items:
+            item['_id'] = str(item['_id'])
+            
+            # Filter exemplars for only those borrowed by this user
+            if 'ExemplareStatus' in item:
+                user_exemplars = [ex for ex in item.get('ExemplareStatus', []) if ex.get('user') == username]
+                item['UserExemplars'] = user_exemplars
+                item['UserExemplarCount'] = len(user_exemplars)
+        
+        # Process single items
+        for item in single_borrowed_items:
+            item['_id'] = str(item['_id'])
+        
+        # Combine both types of borrowed items
+        all_borrowed = single_borrowed_items + [item for item in multi_borrowed_items if item not in single_borrowed_items]
+        
+        # Sort by name
+        all_borrowed.sort(key=lambda x: x.get('Name', '').lower())
+        
+        borrowed_items = all_borrowed
+        client.close()
+        
+    except Exception as e:
+        print(f"Error retrieving borrowed items: {e}")
+        flash(f'Fehler beim Laden der ausgeliehenen Objekte: {str(e)}', 'error')
+    
+    return render_template('my_borrowed_items.html', 
+                          items=borrowed_items, 
+                          username=username)
