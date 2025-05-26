@@ -1391,6 +1391,51 @@ def delete_user():
     
     return redirect(url_for('user_del'))
 
+@app.route('/admin_reset_user_password', methods=['POST'])
+def admin_reset_user_password():
+    """
+    Admin route to reset a user's password.
+    Resets the password for the specified user to a temporary password.
+    Only accessible by administrators.
+    
+    Returns:
+        flask.Response: Redirect to user management page with status message
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+        
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    
+    username = request.form.get('username')
+    new_password = request.form.get('new_password', 'Password123')  # Default temporary password
+    
+    if not username:
+        flash('Kein Benutzer ausgewählt', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Check if user exists
+    user = us.get_user(username)
+    if not user:
+        flash(f'Benutzer {username} nicht gefunden', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Prevent changing own password through this route (use change_password instead)
+    if username == session['username']:
+        flash('Sie können Ihr eigenes Passwort nicht über diese Funktion ändern. Bitte verwenden Sie dafür die Option "Passwort ändern" im Profil-Menü.', 'error')
+        return redirect(url_for('user_del'))
+    
+    # Reset the password
+    try:
+        us.update_password(username, new_password)
+        flash(f'Passwort für {username} wurde erfolgreich zurückgesetzt auf: {new_password}', 'success')
+    except Exception as e:
+        flash(f'Fehler beim Zurücksetzen des Passworts: {str(e)}', 'error')
+    
+    return redirect(url_for('user_del'))
+
 
 @app.route('/logs')
 def logs():
@@ -1536,6 +1581,29 @@ def add_filter_value(filter_num):
         return redirect(url_for('manage_filters'))
     
     # Add the value to the filter
+    success = it.add_predefined_filter_value(filter_num, value)
+    
+    if success:
+        flash(f'Wert "{value}" wurde zu Filter {filter_num} hinzugefügt', 'success')
+    else:
+        flash(f'Wert "{value}" existiert bereits in Filter {filter_num}', 'error')
+    
+    return redirect(url_for('manage_filters'))
+
+@app.route('/remove_filter_value/<int:filter_num>/<string:value>', methods=['POST'])
+def remove_filter_value(filter_num, value):
+    """
+    Remove a predefined value from the specified filter.
+    
+    Args:
+        filter_num (int): Filter number (1 or 2)
+        value (str): Value to remove
+        
+    Returns:
+        flask.Response: Redirect to filter management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
     # Remove the value from the filter
     success = it.remove_predefined_filter_value(filter_num, value)
