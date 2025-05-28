@@ -18,6 +18,1210 @@
 {% block title %}Inventarsystem{% endblock %}
 
 {% block content %}
+<style>
+    /* Main container and layout styles */
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container {
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        width: 80%;
+        max-width: 1200px;
+        margin: 20px auto;
+    }
+
+    h1, h2 {
+        text-align: center;
+    }
+
+    /* Filter styles */
+    .filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
+    .filter-group {
+        position: relative;
+        min-width: 200px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .filter-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .filter-toggle, .clear-filter {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+
+    .clear-filter {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .filter-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 300px;
+        overflow-y: auto;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 100;
+        padding: 8px;
+    }
+
+    .filter-options {
+        padding: 10px;
+    }
+
+    .filter-option {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+    }
+
+    .filter-option input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin-right: 8px;
+        cursor: pointer;
+    }
+
+    .filter-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .filter-option label {
+        margin-left: 5px;
+        cursor: pointer;
+    }
+
+    .filter-option-group {
+        margin-bottom: 12px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+
+    .filter-group-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .selected-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 30px;
+    }
+
+    .filter-tag {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e9ecef;
+        border-radius: 15px;
+        padding: 3px 10px;
+        font-size: 0.8rem;
+    }
+
+    .filter-tag-group {
+        color: #6c757d;
+        font-size: 0.8em;
+        font-style: italic;
+        margin-right: 2px;
+    }
+
+    .filter-tag-remove {
+        background: none;
+        border: none;
+        color: #6c757d;
+        margin-left: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+    }
+
+    /* Search styles */
+    .search-container {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+
+    #code-search {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-button {
+        padding: 8px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .search-button:hover {
+        background-color: #0056b3;
+    }
+
+    .search-field {
+        min-width: 250px;
+    }
+
+    #code-search.searching {
+        background-color: #fff3cd;
+        transition: background-color 0.3s;
+        border: 2px solid #ffc107;
+        box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+    }
+
+    /* QR Scanner styles */
+    .qr-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .scan-button {
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+
+    .scan-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Item display styles */
+    .items-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 20px 0;
+        scroll-snap-type: x mandatory;
+        position: relative;
+        scroll-behavior: smooth;
+    }
+
+    .item-card {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        max-width: 300px;
+        flex-shrink: 0;
+        scroll-snap-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+    .item-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .item-card h3 {
+        margin-top: 0;
+    }
+
+    .item-card .description {
+        max-height: 100px;
+        overflow-y: auto;
+    }
+
+    .item-card .image-container {
+        position: relative;
+        max-width: 300px;
+        margin: 10px 0;
+    }
+
+    .item-card .item-image {
+        width: 100%;
+        height: auto;
+        max-height: 300px;
+        display: none;
+        object-fit: cover;
+    }
+
+    .item-card .item-image:first-child {
+        display: block;
+    }
+
+    /* Navigation buttons */
+    .navigation-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .navigation-buttons .prev-button,
+    .navigation-buttons .next-button {
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    .navigation-buttons .prev-button:hover,
+    .navigation-buttons .next-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Modal styles */
+    .item-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 600px;
+        border-radius: 5px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .close-modal {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .close-modal:hover,
+    .close-modal:focus {
+        color: black;
+        text-decoration: none;
+    }
+
+    /* Form styles */
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 15px;
+    }
+
+    .form-row .form-group {
+        flex: 1;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+
+    .save-button, .cancel-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .save-button {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .save-button:hover {
+        background-color: #218838;
+    }
+
+    .cancel-button {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .cancel-button:hover {
+        background-color: #545b62;
+    }
+
+    .add-new-btn {
+        background-color: #17a2b8;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8em;
+        margin-top: 5px;
+    }
+
+    .add-new-btn:hover {
+        background-color: #138496;
+    }
+
+    /* Filter inputs for forms */
+    .filter-inputs {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+
+    .filter-inputs h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #495057;
+    }
+
+    .multi-filter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .filter-dropdown-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    /* Highlight and status styles */
+    .highlight-item {
+        border: 3px solid gold !important;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
+        position: relative;
+        z-index: 10;
+        animation: highlight-pulse 2s infinite;
+    }
+
+    .code-match {
+        border: 2px solid #17a2b8 !important;
+        box-shadow: 0 0 15px rgba(23, 162, 184, 0.5) !important;
+        position: relative;
+        z-index: 5;
+    }
+
+    .exact-code-match {
+        border: 3px solid #28a745 !important;
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.7) !important;
+        animation: highlight-pulse 2s infinite;
+        position: relative;
+        z-index: 11;
+    }
+
+    @keyframes highlight-pulse {
+        0% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
+        50% { box-shadow: 0 0 30px rgba(40, 167, 69, 1); transform: scale(1.03); }
+        100% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
+    }
+
+    /* Messages */
+    .error-message, .no-items-message {
+        padding: 20px;
+        text-align: center;
+        width: 100%;
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+
+    /* Action Button Styles */
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-start;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #dee2e6;
+        flex-wrap: wrap;
+    }
+
+    .modal-actions form {
+        margin: 0;
+    }
+
+    .ausleihen, .edit-button, .delete-button, .details-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 100px;
+    }
+
+    /* Ausleihen/Zurückgeben Button */
+    .ausleihen {
+        background-color: #28a745;
+        color: white;
+        border: 2px solid #28a745;
+    }
+
+    .ausleihen:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    }
+
+    .ausleihen:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    }
+
+    /* Edit Button */
+    .edit-button {
+        background-color: #007bff;
+        color: white;
+        border: 2px solid #007bff;
+    }
+
+    .edit-button:hover {
+        background-color: #0056b3;
+        border-color: #004085;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .edit-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    }
+
+    /* Delete Button */
+    .delete-button {
+        background-color: #dc3545;
+        color: white;
+        border: 2px solid #dc3545;
+    }
+
+    .delete-button:hover {
+        background-color: #c82333;
+        border-color: #bd2130;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .delete-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+    }
+
+    /* Details Button */
+    .details-button {
+        background-color: #17a2b8;
+        color: white;
+        border: 2px solid #17a2b8;
+    }
+
+    .details-button:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .details-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Disabled Button */
+    .disabled-button {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        cursor: not-allowed !important;
+        opacity: 0.6;
+    }
+
+    .disabled-button:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Modal Details Styling */
+    .modal-details {
+        margin: 20px 0;
+    }
+
+    .detail-group {
+        display: flex;
+        margin-bottom: 10px;
+        align-items: flex-start;
+    }
+
+    .detail-group.full-width {
+        flex-direction: column;
+        margin-bottom: 15px;
+    }
+
+    .detail-label {
+        font-weight: bold;
+        color: #495057;
+        min-width: 150px;
+        margin-right: 10px;
+    }
+
+    .detail-value {
+        color: #212529;
+        flex: 1;
+        word-wrap: break-word;
+    }
+
+    .detail-group.full-width .detail-label {
+        margin-bottom: 5px;
+    }
+
+    .detail-group.full-width .detail-value {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        white-space: pre-wrap;
+    }
+
+    .status-borrowed {
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    /* Modal Image Styling */
+    .modal-image-container {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow: hidden;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+
+    .modal-image {
+        max-width: 100%;
+        max-height: 400px;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+
+    .modal-image-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+    }
+
+    .modal-image-nav:hover {
+        background-color: rgba(0, 0, 0, 0.9);
+    }
+
+    .modal-prev-image {
+        left: 10px;
+    }
+
+    .modal-next-image {
+        right: 10px;
+    }
+
+    .image-counter {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    /* Borrower Info Panel */
+    .borrower-info-panel {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .borrower-info-panel h4 {
+        color: #856404;
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+    }
+
+    .borrower-name, .borrow-time {
+        margin: 5px 0;
+        color: #856404;
+        font-weight: 500;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .filter-container {
+            flex-direction: column;
+        }
+        
+        .form-row {
+            flex-direction: column;
+        }
+        
+        .multi-filter {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Book information display styles */
+    .book-info-container {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        min-height: 40px;
+    }
+
+    .book-info {
+        padding: 15px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .book-info h4 {
+        color: #333;
+        margin: 0 0 10px 0;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+
+    .book-info p {
+        margin: 5px 0;
+        color: #666;
+        line-height: 1.4;
+    }
+
+    .book-thumbnail {
+        max-width: 120px;
+        max-height: 180px;
+        float: right;
+        margin: 0 0 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .book-description {
+        clear: both;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
+
+    .book-description h5 {
+        color: #333;
+        margin: 0 0 8px 0;
+        font-size: 1em;
+        font-weight: bold;
+    }
+
+    .book-description p {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 3px;
+        font-size: 0.9em;
+        line-height: 1.5;
+    }
+
+    /* Import button styling */
+    .import-book-button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 15px;
+        transition: background-color 0.2s ease;
+        display: block;
+        width: 100%;
+    }
+
+    .import-book-button:hover {
+        background-color: #218838;
+    }
+
+    .import-book-button:active {
+        background-color: #1e7e34;
+    }
+
+    /* ISBN input group styling */
+    .isbn-input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .isbn-input-group input {
+        flex: 1;
+    }
+
+    .fetch-isbn-button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s ease;
+    }
+
+    .fetch-isbn-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        color: #007bff;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    .loading-spinner::after {
+        content: "...";
+        animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { 
+            color: rgba(0,0,0,0);
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        40% { 
+            color: #007bff;
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        60% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 rgba(0,0,0,0);
+        }
+        80%, 100% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 #007bff;
+        }
+    }
+
+    /* Error message styling */
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    /* Success message styling */
+    .import-success-message {
+        color: #155724;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: bold;
+        animation: fadeInOut 3s ease;
+    }
+
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translateY(-10px); }
+        10%, 90% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Code validation styling */
+    .code-checking {
+        background-color: #fff3cd !important;
+        border-color: #ffc107 !important;
+        position: relative;
+    }
+
+    .code-checking::after {
+        content: "Prüfe...";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8em;
+        color: #856404;
+        font-style: italic;
+    }
+
+    .code-valid {
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+        color: #155724 !important;
+    }
+
+    .code-invalid {
+        background-color: #f8d7da !important;
+        border-color: #dc3545 !important;
+        color: #721c24 !important;
+    }
+
+    /* Duplicate code popup styling */
+    .popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: overlayFadeIn 0.3s ease;
+    }
+
+    @keyframes overlayFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .duplicate-code-popup {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        max-width: 500px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+        animation: popupSlideIn 0.3s ease;
+    }
+
+    @keyframes popupSlideIn {
+        from { 
+            opacity: 0; 
+            transform: scale(0.8) translateY(-20px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: scale(1) translateY(0); 
+        }
+    }
+
+    .popup-content h3 {
+        color: #dc3545;
+        margin: 0 0 15px 0;
+        font-size: 1.3em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .popup-content h3::before {
+        content: "⚠️";
+        font-size: 1.2em;
+    }
+
+    .popup-content p {
+        color: #333;
+        margin: 15px 0;
+        line-height: 1.5;
+        font-size: 1em;
+    }
+
+    .popup-content .duplicate-code {
+        font-weight: bold;
+        color: #dc3545;
+        background-color: #f8d7da;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 1.1em;
+    }
+
+    .popup-close-button {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .popup-close-button:hover {
+        background-color: #5a6268;
+    }
+
+    .popup-close-x {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #999;
+        cursor: pointer;
+        padding: 5px;
+        line-height: 1;
+    }
+
+    .popup-close-x:hover {
+        color: #333;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .isbn-input-group {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fetch-isbn-button {
+            width: 100%;
+        }
+
+        .book-thumbnail {
+            float: none;
+            display: block;
+            margin: 10px auto;
+        }
+
+        .duplicate-code-popup {
+            margin: 20px;
+            width: calc(100% - 40px);
+            padding: 20px;
+        }
+
+        .popup-content h3 {
+            font-size: 1.1em;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .book-info {
+            padding: 10px;
+        }
+
+        .book-description p {
+            max-height: 100px;
+            font-size: 0.8em;
+        }
+
+        .duplicate-code-popup {
+            padding: 15px;
+        }
+
+        .popup-content h3 {
+            font-size: 1em;
+        }
+
+        .popup-content p {
+            font-size: 0.9em;
+        }
+    }
+
+    /* Item card action buttons */
+    .actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-start;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid #dee2e6;
+        flex-wrap: wrap;
+    }
+
+    .actions form {
+        margin: 0;
+        flex: 1;
+        min-width: 80px;
+    }
+
+    .actions .ausleihen,
+    .actions .edit-button,
+    .actions .delete-button {
+        width: 100%;
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        min-width: auto;
+    }
+
+    /* Borrower badge */
+    .borrower-badge {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 4px;
+        padding: 8px;
+        margin-top: 10px;
+        font-size: 0.85rem;
+        color: #856404;
+    }
+
+    .borrower-badge strong {
+        color: #533f03;
+    }
+
+    .borrow-time {
+        font-size: 0.8rem;
+        opacity: 0.8;
+    }
+
+    /* Image navigation buttons in item cards */
+    .image-container {
+        position: relative;
+        margin: 10px 0;
+        text-align: center;
+    }
+
+    .prev-image-button,
+    .next-image-button {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 14px;
+        border-radius: 3px;
+        transition: background-color 0.3s ease;
+    }
+
+    .prev-image-button:hover,
+    .next-image-button:hover {
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    .prev-image-button {
+        left: 5px;
+    }
+
+    .next-image-button {
+        right: 5px;
+    }
+
+    .item-image {
+        max-width: 100%;
+        max-height: 200px;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+
+    /* ...existing code... */
+</style>
+
 <div class="container">
     <div class="content">
         <h1>Inventar Objekte</h1>
@@ -90,152 +1294,6 @@
             <button class="next-button" onclick="scrollNext()">&#10095;</button>
         </div>
     </div>
-    <div class="upload-form">
-        <h2>Upload Item</h2>
-        <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="name">Name:</label>
-                <input type="text" id="name" name="name" required>
-            </div>
-            <div class="form-group">
-                <label for="ort">Ort:</label>
-                <select id="ort" name="ort" required>
-                    <option value="">-- Bitte Ort auswählen --</option>
-                    <!-- Options will be loaded by JavaScript -->
-                </select>
-                <button type="button" class="add-new-btn" id="add-new-location-btn">
-                    Neuen Ort hinzufügen
-                </button>
-                <div id="new-location-container" style="display: none; margin-top: 10px;">
-                    <input type="text" id="new-location-input" placeholder="Neuen Ort eingeben">
-                    <button type="button" onclick="addNewLocation()">Hinzufügen</button>
-                    <button type="button" onclick="cancelAddLocation()">Abbrechen</button>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="beschreibung">Beschreibung:</label>
-                <textarea id="beschreibung" name="beschreibung" required></textarea>
-            </div>
-            
-            <!-- Updated filter inputs with dropdowns for Filter 1 and Filter 2 -->
-            <div class="filter-inputs">
-                <h3>Unterrichtsfach:</h3>
-                <div class="multi-filter">
-                    <div class="form-group">
-                        <label for="filter1-1">Wert 1:</label>
-                        <select id="filter1-1" name="filter" class="filter-dropdown-select" required>
-                            <option value="">-- Bitte auswählen --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter1-2">Wert 2:</label>
-                        <select id="filter1-2" name="filter" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter1-3">Wert 3:</label>
-                        <select id="filter1-3" name="filter" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter1-4">Wert 4:</label>
-                        <select id="filter1-4" name="filter" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                </div>
-                
-                <h3>Jahrgangsstufe:</h3>
-                <div class="multi-filter">
-                    <div class="form-group">
-                        <label for="filter2-1">Wert 1:</label>
-                        <select id="filter2-1" name="filter2" class="filter-dropdown-select" required>
-                            <option value="">-- Bitte auswählen --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter2-2">Wert 2:</label>
-                        <select id="filter2-2" name="filter2" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter2-3">Wert 3:</label>
-                        <select id="filter2-3" name="filter2" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter2-4">Wert 4:</label>
-                        <select id="filter2-4" name="filter2" class="filter-dropdown-select">
-                            <option value="">-- Optional --</option>
-                            <!-- Options will be loaded by JavaScript -->
-                        </select>
-                    </div>
-                </div>
-                
-                <h3>Thema:</h3>
-                <div class="multi-filter">
-                    <div class="form-group">
-                        <label for="filter3-1">Wert 1:</label>
-                        <input type="text" id="filter3-1" name="filter3" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="filter3-2">Wert 2:</label>
-                        <input type="text" id="filter3-2" name="filter3">
-                    </div>
-                    <div class="form-group">
-                        <label for="filter3-3">Wert 3:</label>
-                        <input type="text" id="filter3-3" name="filter3">
-                    </div>
-                    <div class="form-group">
-                        <label for="filter3-4">Wert 4:</label>
-                        <input type="text" id="filter3-4" name="filter3">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="anschaffungsjahr">Anschaffungsdatum</label>
-                <input type="date" id="anschaffungsjahr" name="anschaffungsjahr">
-            </div>
-            <div class="form-group">
-                <label for="anschaffungskosten">Anschaffungskosten</label>
-                <input id="anschaffungskosten" name="anschaffungskosten">
-            </div>
-            <div class="form-group">
-                <label for="code_4">Code</label>
-                <input id="code_4" name="code_4" required>
-            </div>
-            <div class="form-group">
-                <label for="images">Bilder:</label>
-                <input type="file" id="images" name="images" accept="image/*" multiple>
-                <!-- Add image preview area -->
-                <div class="image-preview-container" id="image-preview-container"></div>
-            </div>
-            
-            <!-- Add ISBN and exemplar count fields to upload form -->
-            <div class="form-group">
-                <label for="isbn">ISBN:</label>
-                <div class="isbn-input-group">
-                    <input type="text" id="isbn" name="isbn" placeholder="ISBN eingeben...">
-                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Buchinformationen abrufen</button>
-                </div>
-                <div id="book-info-container" class="book-info-container"></div>
-            </div>
-            
-            <button type="submit">Upload</button>
-        </form>
-    </div>
     <div id="item-modal" class="item-modal">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
@@ -258,8 +1316,8 @@
                         <input type="text" id="edit-name" name="name" required>
                     </div>
                     <div class="form-group">
-                        <label for="edit-ort">Ort:</label>
-                        <select id="edit-ort" name="ort" required>
+                        <label for="edit-location">Ort:</label>
+                        <select id="edit-location" name="ort" required>
                             <option value="">-- Bitte Ort auswählen --</option>
                             <!-- Options will be loaded by JavaScript -->
                         </select>
@@ -274,8 +1332,8 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="edit-beschreibung">Beschreibung:</label>
-                    <textarea id="edit-beschreibung" name="beschreibung" required></textarea>
+                    <label for="edit-description">Beschreibung:</label>
+                    <textarea id="edit-description" name="beschreibung" required></textarea>
                 </div>
                 
                 <!-- Updated filter inputs for edit form with dropdowns -->
@@ -366,12 +1424,12 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="edit-anschaffungsjahr">Anschaffungsjahr:</label>
-                    <input type="date" id="edit-anschaffungsjahr" name="anschaffungsjahr">
+                    <label for="edit-year">Anschaffungsjahr:</label>
+                    <input type="date" id="edit-year" name="anschaffungsjahr">
                 </div>
                 <div class="form-group">
-                    <label for="edit-anschaffungskosten">Anschaffungskosten:</label>
-                    <input id="edit-anschaffungskosten" name="anschaffungskosten">
+                    <label for="edit-cost">Anschaffungskosten:</label>
+                    <input id="edit-cost" name="anschaffungskosten">
                 </div>
                 <div class="form-group">
                     <label for="edit-code4">Code:</label>
@@ -630,7 +1688,7 @@
             // No need to call applyFilters() here as it will be called after this function
         }
         
-        // Populate filter 2 dropdown with only available values - FIX HERE
+        // Populate filter 2 dropdown with only available values
         populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
     }
 
@@ -667,6 +1725,48 @@
         };
     }
     
+    // Load predefined filter values for dropdowns
+    function loadPredefinedFilterValues(filterNumber) {
+        fetch(`/get_predefined_filter_values/${filterNumber}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // For edit modal dropdowns
+                const editFilterSelects = [
+                    document.getElementById(`edit-filter${filterNumber}-1`),
+                    document.getElementById(`edit-filter${filterNumber}-2`),
+                    document.getElementById(`edit-filter${filterNumber}-3`),
+                    document.getElementById(`edit-filter${filterNumber}-4`)
+                ];
+                
+                editFilterSelects.forEach(select => {
+                    if (select) {
+                        // Clear existing options except the first one
+                        while (select.children.length > 1) {
+                            select.removeChild(select.lastChild);
+                        }
+                        
+                        // Add new options - data.values contains the array
+                        data.values.forEach(filter => {
+                            if (filter && filter.trim() !== '') {
+                                const option = document.createElement('option');
+                                option.value = filter;
+                                option.textContent = filter;
+                                select.appendChild(option);
+                            }
+                        });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error(`Error loading predefined filter ${filterNumber} values:`, error);
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Load saved filters
         loadFilterState();
@@ -674,6 +1774,18 @@
         // Load predefined filter values for dropdowns
         loadPredefinedFilterValues(1);
         loadPredefinedFilterValues(2);
+        
+        // Set up edit form submission
+        setupEditFormSubmission();
+        
+        // Set up add new location buttons
+        const editAddLocationBtn = document.getElementById('edit-add-new-location-btn');
+        if (editAddLocationBtn) {
+            editAddLocationBtn.addEventListener('click', function() {
+                const container = document.getElementById('edit-new-location-container');
+                container.style.display = container.style.display === 'none' ? 'block' : 'none';
+            });
+        }
         
         // Find and attach event listener to all logout links
         const logoutLinks = document.querySelectorAll('a[href*="logout"]');
@@ -707,8 +1819,32 @@
                 }, 300);
             });
         }
+        
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const itemModal = document.getElementById('item-modal');
+            const editModal = document.getElementById('edit-modal');
+            
+            if (event.target === itemModal) {
+                itemModal.style.display = 'none';
+            }
+            if (event.target === editModal) {
+                editModal.style.display = 'none';
+            }
+        };
+
+        // Set up code validation for edit form
+        const editCodeField = document.getElementById('edit-code4');
+        if (editCodeField) {
+            editCodeField.addEventListener('blur', function() {
+                const itemIdField = document.getElementById('edit-item-id');
+                const excludeId = itemIdField ? itemIdField.value : null;
+                validateCodeField(this, excludeId);
+            });
+        }
     });
 
+    // Function to load items from server
     function loadItems() {
         fetch("{{ url_for('get_items') }}")
             .then(response => response.json())
@@ -719,7 +1855,7 @@
                 const filter2Values = new Set();
                 const filter3Values = new Set();
                 
-                // Store all items data globally
+                // Store all items data globally for filter rebuilding
                 allItems = data.items || [];
                 
                 // Clear the container first
@@ -729,20 +1865,18 @@
                     itemsContainer.innerHTML = '<div class="no-items-message">Keine Objekte gefunden</div>';
                     return;
                 }
-                
+
                 // Sort items by name in ascending order (A-Z)
                 data.items.sort((a, b) => {
                     const nameA = a.Name ? a.Name.toLowerCase() : '';
                     const nameB = b.Name ? b.Name.toLowerCase() : '';
-                    return nameA.localeCompare(nameB); // Ascending order
+                    return nameA.localeCompare(nameB);
                 });
                 
                 data.items.forEach(item => {
                     try {
                         const card = document.createElement('div');
                         card.classList.add('item-card');
-                        
-                        // Add class to make card clickable 
                         card.classList.add('clickable-card');
                         
                         // Add highlight class if this is the item we're looking for
@@ -753,77 +1887,62 @@
                             }, 500);
                         }
                         
-                        // Process and store filter values with consistent handling
+                        // Process and store filter values
                         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
                         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
                         const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
-
-                        // Add filter values to their respective sets - all values should be strings
+                        
+                        // Store arrays on the card as data attributes
+                        card.dataset.filter1 = JSON.stringify(filter1Array);
+                        card.dataset.filter2 = JSON.stringify(filter2Array);
+                        card.dataset.filter3 = JSON.stringify(filter3Array);
+                        card.dataset.code = (item.Code_4 !== undefined && item.Code_4 !== null) ? 
+                          String(item.Code_4).trim() : '';
+        
+                        // Add filter values to their respective sets
                         filter1Array.forEach(value => {
                             if (value && typeof value === 'string' && value.trim() !== '') {
                                 filter1Values.add(value);
                             }
                         });
-                        
+        
                         filter2Array.forEach(value => {
                             if (value && typeof value === 'string' && value.trim() !== '') {
                                 filter2Values.add(value);
                             }
                         });
-                        
+        
                         filter3Array.forEach(value => {
                             if (value && typeof value === 'string' && value.trim() !== '') {
                                 filter3Values.add(value);
                             }
                         });
 
-                        // Store filter data as attributes on the card
-                        card.dataset.filter1 = JSON.stringify(filter1Array);
-                        card.dataset.filter2 = JSON.stringify(filter2Array);
-                        card.dataset.filter3 = JSON.stringify(filter3Array);
-                        card.dataset.code = (item.Code_4 !== undefined && item.Code_4 !== null) ? 
-                          String(item.Code_4).trim() : '';
+                        // Display first filter value or dash if none exist
+                        const filter1Display = filter1Array.length > 0 ? filter1Array[0] : '-';
+                        const filter2Display = filter2Array.length > 0 ? filter2Array[0] : '-';
+                        const filter3Display = filter3Array.length > 0 ? filter3Array[0] : '-';
                         
-                        // Create formatted display text for filters with "more" indicators if needed
-                        const maxDisplayValues = 2; // Maximum number of filter values to display before showing "+X more"
+                        // Additional filter values indicator
+                        const filter1More = filter1Array.length > 1 ? ` (+${filter1Array.length - 1} mehr)` : '';
+                        const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
+                        const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
+
+                        const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
                         
-                        // Process filter1 values for display
-                        let filter1Display = filter1Array.length > 0 ? filter1Array.slice(0, maxDisplayValues).join(', ') : '-';
-                        let filter1More = filter1Array.length > maxDisplayValues ? 
-                        ` <span class="more-indicator">+${filter1Array.length - maxDisplayValues} mehr</span>` : '';
+                        // Check if item is borrowed by current user
+                        const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
                         
-                        // Process filter2 values for display
-                        let filter2Display = filter2Array.length > 0 ? filter2Array.slice(0, maxDisplayValues).join(', ') : '-';
-                        let filter2More = filter2Array.length > maxDisplayValues ? 
-                        ` <span class="more-indicator">+${filter2Array.length - maxDisplayValues} mehr</span>` : '';
-                        
-                        // Process filter3 values for display
-                        let filter3Display = filter3Array.length > 0 ? filter3Array.slice(0, maxDisplayValues).join(', ') : '-';
-                        let filter3More = filter3Array.length > maxDisplayValues ? 
-                        ` <span class="more-indicator">+${filter3Array.length - maxDisplayValues} mehr</span>` : '';
-                        
-                        // Process image HTML (assuming this is already defined elsewhere)
-                        const imagesHtml = item.Images && item.Images.length > 0 ? 
-                            item.Images.map((img, idx) => 
-                                `<img src="{{ url_for('uploaded_file', filename='') }}${img}" 
-                                 alt="${item.Name}" class="item-image" 
-                                 style="display: ${idx === 0 ? 'block' : 'none'};" />`
-                            ).join('') : 
-                            '<div class="no-image">Kein Bild</div>';
-                        
-                        // Create borrower badge HTML
-                        const isBorrowedByMe = item.User === currentUsername;
+                        // Add borrower info badge if item is borrowed
                         let borrowerBadge = '';
-                        
-                        if (!item.Verfuegbar) {
+                        if (!item.Verfuegbar && item.BorrowerInfo) {
                             borrowerBadge = `
                                 <div class="borrower-badge">
-                                    Ausgeliehen von: ${item.User || 'Unbekannt'}
-                                    <span class="borrow-time">${item.BorrowTime || ''}</span>
-                                </div>
-                            `;
+                                    Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
+                                    ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
+                                </div>`;
                         }
-                        
+
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
                                 <h3>${item.Name}</h3>
@@ -851,18 +1970,18 @@
                                 :
                                     `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                                 }
-                                <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
-                                <a href="#" class="duplicate-button" onclick="duplicateItem('${item._id}', event)">Duplizieren</a>
-                                <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Delete</a>
+                                <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
+                                    <button class="delete-button">Löschen</button>
+                                </a>
+                                <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
                             </div>
                         `;
                         itemsContainer.appendChild(card);
-
-                        // Add direct click event listeners to the card content area
+                        
+                        // Add click event listeners to the card content area
                         const cardContent = card.querySelector('.card-content');
                         if (cardContent) {
                             cardContent.addEventListener('click', function(e) {
-                                // Don't trigger if clicking on buttons or form elements
                                 if (e.target.tagName === 'BUTTON' || 
                                     e.target.tagName === 'A' || 
                                     e.target.tagName === 'INPUT' ||
@@ -872,11 +1991,8 @@
                                     return;
                                 }
                                 
-                                // Stop event from bubbling up
                                 e.stopPropagation();
                                 
-                                
-                                // Get full item data with correct image paths
                                 const modalItemData = {...item};
                                 modalItemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
                                 
@@ -893,19 +2009,16 @@
                 populateFilterOptions('filter2-options', [...filter2Values].sort(), 2);
                 populateFilterOptions('filter3-options', [...filter3Values].sort(), 3);
                 
-                // Make sure filters are updated if there are active selections
+                itemsContainer.scrollLeft = 0;
+                applyFilters();
+
+                // Rebuild filters if needed
                 if (activeFilters.filter1.length > 0) {
                     rebuildFilter2Options();
                 }
                 if (activeFilters.filter1.length > 0 || activeFilters.filter2.length > 0) {
                     rebuildFilter3Options();
                 }
-                
-                // Start display from leftmost position (first card, which is now A)
-                itemsContainer.scrollLeft = 0;
-                
-                // Apply filters
-                applyFilters();
             })
             .catch(error => {
                 console.error('Error fetching items:', error);
@@ -915,130 +2028,112 @@
             });
     }
 
-    // Update the updateFilter function to rebuild Filter 2 when Filter 1 changes
-    function updateFilter(filterNum, value, isChecked, group = '') {
-        const filterKey = `filter${filterNum}`;
-        // Add group prefix if provided
-        const filterValue = group ? `${group}:${value}` : value;
+    function searchByCode() {
+        const searchInput = document.getElementById('code-search');
+        const rawSearchTerm = searchInput.value;
+        codeSearchTerm = rawSearchTerm.trim().toLowerCase();
         
-        if (isChecked) {
-            // Add filter value if not already present
-            if (!activeFilters[filterKey].includes(filterValue)) {
-                activeFilters[filterKey].push(filterValue);
-            }
-        } else {
-            // Remove filter value
-            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
-        }
+        searchInput.classList.add('searching');
         
-        // Update the filter display
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // If Filter 1 changed, rebuild Filter 2 options, then rebuild Filter 3
-        if (filterNum === 1) {
-            rebuildFilter2Options();
-            rebuildFilter3Options();
-        }
-        // If Filter 2 changed, rebuild Filter 3 options
-        else if (filterNum === 2) {
-            rebuildFilter3Options();
-        }
-        
-        // Save and apply the filters
-        saveFilterState();
-        applyFilters();
-    }
-
-    function clearFilter(filterNum) {
-        activeFilters[`filter${filterNum}`] = [];
-        document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
-        
-        // Uncheck all checkboxes
-        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = false;
+        const itemsContainer = document.querySelector('#items-container');
+        const allCards = itemsContainer.querySelectorAll('.item-card');
+        allCards.forEach(card => {
+            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
         });
         
-        // If Filter 1 was cleared, rebuild Filter 2 and Filter 3 options
-        if (filterNum === 1) {
-            rebuildFilter2Options();
-            rebuildFilter3Options();
-        }
-        // If Filter 2 was cleared, rebuild Filter 3 options
-        else if (filterNum === 2) {
-            rebuildFilter3Options();
-        }
+        applyFilters(true);
         
-        // Save and apply the updated filters
-        saveFilterState();
-        applyFilters();
+        setTimeout(() => {
+            searchInput.classList.remove('searching');
+        }, 500);
     }
 
-    function removeFilter(filterNum, filter) {
-        const filterKey = `filter${filterNum}`;
+    function applyFilters(isDirectSearch = false) {
+        const itemsContainer = document.querySelector('#items-container');
+        const items = itemsContainer.querySelectorAll('.item-card');
         
-        // Remove from active filters
-        activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filter);
+        let visibleCount = 0;
+        let codeMatchCount = 0;
+        let exactMatchCount = 0;
+        let firstMatchedCard = null;
+        let exactMatchCard = null;
         
-        // Update UI
-        updateSelectedFiltersDisplay(filterNum);
+        const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
+        const isCodeSearch = searchTerm.length > 0;
         
-        // Uncheck corresponding checkbox if exists
-        let value = filter;
-        let group = '';
-        
-        if (filter.includes(':')) {
-            [group, value] = filter.split(':');
-        }
-        
-        // Find and uncheck the checkbox
-        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
-        checkboxes.forEach(checkbox => {
-            if ((checkbox.value === value) && 
-                 ((!group && !checkbox.dataset.group) || 
-                  (group && checkbox.dataset.group === group))) {
-                checkbox.checked = false;
+        items.forEach(item => {
+            const itemFilter1 = item.dataset.filter1;
+            const itemFilter2 = item.dataset.filter2;
+            const itemFilter3 = item.dataset.filter3;
+            const rawCode = item.dataset.code || '';
+            const itemCode = rawCode.trim().toLowerCase();
+            
+            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
+            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
+            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
+            const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
+            
+            let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
+            let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
+            
+            if (passesAllFilters && matchesCodeSearch) {
+                item.style.display = 'block';
+                visibleCount++;
+                
+                if (exactCodeMatch) {
+                    item.classList.add('highlight-item', 'exact-code-match');
+                    exactMatchCount++;
+                    if (!exactMatchCard) {
+                        exactMatchCard = item;
+                    }
+                } else if (isCodeSearch && itemCode.includes(searchTerm)) {
+                    item.classList.add('code-match');
+                    codeMatchCount++;
+                    if (!firstMatchedCard) {
+                        firstMatchedCard = item;
+                    }
+                }
+            } else {
+                item.style.display = 'none';
             }
         });
         
-        // If Filter 1 was changed, rebuild Filter 2 and Filter 3 options
-        if (filterNum === 1) {
-            rebuildFilter2Options();
-            rebuildFilter3Options();
+        if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
+            setTimeout(() => {
+                const cardToHighlight = exactMatchCard || firstMatchedCard;
+                
+                if (cardToHighlight) {
+                    centerCardInView(cardToHighlight, itemsContainer);
+                    applyAttentionAnimation(cardToHighlight);
+                }
+            }, 300);
         }
-        // If Filter 2 was changed, rebuild Filter 3 options
-        else if (filterNum === 2) {
-            rebuildFilter3Options();
+    }
+
+    function checkFilterMatch(activeFilters, itemFilterData) {
+        if (activeFilters.length === 0) return true;
+        
+        let itemFilterArray;
+        try {
+            itemFilterArray = JSON.parse(itemFilterData || '[]');
+        } catch {
+            itemFilterArray = [];
         }
         
-        // Save and apply the filters
-        saveFilterState();
-        applyFilters();
+        return activeFilters.some(filter => {
+            const filterValue = filter.includes(':') ? filter.split(':')[1] : filter;
+            return itemFilterArray.includes(filterValue);
+        });
     }
 
     function centerCardInView(card, container) {
-        // Make sure the card is visible first
         card.style.display = 'block';
         
-        // Get positions and dimensions
         const containerRect = container.getBoundingClientRect();
         const cardRect = card.getBoundingClientRect();
         
-        // Calculate scroll position to center the card
         const scrollPosition = card.offsetLeft - (containerRect.width/2) + (cardRect.width/2);
         
-        // Debug the centering calculation if in debug mode
-        if (window.isDebug) {
-            console.log('Card positioning details:', {
-                cardName: card.querySelector('h3')?.textContent,
-                containerWidth: containerRect.width,
-                cardWidth: cardRect.width,
-                cardLeft: card.offsetLeft,
-                calculatedScrollPosition: scrollPosition
-            });
-        }
-        
-        // Smooth scroll to position
         container.scrollTo({
             left: scrollPosition,
             behavior: 'smooth'
@@ -1046,10 +2141,8 @@
     }
 
     function applyAttentionAnimation(card) {
-        // First remove any existing animations
         card.getAnimations().forEach(anim => anim.cancel());
         
-        // Apply a more pronounced animation
         card.animate([
             { transform: 'scale(1)', boxShadow: '0 0 15px rgba(40, 167, 69, 0.7)' },
             { transform: 'scale(1.08)', boxShadow: '0 0 25px rgba(40, 167, 69, 1)' },
@@ -1060,7 +2153,6 @@
             easing: 'ease-in-out'
         });
         
-        // Also flash the background for better visibility
         card.animate([
             { backgroundColor: 'white' },
             { backgroundColor: 'rgba(40, 167, 69, 0.1)' },
@@ -1072,273 +2164,34 @@
         });
     }
 
-    function debugCardData(card) {
-        if (!isDebug) return;
-        
-        const itemName = card.querySelector('h3')?.textContent || 'unknown';
-        debugLog(`Card data for "${itemName}":`, {
-            code: card.dataset.code,
-            filter1: card.dataset.filter1,
-            filter2: card.dataset.filter2,
-            filter3: card.dataset.filter3,
-            isVisible: card.style.display !== 'none'
-        });
-    }
-
-    function scrollPrev() {
-        const container = document.querySelector('#items-container');
-        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20; // Match the gap in CSS
-        
-        // Scroll one card width to the left + gap
-        container.scrollBy({
-            left: -1 * (cardWidth + gap),
-            behavior: 'smooth'
-        });
-    }
-
-    function scrollNext() {
-        const container = document.querySelector('#items-container');
-        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20; // Match the gap in CSS
-        
-        // Scroll one card width to the right + gap
-        container.scrollBy({
-            left: cardWidth + gap,
-            behavior: 'smooth'
-        });
-    }
-
-    function prevImage(event) {
-        event.stopPropagation(); // Prevent card click event
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
-        
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function nextImage(event) {
-        event.stopPropagation(); // Prevent card click event
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
-        
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
-    }
-
-    function confirmDelete(itemId, itemName, event) {
-        event.preventDefault();
-        
-        const confirmMessage = itemName             ? `Sind Sie sicher, dass Sie "${itemName}" löschen möchten?`             : "Sind Sie sicher, dass Sie diesen Artikel löschen möchten?";
-        
-        if (confirm(confirmMessage)) {
-            window.location.href = `{{ url_for('delete_item', id='') }}${itemId}`;
-        }
-    }
-
-    function duplicateItem(itemId, event) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        document.getElementById('item-modal').style.display = 'none';
-
-        fetch(`/get_item/${itemId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to load item data');
-                }
-                return response.json();
-            })
-            .then(data => {
-                showEditItemForm(data.item, true);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Laden der Objektdaten');
-            });
-    }
-
-    function populateFilterOptions(containerId, filterValues, filterNum) {
-        const container = document.getElementById(containerId);
-        if (!container) {
-            debugLog(`Container not found: ${containerId}`);
-            return;
-        }
-        
-        container.innerHTML = ''; // Clear previous options
-        
-        // First group values by category/prefix if they exist
-        const groupedValues = {};
-        
-        // Process filter values to identify groups
-        filterValues.forEach(value => {
-            if (!value) return; // Skip empty values
-            
-            let group = 'Default';
-            let displayValue = value;
-            
-            // Check if value contains grouping delimiter
-            if (typeof value === 'string' && value.includes(':')) {
-                [group, displayValue] = value.split(':', 2);
-            }
-            
-            // Initialize group array if needed
-            if (!groupedValues[group]) {
-                groupedValues[group] = [];
-            }
-            
-            // Add value to group
-            groupedValues[group].push(displayValue);
-        });
-        
-        // Now create DOM elements for each group
-        Object.keys(groupedValues).sort().forEach(group => {
-            // Skip empty groups
-            if (!groupedValues[group].length) return;
-            
-            // Create option group
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'filter-option-group';
-            
-            // Add group header if not default
-            if (group !== 'Default') {
-                const header = document.createElement('div');
-                header.className = 'filter-group-header';
-                header.textContent = group;
-                groupDiv.appendChild(header);
-            }
-            
-            // Add each filter option in this group
-            groupedValues[group].sort().forEach(value => {
-                // Create filter option
-                const optionDiv = document.createElement('div');
-                optionDiv.className = 'filter-option';
-                
-                // Create unique ID for checkbox
-                const safeValue = value.replace(/[^a-zA-Z0-9]/g, '_');
-                const safeGroup = group.replace(/[^a-zA-Z0-9]/g, '_');
-                const id = `filter${filterNum}-${safeGroup}-${safeValue}`;
-                
-                // Create checkbox
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.id = id;
-                checkbox.value = value;
-                
-                // Store group info for filtering
-                if (group !== 'Default') {
-                    checkbox.dataset.group = group;
-                }
-                
-                // Check if this value is already active
-                const filterValue = group !== 'Default' ? `${group}:${value}` : value;
-                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
-                
-                // Add change handler
-                checkbox.onchange = () => {
-                    updateFilter(filterNum, value, checkbox.checked, 
-                        group !== 'Default' ? group : '');
-                };
-                
-                // Create label
-                const label = document.createElement('label');
-                label.htmlFor = id;
-                label.textContent = value;
-                
-                // Add to DOM
-                optionDiv.appendChild(checkbox);
-                optionDiv.appendChild(label);
-                groupDiv.appendChild(optionDiv);
-            });
-            
-            // Add group to container
-            container.appendChild(groupDiv);
-        });
-        
-        debugLog(`Populated ${filterValues.length} options for filter ${filterNum}`);
-    }
-
-    function checkFilterMatch(activeFilterValues, itemFilterValuesJSON) {
-        // If no active filters, all items match
-        if (!activeFilterValues || activeFilterValues.length === 0) {
-            return true;
-        }
-        
-        try {
-            // Parse item filter values
-            const itemFilterValues = JSON.parse(itemFilterValuesJSON || '[]');
-            
-            // If item has no values, it can't match any filters
-            if (!itemFilterValues || itemFilterValues.length === 0) {
-                return false;
-            }
-            
-            // Check if ANY active filter values match ANY item filter values
-            for (const activeFilter of activeFilterValues) {
-                // Extract value from activeFilter (remove group prefix if exists)
-                const activeValue = activeFilter.includes(':') 
-                    ? activeFilter.split(':')[1] 
-                    : activeFilter;
-                
-                // Check if any item filter value matches this active filter
-                if (itemFilterValues.includes(activeValue)) {
-                    return true;
-                }
-            }
-            
-            // No match found
-            return false;
-        } catch (err) {
-            console.error("Error in checkFilterMatch:", err);
-            debugLog("Error in checkFilterMatch:", {
-                error: err.message,
-                activeFilters: activeFilterValues,
-                itemFilters: itemFilterValuesJSON
-            });
-            return false;
-        }
-    }
-
     function clearCodeSearch() {
         const searchInput = document.getElementById('code-search');
         searchInput.value = '';
         codeSearchTerm = '';
         
-        // Reset highlighting
         const itemsContainer = document.querySelector('#items-container');
         const allCards = itemsContainer.querySelectorAll('.item-card');
         allCards.forEach(card => {
             card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
         });
         
-        // Apply filters to show all matching items
         applyFilters();
     }
 
     function openItemModal(item) {
-        // Get modal elements
         const modal = document.getElementById('item-modal');
         const modalContent = document.getElementById('modal-content-wrapper');
         
-        // Format filter values for display
         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
         const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
         
-        // Build image HTML
         const imagesHtml = item.Images ? item.Images.map((image, index) => 
             `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
              style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
         
-        // Check if item is borrowed
         const isBorrowed = !item.Verfuegbar;
         
-        // Build borrower info panel if applicable
         let borrowerInfoHtml = '';
         if (isBorrowed && item.BorrowerInfo) {
             borrowerInfoHtml = `
@@ -1350,7 +2203,6 @@
             `;
         }
         
-        // Build modal content HTML
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
             ${borrowerInfoHtml}
@@ -1418,218 +2270,170 @@
                     `<form method="POST" action="/ausleihen/${item._id}">
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
-                : (item.User === currentUsername) ?
+                    : (item.User === currentUsername) ?
                     `<form method="POST" action="/zurueckgeben/${item._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`
-                : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                    : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
-                <a href="#" class="edit-button" onclick="editItem('${item._id}', event)">Bearbeiten</a>
-                <a href="#" class="duplicate-button" onclick="duplicateItem('${item._id}', event)">Duplizieren</a>
-                <a href="#" class="delete-button" onclick="confirmDelete('${item._id}', '${item.Name}', event)">Löschen</a>
+                <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
+                <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
+                    <button class="delete-button">Löschen</button>
+                </a>
             </div>
         `;
         
-        // Show the modal
         modal.style.display = 'block';
         
-        // Set up close button
         const closeButton = modal.querySelector('.close-modal');
         closeButton.onclick = function() {
             modal.style.display = 'none';
         };
         
-        // Store current image index for navigation
         window.currentModalImageIndex = 0;
         window.totalModalImages = item.Images ? item.Images.length : 0;
-        
-        // Set up click outside to close
-        window.onclick = function(event) {
-            if (event.target == modal) {
-                modal.style.display = 'none';
-            }
-        };
     }
 
     function changeModalImage(direction) {
-        const images = document.querySelectorAll('.modal-image');
-        if (images.length === 0) return;
+        const currentIndex = window.currentModalImageIndex;
+        const total = window.totalModalImages;
         
-        // Hide current image
-        images[window.currentModalImageIndex].style.display = 'none';
+        if (total <= 1) return;
         
-        // Update index
-        window.currentModalImageIndex = (window.currentModalImageIndex + direction + images.length) % images.length;
+        document.getElementById(`modal-image-${currentIndex}`).style.display = 'none';
         
-        // Show new image
-        images[window.currentModalImageIndex].style.display = 'block';
+        let newIndex = (currentIndex + direction) % total;
+        if (newIndex < 0) newIndex = total - 1;
         
-        // Update image counter text
-        const counterText = document.querySelector('.image-counter');
-        if (counterText) {
-            counterText.textContent = `${window.currentModalImageIndex + 1}/${images.length}`;
-        }
-    }
-
-    function editItem(itemId, event) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        document.getElementById('item-modal').style.display = 'none';
-
-        fetch(`/get_item/${itemId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to load item data');
-                }
-                return response.json();
-            })
-            .then(data => {
-                showEditItemForm(data.item, false);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Laden der Objektdaten');
-            });
+        document.getElementById(`modal-image-${newIndex}`).style.display = 'block';
+        
+        const counter = document.querySelector('.image-counter');
+        if (counter) counter.textContent = `${newIndex + 1}/${total}`;
+        
+        window.currentModalImageIndex = newIndex;
     }
     
-    // Add missing function to close edit modal
-    function closeEditModal() {
-        const modal = document.getElementById('edit-modal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
+    function scrollPrev() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 20;
+        
+        container.scrollBy({
+            left: -1 * (cardWidth + gap),
+            behavior: 'smooth'
+        });
     }
 
-    function showEditItemForm(item, isDuplicate) {
-        // Reset the form
-        const form = document.getElementById('edit-item-form');
-        form.reset();
+    function scrollNext() {
+        const container = document.querySelector('#items-container');
+        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
+        const gap = 20;
         
-        // Set form action based on duplicate or edit
-        // Fix: Use upload_item endpoint for duplicating and add a hidden field to indicate duplication
-        const formAction = isDuplicate 
-            ? "{{ url_for('upload_item') }}" 
-            : "{{ url_for('edit_item', id='') }}" + item._id;
-        form.setAttribute('action', formAction);
-        
-        // Add a hidden field to indicate this is a duplication if needed
-        if (isDuplicate) {
-            // Remove any existing is_duplicating field
-            const existingField = form.querySelector('input[name="is_duplicating"]');
-            if (existingField) {
-                existingField.remove();
-            }
-            
-            // Add hidden field to indicate duplication
-            const hiddenField = document.createElement('input');
-            hiddenField.type = 'hidden';
-            hiddenField.name = 'is_duplicating';
-            hiddenField.value = 'true';
-            form.appendChild(hiddenField);
-            
-            // Also add duplicate_images fields for any existing images
-            if (item.Images && item.Images.length > 0) {
-                item.Images.forEach(image => {
-                    // Extract just the filename without the path
-                    const imageName = image.split('/').pop();
-                    const imageField = document.createElement('input');
-                    imageField.type = 'hidden';
-                    imageField.name = 'duplicate_images';
-                    imageField.value = imageName;
-                    form.appendChild(imageField);
-                });
-            }
-        }
-        
-        // Safely set form field values with null checks
-        const setFieldValueSafely = (fieldId, value) => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                field.value = value;
-            }
-        };
-        
-        // Fill in the form fields with null checks
-        setFieldValueSafely('edit-item-id', item._id);
-        setFieldValueSafely('edit-name', item.Name);
-        setFieldValueSafely('edit-ort', item.Ort);
-        setFieldValueSafely('edit-beschreibung', item.Beschreibung);
-        
-        // Handle date format for anschaffungsjahr
-        let anschaffungsjahr = '';
-        if (item.Anschaffungsjahr) {
-            if (typeof item.Anschaffungsjahr === 'string') {
-                // Split by 'T' to get just the date part if it's in ISO format
-                anschaffungsjahr = item.Anschaffungsjahr.split('T')[0];
-            } else {
-                anschaffungsjahr = item.Anschaffungsjahr;
-            }
-        }
-        setFieldValueSafely('edit-anschaffungsjahr', anschaffungsjahr);
-        
-        setFieldValueSafely('edit-anschaffungskosten', item.Anschaffungskosten);
-        setFieldValueSafely('edit-code4', item.Code_4);
-        
-        // Handle filters - split by comma and trim spaces
-        const filter1Values = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
-        const filter2Values = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
-        const filter3Values = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
-        
-        // Clear existing filter selections
-        activeFilters.filter1 = [];
-        activeFilters.filter2 = [];
-        activeFilters.filter3 = [];
-        
-        // Set filter values in the form using safer method
-        safeSetFilterValuesInForm('edit-filter1', filter1Values);
-        safeSetFilterValuesInForm('edit-filter2', filter2Values);
-        safeSetFilterValuesInForm('edit-filter3', filter3Values);
-        
-        // Add ISBN value if it exists
-        setFieldValueSafely('edit-isbn', item.ISBN || '');
-        
-        // Update exemplare status if this is an edit (not duplicate)
-        if (!isDuplicate && item.ExemplareStatus) {
-            updateExemplareStatus('edit', item.ExemplareStatus);
-        }
-        
-        // Show the edit modal
-        const modal = document.getElementById('edit-modal');
-        if (modal) {
-            modal.style.display = 'block';
-            
-            // Center the modal in the viewport
-            modal.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        container.scrollBy({
+            left: cardWidth + gap,
+            behavior: 'smooth'
+        });
     }
 
-    // Update selected filters display function
+    function prevImage(event) {
+        event.stopPropagation();
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex - 1 + images.length) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+
+    function nextImage(event) {
+        event.stopPropagation();
+        const container = event.target.closest('.image-container');
+        const images = container.querySelectorAll('.item-image');
+        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        
+        images[currentIndex].style.display = 'none';
+        currentIndex = (currentIndex + 1) % images.length;
+        images[currentIndex].style.display = 'block';
+    }
+    
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        
+        document.querySelectorAll('.filter-dropdown').forEach(dd => {
+            if (dd.id !== dropdownId) {
+                dd.style.display = 'none';
+            }
+        });
+        
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function clearFilter(filterNum) {
+        activeFilters[`filter${filterNum}`] = [];
+        document.getElementById(`selected-filter${filterNum}`).innerHTML = '';
+        
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        saveFilterState();
+        applyFilters();
+    }
+
+    function updateFilter(filterNum, value, isChecked, group = '') {
+        const filterKey = `filter${filterNum}`;
+        const filterValue = group ? `${group}:${value}` : value;
+        
+        if (isChecked) {
+            if (!activeFilters[filterKey].includes(filterValue)) {
+                activeFilters[filterKey].push(filterValue);
+            }
+        } else {
+            activeFilters[filterKey] = activeFilters[filterKey].filter(v => v !== filterValue);
+        }
+        
+        updateSelectedFiltersDisplay(filterNum);
+        
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
+        }
+        
+        saveFilterState();
+        applyFilters();
+    }
+
     function updateSelectedFiltersDisplay(filterNum) {
         const container = document.getElementById(`selected-filter${filterNum}`);
         container.innerHTML = '';
         
         activeFilters[`filter${filterNum}`].forEach(filter => {
-            // Extract display value from filter
             let displayValue = filter;
             let groupName = '';
             
-            // Handle group:value format
             if (filter.includes(':')) {
                 [groupName, displayValue] = filter.split(':');
             }
             
-            // Create filter tag
             const tag = document.createElement('div');
             tag.className = 'filter-tag';
             
-            // Show group if present
             let tagContent = '';
             if (groupName) {
                 tagContent += `<span class="filter-tag-group">${groupName}:</span>`;
             }
             
-            // Add filter value and remove button
             tagContent += displayValue;
             tagContent += `<button class="filter-tag-remove" onclick="removeFilter(${filterNum}, '${filter}')">&times;</button>`;
             
@@ -1638,1245 +2442,410 @@
         });
     }
 
-    function searchByCode() {
-        const searchInput = document.getElementById('code-search');
-        const rawSearchTerm = searchInput.value;
-        codeSearchTerm = rawSearchTerm.trim().toLowerCase();
+    function removeFilter(filterNum, filter) {
+        const filterKey = `filter${filterNum}`;
         
-        // Add visual feedback when searching
-        searchInput.classList.add('searching');
+        activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filter);
         
-        // Reset highlighting
-        const itemsContainer = document.querySelector('#items-container');
-        const allCards = itemsContainer.querySelectorAll('.item-card');
-        allCards.forEach(card => {
-            card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
-        });
+        updateSelectedFiltersDisplay(filterNum);
         
-        // Apply filters which will handle highlighting
-        applyFilters(true); // Pass true to indicate this is a direct search
+        let value = filter;
+        let group = '';
         
-        // Remove visual feedback after a delay
-        setTimeout(() => {
-            searchInput.classList.remove('searching');
-        }, 500);
-    }
-
-    function applyFilters(isDirectSearch = false) {
-        const itemsContainer = document.querySelector('#items-container');
-        const items = itemsContainer.querySelectorAll('.item-card');
+        if (filter.includes(':')) {
+            [group, value] = filter.split(':');
+        }
         
-        let visibleCount = 0;
-        let codeMatchCount = 0;
-        let exactMatchCount = 0;
-        let firstMatchedCard = null;
-        let exactMatchCard = null;
-        
-        // Process search term
-        const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
-        const isCodeSearch = searchTerm.length > 0;
-        
-        items.forEach(item => {
-            const itemFilter1 = item.dataset.filter1;
-            const itemFilter2 = item.dataset.filter2;
-            const itemFilter3 = item.dataset.filter3;
-            const rawCode = item.dataset.code || '';
-            const itemCode = rawCode.trim().toLowerCase();
-            
-            // Check if item matches all active filters
-            const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
-            const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
-            const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
-            const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
-            
-            // Check for code match (special logic for exact matches)
-            let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
-            let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
-            
-            if (passesAllFilters && matchesCodeSearch) {
-                // Show item if it matches all filters and code search
-                item.style.display = 'block';
-                visibleCount++;
-                
-                // Add appropriate highlight classes for code matches
-                if (exactCodeMatch) {
-                    item.classList.add('highlight-item', 'exact-code-match');
-                    exactMatchCount++;
-                    if (!exactMatchCard) {
-                        exactMatchCard = item;
-                    }
-                } else if (isCodeSearch && itemCode.includes(searchTerm)) {
-                    item.classList.add('code-match');
-                    codeMatchCount++;
-                    if (!firstMatchedCard) {
-                        firstMatchedCard = item;
-                    }
-                }
-            } else {
-                // Hide non-matching items
-                item.style.display = 'none';
+        const checkboxes = document.querySelectorAll(`#filter${filterNum}-options input[type="checkbox"]`);
+        checkboxes.forEach(checkbox => {
+            if ((checkbox.value === value) && 
+                ((!group && !checkbox.dataset.group) || 
+                 (group && checkbox.dataset.group === group))) {
+                checkbox.checked = false;
             }
         });
         
-        // Handle scrolling and highlighting for code searches
-        if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
-            setTimeout(() => {
-                // Prefer exact match, fallback to partial match
-                const cardToHighlight = exactMatchCard || firstMatchedCard;
-                
-                if (cardToHighlight) {
-                    // Center the matched card in view
-                    centerCardInView(cardToHighlight, itemsContainer);
-                    
-                    // Add stronger attention-grabbing animation
-                    applyAttentionAnimation(cardToHighlight);
-                }
-            }, 300);
-        } else if (isDirectSearch && isCodeSearch && visibleCount === 0) {
-            debugLog(`No matches found for search term "${searchTerm}"`, {
-                allCodes: Array.from(items).map(item => item.dataset.code?.trim() || 'empty')
-            });
+        if (filterNum === 1) {
+            rebuildFilter2Options();
+            rebuildFilter3Options();
+        } else if (filterNum === 2) {
+            rebuildFilter3Options();
         }
+        
+        saveFilterState();
+        applyFilters();
     }
 
-    // Add function to toggle filter dropdowns
-    function toggleFilterDropdown(dropdownId) {
-        const dropdown = document.getElementById(dropdownId);
-        if (dropdown.style.display === 'block') {
-            dropdown.style.display = 'none';
-        } else {
-            // Close all other dropdowns first
-            const dropdowns = document.querySelectorAll('.filter-dropdown');
-            dropdowns.forEach(d => d.style.display = 'none');
-            
-            // Open this dropdown
-            dropdown.style.display = 'block';
-        }
-    }
-    
-    // Function to load predefined filter values into dropdowns
-    function loadPredefinedFilterValues(filterNum) {
-        fetch(`/get_predefined_filter_values/${filterNum}`)
-            .then(response => response.json())
-            .then(data => {
-                // Get all dropdowns for this filter
-                const selector = filterNum === 1 ? 
-                    'select[id^="filter1-"], select[id^="edit-filter1-"]' : 
-                    'select[id^="filter2-"], select[id^="edit-filter2-"]';
-                const dropdowns = document.querySelectorAll(selector);
-                
-                // Populate each dropdown
-                dropdowns.forEach(dropdown => {
-                    // Preserve the first option (placeholder)
-                    const firstOption = dropdown.options[0];
-                    
-                    // Clear existing options except the first one
-                    dropdown.innerHTML = '';
-                    dropdown.appendChild(firstOption);
-                    
-                    // Add options for each value
-                    data.values.forEach(value => {
-                        const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = value;
-                        dropdown.appendChild(option);
-                    });
-                });
-            })
-            .catch(error => {
-                console.error(`Error loading filter ${filterNum} values:`, error);
-            });
-    }
-    
-    // Function to load predefined locations into dropdowns
-    function loadPredefinedLocations() {
-        fetch('/get_predefined_locations')
-            .then(response => response.json())
-            .then(data => {
-                // Get all location dropdowns
-                const dropdowns = document.querySelectorAll('select#ort, select#edit-ort');
-                
-                // Populate each dropdown
-                dropdowns.forEach(dropdown => {
-                    // Preserve the first option (placeholder)
-                    const firstOption = dropdown.options[0];
-                    
-                    // Clear existing options except the first one
-                    dropdown.innerHTML = '';
-                    dropdown.appendChild(firstOption);
-                    
-                    // Add options for each value
-                    data.locations.forEach(value => {
-                        const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = value;
-                        dropdown.appendChild(option);
-                    });
-                });
-            })
-            .catch(error => {
-                console.error('Error loading location values:', error);
-            });
-    }
-    
-    // Function to add a new location
-    function addNewLocation(formType = '') {
-        const prefix = formType ? `${formType}-` : '';
-        const input = document.getElementById(`${prefix}new-location-input`);
-        const value = input.value.trim();
-        
-        if (!value) {
-            alert('Bitte geben Sie einen Ort ein');
+    function populateFilterOptions(containerId, filterValues, filterNum) {
+        const container = document.getElementById(containerId);
+        if (!container) {
             return;
         }
         
-        // Add to server via API
-        fetch('/add_location_value', {
+        container.innerHTML = '';
+        
+        const groupedValues = {};
+        
+        filterValues.forEach(value => {
+            if (!value) return;
+            
+            let group = 'Default';
+            let displayValue = value;
+            
+            if (typeof value === 'string' && value.includes(':')) {
+                [group, displayValue] = value.split(':', 2);
+            }
+            
+            if (!groupedValues[group]) {
+                groupedValues[group] = [];
+            }
+            
+            groupedValues[group].push(displayValue);
+        });
+        
+        Object.keys(groupedValues).sort().forEach(group => {
+            if (!groupedValues[group].length) return;
+            
+            if (Object.keys(groupedValues).length > 1 && group !== 'Default') {
+                const groupHeader = document.createElement('div');
+                groupHeader.className = 'filter-group-header';
+                groupHeader.textContent = group;
+                container.appendChild(groupHeader);
+            }
+            
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'filter-option-group';
+            
+            groupedValues[group].sort().forEach(value => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'filter-option';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = value;
+                checkbox.dataset.group = group !== 'Default' ? group : '';
+                
+                const filterValue = group !== 'Default' ? `${group}:${value}` : value;
+                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
+                
+                checkbox.addEventListener('change', function() {
+                    updateFilter(filterNum, value, this.checked, group !== 'Default' ? group : '');
+                });
+                
+                const label = document.createElement('label');
+                label.textContent = value;
+                label.prepend(checkbox);
+                
+                optionDiv.appendChild(label);
+                groupContainer.appendChild(optionDiv);
+            });
+            
+            container.appendChild(groupContainer);
+        });
+    }
+
+    // Edit modal functions
+    function openEditModal(itemId) {
+        // Find the item data from allItems array
+        const item = allItems.find(i => i._id === itemId);
+        if (!item) {
+            console.error('Item not found:', itemId);
+            return;
+        }
+
+        // Populate the edit form with current item data
+        document.getElementById('edit-item-id').value = item._id;
+        document.getElementById('edit-name').value = item.Name || '';
+        document.getElementById('edit-description').value = item.Beschreibung || '';
+        document.getElementById('edit-code4').value = item.Code_4 || '';
+        document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
+        document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
+
+        // Load location options
+        loadLocationOptions();
+
+        // Set the current location
+        setTimeout(() => {
+            const locationSelect = document.getElementById('edit-location');
+            if (locationSelect && item.Ort) {
+                locationSelect.value = item.Ort;
+            }
+        }, 100);
+
+        // Handle filter arrays - set current values
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+
+        // Set filter dropdowns (up to 4 each)
+        for (let i = 1; i <= 4; i++) {
+            // Filter 1
+            const filter1Select = document.getElementById(`edit-filter1-${i}`);
+            if (filter1Select) {
+                filter1Select.value = filter1Array[i-1] || '';
+            }
+            
+            // Filter 2
+            const filter2Select = document.getElementById(`edit-filter2-${i}`);
+            if (filter2Select) {
+                filter2Select.value = filter2Array[i-1] || '';
+            }
+            
+            // Filter 3
+            const filter3Select = document.getElementById(`edit-filter3-${i}`);
+            if (filter3Select) {
+                filter3Select.value = filter3Array[i-1] || '';
+            }
+        }
+
+        // Show the modal
+        document.getElementById('edit-modal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const locationSelect = document.getElementById('edit-location');
+                if (locationSelect && data.locations) {
+                    // Clear existing options except the first one
+                    while (locationSelect.children.length > 1) {
+                        locationSelect.removeChild(locationSelect.lastChild);
+                    }
+                    
+                    // Add location options
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        locationSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading locations:', error);
+            });
+    }
+
+    function addNewLocation(context) {
+        const inputField = document.getElementById(`${context}-new-location-input`);
+        const newLocation = inputField.value.trim();
+        
+        if (!newLocation) {
+            alert('Bitte geben Sie einen Ortsnamen ein.');
+            return;
+        }
+        
+        // Send request to add new location
+        fetch('/add_location', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: `value=${encodeURIComponent(value)}`
+            body: JSON.stringify({ location: newLocation })
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Reload locations
-                loadPredefinedLocations();
+                // Reload location options
+                loadLocationOptions();
                 
-                // Select the new value in the dropdown
+                // Hide the new location input
+                document.getElementById(`${context}-new-location-container`).style.display = 'none';
+                inputField.value = '';
+                
+                // Set the newly added location as selected
                 setTimeout(() => {
-                    const dropdown = document.getElementById(`${prefix}ort`);
-                    for (let i = 0; i < dropdown.options.length; i++) {
-                        if (dropdown.options[i].value === value) {
-                            dropdown.selectedIndex = i;
-                            break;
-                        }
+                    const locationSelect = document.getElementById(`${context}-location`);
+                    if (locationSelect) {
+                        locationSelect.value = newLocation;
                     }
-                }, 300);
-                
-                // Hide the new location form
-                cancelAddLocation(formType);
+                }, 100);
             } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
+                alert('Fehler beim Hinzufügen des Ortes: ' + (data.message || 'Unbekannter Fehler'));
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            
-            // Add to dropdown temporarily (will be properly added next time)
-            const dropdown = document.getElementById(`${prefix}ort`);
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = value + ' (New)';
-            dropdown.appendChild(option);
-            dropdown.value = value;
-            
-            // Hide the new location form
-            cancelAddLocation(formType);
+            console.error('Error adding location:', error);
+            alert('Fehler beim Hinzufügen des Ortes.');
         });
     }
     
-    // Function to cancel adding a new location
-    function cancelAddLocation(formType = '') {
-        const prefix = formType ? `${prefix}-` : '';
-        document.getElementById(`${prefix}new-location-container`).style.display = 'none';
-        document.getElementById(`${prefix}new-location-input`).value = '';
+    function cancelAddLocation(context) {
+        const container = document.getElementById(`${context}-new-location-container`);
+        const inputField = document.getElementById(`${context}-new-location-input`);
+        
+        container.style.display = 'none';
+        inputField.value = '';
     }
-    
-    // Set up the "Add new location" buttons
-    document.addEventListener('DOMContentLoaded', function() {
-        // For main form
-        const addNewLocationBtn = document.getElementById('add-new-location-btn');
-        if (addNewLocationBtn) {
-            addNewLocationBtn.addEventListener('click', function() {
-                document.getElementById('new-location-container').style.display = 'block';
-            });
-        }
-        
-        // For edit form
-        const editAddNewLocationBtn = document.getElementById('edit-add-new-location-btn');
-        if (editAddNewLocationBtn) {
-            editAddNewLocationBtn.addEventListener('click', function() {
-                document.getElementById('edit-new-location-container').style.display = 'block';
-            });
-        }
-        
-        // Load locations
-        loadPredefinedLocations();
-        
-        // Load saved filters
-        loadFilterState();
-        
-        // Load predefined filter values for dropdowns
-        loadPredefinedFilterValues(1);
-        loadPredefinedFilterValues(2);
-        
-        // Find and attach event listener to all logout links
-        const logoutLinks = document.querySelectorAll('a[href*="logout"]');
-        logoutLinks.forEach(link => {
-            link.addEventListener('click', function() {
-                clearFilterState(); // Clear filters when logging out
-            });
-        });
-        
-        // Fetch user status to get current username
-        fetch('/user_status')
-            .then(response => response.json())
-            .then(data => {
-                currentUsername = data.username;
-                // Now load items with username information
-                loadItems();
-            })
-            .catch(error => {
-                console.error('Error fetching user status:', error);
-                loadItems(); // Load items anyway in case of error
-            });
 
-        // Add event listener for code search input
-        const codeSearchInput = document.getElementById('code-search');
-        if (codeSearchInput) {
-            codeSearchInput.addEventListener('input', function() {
-                // Use a small delay to avoid excessive filtering while typing
-                clearTimeout(this.searchTimeout);
-                this.searchTimeout = setTimeout(() => {
-                    searchByCode();
-                }, 300);
+    // Set up form submission handler for edit form
+    function setupEditFormSubmission() {
+        const editForm = document.getElementById('edit-item-form');
+        if (editForm) {
+            editForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(editForm);
+                const itemId = document.getElementById('edit-item-id').value;
+                
+                // Set the form action to the edit endpoint
+                formData.append('_method', 'PUT'); // Some frameworks use this for PUT requests
+                
+                fetch(`/edit_item/${itemId}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error('Network response was not ok');
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Close modal and reload items
+                        closeEditModal();
+                        loadItems();
+                        
+                        // Show success message
+                        alert('Objekt wurde erfolgreich aktualisiert!');
+                    } else {
+                        alert('Fehler beim Speichern: ' + (data.message || 'Unbekannter Fehler'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating item:', error);
+                    alert('Fehler beim Speichern des Objekts.');
+                });
             });
         }
-    });
+    }
 
-    // Function to handle file input changes and update previews
-    function handleFileInputChange(input, formType) {
-        const previewContainer = formType === 'edit' 
-            ? document.getElementById('edit-image-preview-container') 
-            : document.getElementById('image-preview-container');
-            
-        if (!previewContainer) return;
+    // Function to fetch book information (for ISBN lookup)
+    function fetchBookInfo(context) {
+        const isbnField = document.getElementById(`${context}-isbn`);
+        const isbn = isbnField.value.trim();
         
-        // Clear existing previews
-        previewContainer.innerHTML = '';
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
         
-        // Create previews for each file
-        Array.from(input.files).forEach(file => {
-            updateImagePreview(file, formType);
+        const infoContainer = document.getElementById(`${context}-book-info-container`);
+        infoContainer.innerHTML = '<div style="padding: 10px; text-align: center;">Lade Buchinformationen...</div>';
+        
+        fetch('/fetch_book_info', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ isbn: isbn })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.book_info) {
+                const bookInfo = data.book_info;
+                
+                // Auto-fill form fields if they're empty
+                const nameField = document.getElementById(`${context}-name`);
+                const descField = document.getElementById(`${context}-description`);
+                
+                if (nameField && !nameField.value && bookInfo.title) {
+                    nameField.value = bookInfo.title;
+                }
+                
+                if (descField && !descField.value && bookInfo.description) {
+                    descField.value = bookInfo.description;
+                }
+                
+                // Display book information
+                let bookHtml = `
+                    <div class="book-info">
+                        <h4>${bookInfo.title || 'Unbekannt'}</h4>
+                        ${bookInfo.thumbnail ? `<img src="${bookInfo.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        <p><strong>Autor(en):</strong> ${bookInfo.authors ? bookInfo.authors.join(', ') : 'Unbekannt'}</p>
+                        <p><strong>Verlag:</strong> ${bookInfo.publisher || 'Unbekannt'}</p>
+                        <p><strong>Erscheinungsdatum:</strong> ${bookInfo.publishedDate || 'Unbekannt'}</p>
+                        <p><strong>Seiten:</strong> ${bookInfo.pageCount || 'Unbekannt'}</p>
+                        <p><strong>Kategorien:</strong> ${bookInfo.categories ? bookInfo.categories.join(', ') : 'Unbekannt'}</p>
+                `;
+                
+                if (bookInfo.description) {
+                    bookHtml += `
+                        <div class="book-description">
+                            <h5>Beschreibung:</h5>
+                            <p>${bookInfo.description}</p>
+                        </div>
+                    `;
+                }
+                
+                bookHtml += `
+                        <button type="button" class="import-book-button" onclick="importBookInfo('${context}')">
+                            Buchinformationen übernehmen
+                        </button>
+                    </div>
+                `;
+                
+                infoContainer.innerHTML = bookHtml;
+                
+                // Store book info for later use
+                window.currentBookInfo = bookInfo;
+            } else {
+                infoContainer.innerHTML = `
+                    <div style="padding: 10px; color: #dc3545; border: 1px solid #f5c6cb; background-color: #f8d7da; border-radius: 4px;">
+                        Keine Buchinformationen gefunden oder Fehler beim Abrufen der Daten.
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching book info:', error);
+            infoContainer.innerHTML = `
+                <div style="padding: 10px; color: #dc3545; border: 1px solid #f5c6cb; background-color: #f8d7da; border-radius: 4px;">
+                    Fehler beim Abrufen der Buchinformationen.
+                </div>
+            `;
         });
     }
     
+    function importBookInfo(context) {
+        if (!window.currentBookInfo) {
+            alert('Keine Buchinformationen zum Importieren verfügbar.');
+            return;
+        }
+        
+        const bookInfo = window.currentBookInfo;
+        
+        // Fill form fields
+        const nameField = document.getElementById(`${context}-name`);
+        const descField = document.getElementById(`${context}-description`);
+        
+        if (nameField && bookInfo.title) {
+            nameField.value = bookInfo.title;
+        }
+        
+        if (descField && bookInfo.description) {
+            descField.value = bookInfo.description;
+        }
+        
+        // Clear the book info display
+        const infoContainer = document.getElementById(`${context}-book-info-container`);
+        infoContainer.innerHTML = '<div style="padding: 10px; color: #28a745; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">Buchinformationen wurden übernommen!</div>';
+        
+        // Clear the timeout if it exists
+        if (window.clearBookInfoTimeout) {
+            clearTimeout(window.clearBookInfoTimeout);
+        }
+        
+        // Clear the success message after 3 seconds
+        window.clearBookInfoTimeout = setTimeout(() => {
+            infoContainer.innerHTML = '';
+        }, 3000);
+    }
 </script>
-
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        margin: 0;
-        padding: 0;
-    }
-
-    .container {
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        width: 80%;
-        max-width: 1200px;
-        margin: 20px auto;
-    }
-
-    h1, h2 {
-        text-align: center;
-    }
-
-    /* Filter styles */
-    .filter-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        justify-content: center;
-        margin-bottom: 20px;
-    }
-
-    .filter-group {
-        position: relative;
-        min-width: 200px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .filter-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .filter-toggle, .clear-filter {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 3px;
-        padding: 3px 8px;
-        cursor: pointer;
-    }
-
-    .clear-filter {
-        font-size: 0.8rem;
-        color: #6c757d;
-    }
-
-    .filter-dropdown {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        width: 100%;
-        max-height: 300px; /* Increased height */
-        overflow-y: auto;
-        background-color: white;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        z-index: 100;
-        padding: 8px;
-    }
-
-    .filter-options {
-        padding: 10px;
-    }
-
-    .filter-option {
-        margin-bottom: 5px;
-        display: flex;
-        align-items: center;
-    }
-
-    .filter-option input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        margin-right: 8px;
-        cursor: pointer;
-    }
-
-    .filter-option:hover {
-        background-color: #f5f5f5;
-    }
-
-    .filter-option label {
-        margin-left: 5px;
-        cursor: pointer;
-    }
-
-    .filter-option-group {
-        margin-bottom: 12px;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 8px;
-    }
-
-    .filter-group-header {
-        font-weight: bold;
-        margin-bottom: 5px;
-        color: #495057;
-        font-size: 0.9rem;
-    }
-
-    .selected-filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        min-height: 30px;
-    }
-
-    .filter-tag {
-        display: inline-flex;
-        align-items: center;
-        background-color: #e9ecef;
-        border-radius: 15px;
-        padding: 3px 10px;
-        font-size: 0.8rem;
-    }
-
-    .filter-tag-group {
-        color: #6c757d;
-        font-size: 0.8em;
-        font-style: italic;
-        margin-right: 2px;
-    }
-
-    .filter-tag-remove {
-        background: none;
-        border: none;
-        color: #6c757d;
-        margin-left: 5px;
-        cursor: pointer;
-        font-size: 1rem;
-        line-height: 1;
-    }
-
-    /* Item display styles */
-    .items-container {
-        display: flex;
-        overflow-x: auto; /* Change from hidden to auto */
-        gap: 20px;
-        padding: 20px 0;
-        scroll-snap-type: x mandatory;
-        position: relative; /* Added for better scroll positioning */
-        scroll-behavior: smooth; /* Added for smoother scrolling */
-    }
-
-    .item-card {
-        background-color: #fff;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        max-width: 300px;
-        flex-shrink: 0;
-        scroll-snap-align: center;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-
-    .item-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .item-card h3 {
-        margin-top: 0;
-    }
-
-    .item-card .description {
-        max-height: 100px;
-        overflow-y: auto;
-    }
-
-    .item-card .image-container {
-        position: relative;
-        max-width: 300px;
-        margin: 10px 0;
-    }
-
-    .item-card .item-image {
-        width: 100%;
-        height: auto;
-        max-height: 300px; /* Set a maximum height for the images */
-        display: none;
-        object-fit: cover;
-    }
-
-    .item-card .item-image:first-child {
-        display: block;
-    }
-
-    .clickable-card {
-        cursor: pointer;
-        position: relative;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .clickable-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0, 123, 255, 0.3);
-    }
-
-    .card-content {
-        cursor: pointer;
-        z-index: 1;
-        position: relative;
-    }
-
-    .prev-image-button, .next-image-button {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 0, 0, 0.5);
-        color: white;
-        border: none;
-        cursor: pointer;
-        padding: 5px;
-        border-radius: 5px;
-    }
-
-    .prev-image-button {
-        left: -30px;
-    }
-
-    .next-image-button {
-        right: -30px;
-    }
-
-    .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        margin-top: 10px;
-    }
-
-    .actions form, 
-    .actions a {
-        flex: 1 1 calc(33% - 5px);
-        min-width: fit-content;
-    }
-
-    .actions form button,
-    .actions a {
-        width: 100%;
-        font-size: 0.85rem;
-        padding: 8px 5px;
-        text-align: center;
-    }
-
-    button.ausleihen {
-flex: 1;
-        padding: 10px;
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-       }
-
-    button.ausleihen:hover {
-        background-color: #0056b3;
-    }
-
-    a.delete-button {
-        flex: 1;
-        padding: 10px;
-        background-color: #dc3545;
-        color: #fff;
-        text-align: center;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        text-decoration: none;
-    }
-
-    a.delete-button:hover {
-        background-color: #c82333;
-    }
-
-    .duplicate-button {
-        flex: 1;
-        padding: 10px;
-        background-color: #17a2b8;
-        color: white;
-        text-align: center;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        text-decoration: none;
-    }
-
-    .duplicate-button:hover {
-        background-color: #138496;
-    }
-
-    /* Form styles */
-    .form-group {
-        margin-bottom: 15px;
-    }
-
-    label {
-        display: block;
-        margin-bottom: 5px;
-    }
-
-    input[type="text"],
-    textarea,
-    input[type="file"],
-    input[type="date"] {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-
-    .flash {
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 5px;
-    }
-
-    .flash.success {
-        background-color: #d4edda;
-        color: #155724;
-    }
-
-    .flash.error {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-
-    /* Navigation and QR code scanning */
-    .navigation-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-        margin-top: 20px;
-    }
-
-    .navigation-buttons .prev-button,
-    .navigation-buttons .next-button {
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        cursor: pointer;
-        padding: 10px;
-        border-radius: 5px;
-    }
-
-    .navigation-buttons .prev-button:hover,
-    .navigation-buttons .next-button:hover {
-        background-color: #0056b3;
-    }
-
-    .qr-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin-bottom: 20px;
-    }
-
-    .scan-button {
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        margin-bottom: 10px;
-    }
-
-    .scan-button:hover {
-        background-color: #0056b3;
-    }
-
-    #qr-reader {
-        margin: 0 auto;
-        max-width: 100%;
-    }
-
-    /* Search styles */
-    .search-container {
-        display: flex;
-        gap: 5px;
-        margin-top: 5px;
-    }
-
-    #code-search {
-        flex: 1;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-
-    .search-button {
-        padding: 8px 12px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    .search-button:hover {
-        background-color: #0056b3;
-    }
-
-    .search-field {
-        min-width: 250px;
-    }
-
-    #code-search.searching {
-        background-color: #fff3cd;
-        transition: background-color 0.3s;
-        border: 2px solid #ffc107;
-        box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
-    }
-
-    /* Modal styles */
-    .item-modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.7);
-        overflow-y: auto;
-        animation: fadeIn 0.3s ease;
-    }
-
-    @keyframes fadeIn {
-        from {opacity: 0;}
-        to {opacity: 1;}
-    }
-
-    .modal-content {
-        position: relative;
-        background-color: #fefefe;
-        margin: 5% auto;
-        padding: 20px;
-        border-radius: 8px;
-        width: 80%;
-        max-width: 900px;
-        animation: slideIn 0.3s ease;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        overflow: hidden;
-    }
-
-    @keyframes slideIn {
-        from {transform: translateY(-20px); opacity: 0;}
-        to {transform: translateY(0); opacity: 1;}
-    }
-
-    .close-modal {
-        position: absolute;
-        top: 15px;
-        right: 20px;
-        color: #aaa;
-        font-size: 28px;
-        font-weight: bold;
-        cursor: pointer;
-        z-index: 10;
-    }
-
-    .close-modal:hover {
-        color: #000;
-    }
-
-    .modal-image-container {
-        text-align: center;
-        margin: 20px 0;
-        position: relative;
-        max-height: 500px;
-        overflow: hidden;
-    }
-
-    .modal-image {
-        max-width: 100%;
-        max-height: 450px;
-        border-radius: 5px;
-        object-fit: contain;
-    }
-
-    .modal-image-nav {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        padding: 15px;
-        background-color: rgba(0,0,0,0.5);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        font-size: 18px;
-        opacity: 0.8;
-        transition: opacity 0.3s;
-    }
-
-    .modal-image-nav:hover {
-        opacity: 1;
-        background-color: rgba(0,0,0,0.7);
-    }
-
-    .modal-prev-image {
-        left: 15px;
-    }
-
-    .modal-next-image {
-        right: 15px;
-    }
-
-    .modal-details {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-    }
-
-    .detail-group {
-        margin-bottom: 15px;
-    }
-
-    .detail-label {
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    .detail-value {
-        padding: 5px 0;
-    }
-
-    .modal-actions {
-        display: flex;
-        gap: 10px;
-        margin-top: 20px;
-        justify-content: flex-end;
-    }
-
-    .modal-actions .ausleihen,
-    .modal-actions .delete-button,
-    .modal-actions .qr-download-button {
-        padding: 10px 20px;
-    }
-
-    .full-width {
-        grid-column:  1 / -1;
-    }
-
-    /* Status indicators */
-    .borrower-badge {
-        background-color: #fff3cd;
-        color: #856404;
-        border-left: 4px solid #ffc107;
-        padding: 8px;
-        margin: 10px 0;
-        font-size: 0.85em;
-        border-radius: 4px;
-    }
-
-    .borrow-time {
-        font-size: 0.9em;
-        color: #6c757d;
-        font-style: italic;
-        display: block;
-        margin-top: 3px;
-    }
-
-    .borrower-info-panel {
-        margin: 15px 0;
-        padding: 15px;
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        border-radius: 4px;
-    }
-
-    .borrower-info-panel h4 {
-        color: #856404;
-        margin-top: 0;
-        margin-bottom: 10px;
-        font-size: 1.1em;
-    }
-
-    .borrower-name {
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-
-    .status-borrowed {
-        color: #dc3545;
-        font-weight: bold;
-    }
-
-    .disabled-button {
-        background-color: #6c757d;
-        cursor: not-allowed;
-        opacity: 0.65;
-    }
-
-    .highlight-item {
-        border: 3px solid gold !important;
-        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
-        position: relative;
-        z-index: 10;
-        animation: highlight-pulse 2s infinite;
-    }
-
-    .code-match {
-        border: 2px solid #17a2b8 !important;
-        box-shadow: 0 0 15px rgba(23, 162, 184, 0.5) !important;
-        position: relative;
-        z-index: 5;
-    }
-
-    .exact-code-match {
-        border: 3px solid #28a745 !important;
-        box-shadow: 0 0 20px rgba(40, 167, 69, 0.7) !important;
-        animation: highlight-pulse 2s infinite;
-        position: relative;
-        z-index: 11; /* Higher than regular highlight */
-    }
-
-    @keyframes highlight-pulse {
-        0% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
-        50% { box-shadow: 0 0 30px rgba(40, 167, 69, 1); transform: scale(1.03); }
-        100% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
-    }
-
-    /* Messages */
-    .error-message, .no-items-message {
-        padding: 20px;
-        text-align: center;
-        width: 100%;
-        color: #721c24;
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        border-radius: 5px;
-        margin: 20px 0;
-    }
-
-    .no-items-message {
-        color: #383d41;
-        background-color: #e2e3e5;
-        border-color: #d6d8db;
-    }
-
-    /* Admin-specific styles */
-    .upload-form {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        border: 1px solid #dee2e6;
-        margin-top: 30px;
-    }
-
-    .upload-form h2 {
-        color: #495057;
-        margin-top: 0;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #e9ecef;
-        padding-bottom: 10px;
-    }
-
-    .filter-inputs h3 {
-        font-size: 1rem;
-        margin: 15px 0 10px;
-        color: #495057;
-    }
-
-    .multi-filter {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 10px;
-        margin-bottom: 15px;
-    }
-
-    .form-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-    }
-
-    .form-row .form-group {
-        flex: 1 1 calc(50% - 15px);
-        min-width: 200px;
-    }
-
-    .form-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        margin-top: 20px;
-    }
-
-    .save-button, .cancel-button {
-        padding: 10px 20px;
-        border-radius: 5px;
-        border: none;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    .save-button {
-        background-color: #28a745;
-        color: white;
-    }
-
-    .save-button:hover {
-        background-color: #218838;
-    }
-
-    .cancel-button {
-        background-color: #6c757d;
-        color: white;
-    }
-
-    .cancel-button:hover {
-        background-color: #5a6268;
-    }
-
-    .edit-button {
-        flex: 1;
-        padding: 10px;
-        background-color: #ffc107;
-        color: #212529;
-        text-align: center;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        text-decoration: none;
-    }
-
-    .edit-button:hover {
-        background-color: #e0a800;
-    }
-
-    .add-new-btn {
-        margin-left: 10px;
-        background-color: #6c757d;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 5px 10px;
-        font-size: 0.8rem;
-        cursor: pointer;
-    }
-    
-    .add-new-btn:hover {
-        background-color: #5a6268;
-    }
-
-    .existing-images-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 15px;
-    }
-
-    .existing-image-item {
-        position: relative;
-        width: 100px;
-        height: 100px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .existing-image-item img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .existing-image-item .remove-image {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        background-color: rgba(220, 53, 69, 0.8);
-        color: white;
-        border: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        font-size: 12px;
-        line-height: 1;
-        text-align: center;
-        cursor: pointer;
-    }
-
-    /* Image preview styles */
-    .image-preview-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 10px;
-    }
-    
-    .preview-image-item {
-        position: relative;
-        width: 100px;
-        height: 120px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .preview-image-item img {
-        width: 100%;
-        height: 100px;
-        object-fit: contain;
-    }
-    
-    .preview-image-item .file-name {
-        font-size: 0.7rem;
-        padding: 2px 4px;
-        text-overflow: ellipsis;
-        overflow: hidden;
-        white-space: nowrap;
-        background-color: #f8f9fa;
-        border-top: 1px solid #dee2e6;
-    }
-    
-    .loading-image {
-        padding: 10px;
-        background-color: #f8f9fa;
-        border-radius: 4px;
-        color: #6c757d;
-        font-style: italic;
-    }
-    
-    /* Responsive styles */
-    @media (max-width: 768px) {
-        .form-row {
-            flex-direction: column;
-        }
-        
-        .modal-content {
-            width: 95%;
-            padding: 15px;
-        }
-        
-        .actions {
-            flex-direction: column;
-        }
-        
-        .items-container {
-            padding: 10px 0;
-        }
-        
-        .modal-details {
-            grid-template-columns: 1fr;
-        }
-        
-        .item-card {
-            max-width: 250px;
-        }
-        
-        .filter-container {
-            flex-direction: column;
-        }
-        
-        .filter-group {
-            min-width: 150px;
-            width: 100%;
-        }
-    }
-    
-    @media (max-width: 480px) {
-        .container {
-            width: 98%;
-            padding: 10px;
-        }
-        
-        .item-card {
-            min-width: 200px;
-            padding: 15px;
-        }
-        
-        .actions {
-            flex-direction: column;
-        }
-        
-        .modal-details {
-            grid-template-columns: 1fr;
-        }
-        
-        .filter-container {
-            flex-direction: column;
-        }
-        
-        .filter-group {
-            width: 100%;
-        }
-    }
-</style>
 {% endblock %}

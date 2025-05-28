@@ -304,6 +304,24 @@ def home_admin():
     return render_template('main_admin.html', username=session['username'])
 
 
+@app.route('/upload_admin')
+def upload_admin():
+    """
+    Admin upload page route.
+    Only accessible by users with admin privileges.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    return render_template('upload_admin.html', username=session['username'])
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """
@@ -567,13 +585,16 @@ def upload_item():
     # Get duplicate_images if duplicating
     duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
     
+    # Get book cover image if downloaded
+    book_cover_image = request.form.get('book_cover_image')
+    
     # Validation
     if not name or not ort or not beschreibung:
         flash('Bitte füllen Sie alle erforderlichen Felder aus', 'error')
         return redirect(url_for('home_admin'))
 
-    # Only check for images if not duplicating and no duplicate images provided
-    if not is_duplicating and not images and not duplicate_images:
+    # Only check for images if not duplicating and no duplicate images provided and no book cover
+    if not is_duplicating and not images and not duplicate_images and not book_cover_image:
         flash('Bitte laden Sie mindestens ein Bild hoch', 'error')
         return redirect(url_for('home_admin'))
 
@@ -598,6 +619,15 @@ def upload_item():
     # Add the duplicate_images to the list
     if is_duplicating and duplicate_images:
         image_filenames.extend(duplicate_images)
+    
+    # Add book cover image if downloaded
+    if book_cover_image:
+        # Verify the book cover image file exists
+        book_cover_path = os.path.join(app.config['UPLOAD_FOLDER'], book_cover_image)
+        if os.path.exists(book_cover_path):
+            image_filenames.append(book_cover_image)
+        else:
+            print(f"Warning: Book cover image {book_cover_image} not found in uploads folder")
 
     # If location is not in the predefined list, maybe add it (depending on policy)
     # For now, we allow new locations to be created when items are added
@@ -1716,6 +1746,56 @@ def fetch_book_info(isbn):
         print(f"Error fetching book data: {e}")
         return jsonify({"error": f"Failed to fetch book information: {str(e)}"}), 500
 
+@app.route('/download_book_cover', methods=['POST'])
+def download_book_cover():
+    """
+    API endpoint to download and save a book cover image from URL
+    
+    Returns:
+        dict: Success status and filename or error message
+    """
+    if 'username' not in session:
+        return jsonify({"error": "Not authorized"}), 403
+    if not us.check_admin(session['username']):
+        return jsonify({"error": "Admin privileges required"}), 403
+    
+    try:
+        data = request.get_json()
+        image_url = data.get('url')
+        
+        if not image_url:
+            return jsonify({"error": "No image URL provided"}), 400
+        
+        # Download the image
+        response = requests.get(image_url, stream=True, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({"error": f"Failed to download image: Status {response.status_code}"}), 400
+        
+        # Generate a unique filename
+        import hashlib
+        import uuid
+        hash_object = hashlib.md5(image_url.encode())
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}.jpg"
+        
+        # Save the image to uploads folder
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        with open(filepath, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "message": "Image downloaded successfully"
+        })
+        
+    except Exception as e:
+        print(f"Error downloading book cover: {e}")
+        return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
+
 @app.route('/proxy_image')
 def proxy_image():
     """
@@ -1963,3 +2043,23 @@ def manage_locations():
     
     return render_template('manage_locations.html', 
                           location_values=location_values)
+
+@app.route('/check_code_unique/<code>')
+def check_code_unique(code):
+    """
+    API endpoint to check if a code is unique
+    
+    Args:
+        code (str): Code to check
+        exclude_id (str, optional): ID of item to exclude from check (for edit operations)
+        
+    Returns:
+        dict: JSON response with is_unique boolean
+    """
+    exclude_id = request.args.get('exclude_id')
+    is_unique = it.is_code_unique(code, exclude_id)
+    
+    return jsonify({
+        'is_unique': is_unique,
+        'code': code
+    })

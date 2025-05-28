@@ -1,0 +1,1220 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+{% extends "base.html" %}
+
+{% block title %}Artikel hochladen - Inventarsystem{% endblock %}
+
+{% block content %}
+<style>
+    /* Book information display styles */
+    .book-info-container {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        min-height: 40px;
+    }
+
+    .book-info {
+        padding: 15px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .book-info h4 {
+        color: #333;
+        margin: 0 0 10px 0;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+
+    .book-info p {
+        margin: 5px 0;
+        color: #666;
+        line-height: 1.4;
+    }
+
+    .book-thumbnail {
+        max-width: 120px;
+        max-height: 180px;
+        float: right;
+        margin: 0 0 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .book-description {
+        clear: both;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
+
+    .book-description h5 {
+        color: #333;
+        margin: 0 0 8px 0;
+        font-size: 1em;
+        font-weight: bold;
+    }
+
+    .book-description p {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 3px;
+        font-size: 0.9em;
+        line-height: 1.5;
+    }
+
+    /* Import button styling */
+    .import-book-button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 15px;
+        transition: background-color 0.2s ease;
+        display: block;
+        width: 100%;
+    }
+
+    .import-book-button:hover {
+        background-color: #218838;
+    }
+
+    .import-book-button:active {
+        background-color: #1e7e34;
+    }
+
+    /* ISBN input group styling */
+    .isbn-input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .isbn-input-group input {
+        flex: 1;
+    }
+
+    .fetch-isbn-button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s ease;
+    }
+
+    .fetch-isbn-button:hover {
+        background-color: #0056b3;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        color: #007bff;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    .loading-spinner::after {
+        content: "...";
+        animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { 
+            color: rgba(0,0,0,0);
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        40% { 
+            color: #007bff;
+            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        }
+        60% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 rgba(0,0,0,0);
+        }
+        80%, 100% { 
+            text-shadow: .25em 0 0 #007bff, .5em 0 0 #007bff;
+        }
+    }
+
+    /* Error message styling */
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    /* Success message styling */
+    .import-success-message {
+        color: #155724;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        padding: 12px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: bold;
+        animation: fadeInOut 3s ease;
+    }
+
+    @keyframes fadeInOut {
+        0% { opacity: 0; transform: translateY(-10px); }
+        10%, 90% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Code validation styling */
+    .code-checking {
+        background-color: #fff3cd !important;
+        border-color: #ffc107 !important;
+        position: relative;
+    }
+
+    .code-checking::after {
+        content: "Prüfe...";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8em;
+        color: #856404;
+        font-style: italic;
+    }
+
+    .code-valid {
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+        color: #155724 !important;
+    }
+
+    .code-invalid {
+        background-color: #f8d7da !important;
+        border-color: #dc3545 !important;
+        color: #721c24 !important;
+    }
+
+    /* Duplicate code popup styling */
+    .popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: overlayFadeIn 0.3s ease;
+    }
+
+    @keyframes overlayFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .duplicate-code-popup {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        max-width: 500px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+        animation: popupSlideIn 0.3s ease;
+    }
+
+    @keyframes popupSlideIn {
+        from { 
+            opacity: 0; 
+            transform: scale(0.8) translateY(-20px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: scale(1) translateY(0); 
+        }
+    }
+
+    .popup-content h3 {
+        color: #dc3545;
+        margin: 0 0 15px 0;
+        font-size: 1.3em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .popup-content h3::before {
+        content: "⚠️";
+        font-size: 1.2em;
+    }
+
+    .popup-content p {
+        color: #333;
+        margin: 15px 0;
+        line-height: 1.5;
+        font-size: 1em;
+    }
+
+    .popup-content .duplicate-code {
+        font-weight: bold;
+        color: #dc3545;
+        background-color: #f8d7da;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-family: monospace;
+        font-size: 1.1em;
+    }
+
+    .popup-close-button {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .popup-close-button:hover {
+        background-color: #5a6268;
+    }
+
+    .popup-close-x {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #999;
+        cursor: pointer;
+        padding: 5px;
+        line-height: 1;
+    }
+
+    .popup-close-x:hover {
+        color: #333;
+    }
+
+    /* Upload form styles */
+    .upload-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .upload-form h1 {
+        color: #333;
+        margin-bottom: 30px;
+        text-align: center;
+        font-size: 2em;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        height: 100px;
+        resize: vertical;
+    }
+
+    .filter-inputs {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+
+    .filter-inputs h3 {
+        color: #333;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+    }
+
+    .multi-filter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .filter-dropdown-select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    .add-new-btn {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-top: 5px;
+        font-size: 12px;
+    }
+
+    .add-new-btn:hover {
+        background-color: #0056b3;
+    }
+
+    .image-preview-container {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .image-preview {
+        position: relative;
+        display: inline-block;
+    }
+
+    .image-preview img {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .remove-image {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Book cover preview styles */
+    .book-cover-preview {
+        margin-top: 10px;
+        padding: 10px;
+        border: 2px dashed #007bff;
+        border-radius: 5px;
+        background-color: #f8f9ff;
+    }
+
+    .book-cover-preview .preview-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .book-cover-preview img {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .image-loading {
+        padding: 10px;
+        text-align: center;
+        color: #666;
+        font-style: italic;
+    }
+
+    .submit-button {
+        background-color: #28a745;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 5px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .submit-button:hover {
+        background-color: #218838;
+    }
+
+    .submit-button:active {
+        background-color: #1e7e34;
+    }
+
+    /* Navigation button */
+    .nav-back-button {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        text-decoration: none;
+        display: inline-block;
+        margin-bottom: 20px;
+        transition: background-color 0.2s ease;
+    }
+
+    .nav-back-button:hover {
+        background-color: #5a6268;
+        color: white;
+        text-decoration: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .upload-container {
+            margin: 10px;
+            padding: 15px;
+        }
+
+        .multi-filter {
+            grid-template-columns: 1fr;
+        }
+
+        .isbn-input-group {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fetch-isbn-button {
+            width: 100%;
+        }
+
+        .book-thumbnail {
+            float: none;
+            display: block;
+            margin: 10px auto;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .upload-form h1 {
+            font-size: 1.5em;
+        }
+
+        .submit-button {
+            padding: 12px 20px;
+            font-size: 16px;
+        }
+    }
+</style>
+
+<div class="upload-container">
+    <a href="{{ url_for('home_admin') }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
+    
+    <div class="upload-form">
+        <h1>Artikel hochladen</h1>
+        <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="ort">Ort:</label>
+                <select id="ort" name="ort" required>
+                    <option value="">-- Bitte Ort auswählen --</option>
+                    <!-- Options will be loaded by JavaScript -->
+                </select>
+                <button type="button" class="add-new-btn" id="add-new-location-btn">
+                    Neuen Ort hinzufügen
+                </button>
+                <div id="new-location-container" style="display: none; margin-top: 10px;">
+                    <input type="text" id="new-location-input" placeholder="Neuen Ort eingeben">
+                    <button type="button" onclick="addNewLocation()">Hinzufügen</button>
+                    <button type="button" onclick="cancelAddLocation()">Abbrechen</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="beschreibung">Beschreibung:</label>
+                <textarea id="beschreibung" name="beschreibung" required></textarea>
+            </div>
+            
+            <!-- Updated filter inputs with dropdowns for Filter 1 and Filter 2 -->
+            <div class="filter-inputs">
+                <h3>Unterrichtsfach:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter1-1">Wert 1:</label>
+                        <select id="filter1-1" name="filter" class="filter-dropdown-select" required>
+                            <option value="">-- Bitte auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-2">Wert 2:</label>
+                        <select id="filter1-2" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-3">Wert 3:</label>
+                        <select id="filter1-3" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter1-4">Wert 4:</label>
+                        <select id="filter1-4" name="filter" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Jahrgangsstufe:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter2-1">Wert 1:</label>
+                        <select id="filter2-1" name="filter2" class="filter-dropdown-select" required>
+                            <option value="">-- Bitte auswählen --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-2">Wert 2:</label>
+                        <select id="filter2-2" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-3">Wert 3:</label>
+                        <select id="filter2-3" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter2-4">Wert 4:</label>
+                        <select id="filter2-4" name="filter2" class="filter-dropdown-select">
+                            <option value="">-- Optional --</option>
+                            <!-- Options will be loaded by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+                
+                <h3>Thema:</h3>
+                <div class="multi-filter">
+                    <div class="form-group">
+                        <label for="filter3-1">Wert 1:</label>
+                        <input type="text" id="filter3-1" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-2">Wert 2:</label>
+                        <input type="text" id="filter3-2" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-3">Wert 3:</label>
+                        <input type="text" id="filter3-3" name="filter3">
+                    </div>
+                    <div class="form-group">
+                        <label for="filter3-4">Wert 4:</label>
+                        <input type="text" id="filter3-4" name="filter3">
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="anschaffungsjahr">Anschaffungsjahr</label>
+                <input type="date" id="anschaffungsjahr" name="anschaffungsjahr">
+            </div>
+            <div class="form-group">
+                <label for="anschaffungskosten">Anschaffungskosten</label>
+                <input id="anschaffungskosten" name="anschaffungskosten">
+            </div>
+            <div class="form-group">
+                <label for="code_4">Code</label>
+                <input id="code_4" name="code_4" required>
+            </div>
+            <div class="form-group">
+                <label for="images">Bilder:</label>
+                <input type="file" id="images" name="images" accept="image/*" multiple>
+                <!-- Add image preview area -->
+                <div class="image-preview-container" id="image-preview-container"></div>
+            </div>
+            
+            <!-- Add ISBN and exemplar count fields to upload form -->
+            <div class="form-group">
+                <label for="isbn">ISBN:</label>
+                <div class="isbn-input-group">
+                    <input type="text" id="isbn" name="isbn" placeholder="ISBN eingeben...">
+                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Buchinformationen abrufen</button>
+                </div>
+                <div id="book-info-container" class="book-info-container"></div>
+            </div>
+            
+            <button type="submit" class="submit-button">Artikel hochladen</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Global variable to store fetched book data
+    let currentBookData = null;
+
+    // Load predefined filter values for dropdowns
+    function loadPredefinedFilterValues(filterNumber) {
+        fetch(`/get_predefined_filter_values/${filterNumber}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const filterSelects = [
+                    document.getElementById(`filter${filterNumber}-1`),
+                    document.getElementById(`filter${filterNumber}-2`),
+                    document.getElementById(`filter${filterNumber}-3`),
+                    document.getElementById(`filter${filterNumber}-4`)
+                ];
+                
+                filterSelects.forEach(select => {
+                    if (select) {
+                        // Clear existing options except the first one
+                        while (select.children.length > 1) {
+                            select.removeChild(select.lastChild);
+                        }
+                        
+                        // Add new options - data.values contains the array
+                        data.values.forEach(value => {
+                            const option = document.createElement('option');
+                            option.value = value;
+                            option.textContent = value;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error(`Error loading predefined filter ${filterNumber} values:`, error);
+            });
+    }
+
+    // Load location options
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('ort');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        ortSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
+    // Function to add new location
+    function addNewLocation() {
+        const newLocationInput = document.getElementById('new-location-input');
+        const newLocation = newLocationInput.value.trim();
+        
+        if (!newLocation) {
+            alert('Bitte geben Sie einen Ort ein.');
+            return;
+        }
+        
+        // Add to dropdown
+        const ortSelect = document.getElementById('ort');
+        const option = document.createElement('option');
+        option.value = newLocation;
+        option.textContent = newLocation;
+        option.selected = true;
+        ortSelect.appendChild(option);
+        
+        // Hide the input container
+        document.getElementById('new-location-container').style.display = 'none';
+        newLocationInput.value = '';
+    }
+
+    // Function to cancel adding new location
+    function cancelAddLocation() {
+        document.getElementById('new-location-container').style.display = 'none';
+        document.getElementById('new-location-input').value = '';
+    }
+
+    // Function to fetch book information from ISBN
+    function fetchBookInfo(formType) {
+        const isbnField = document.getElementById('isbn');
+        const infoContainer = document.getElementById('book-info-container');
+        
+        if (!isbnField || !infoContainer) {
+            alert('Fehler: Erforderliche Formularelemente nicht gefunden.');
+            return;
+        }
+        
+        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        
+        if (!isbn) {
+            alert('Bitte geben Sie eine ISBN ein.');
+            return;
+        }
+        
+        // Show loading indicator
+        infoContainer.innerHTML = '<div class="loading-spinner">Informationen werden abgerufen...</div>';
+        
+        // Make API request to fetch book data
+        fetch(`/fetch_book_info/${isbn}`)
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Buch nicht gefunden. Überprüfen Sie die ISBN.');
+                    } else {
+                        throw new Error('Fehler beim Abrufen der Buchinformationen');
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    infoContainer.innerHTML = `<div class="error-message">${data.error}</div>`;
+                    return;
+                }
+                
+                // Store book data globally for import functionality
+                currentBookData = data;
+                
+                // Display book information with import button
+                infoContainer.innerHTML = `
+                    <div class="book-info">
+                        <h4>${data.title}</h4>
+                        ${data.authors ? `<p><strong>Autor(en):</strong> ${data.authors}</p>` : ''}
+                        ${data.publisher ? `<p><strong>Verlag:</strong> ${data.publisher}</p>` : ''}
+                        ${data.publishedDate ? `<p><strong>Erscheinungsdatum:</strong> ${data.publishedDate}</p>` : ''}
+                        ${data.pageCount ? `<p><strong>Seitenanzahl:</strong> ${data.pageCount}</p>` : ''}
+                        ${data.price ? `<p><strong>Preis:</strong> ${data.price}</p>` : ''}
+                        ${data.thumbnail ? `<img src="${data.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
+                        ${data.description ? `
+                            <div class="book-description">
+                                <h5>Beschreibung:</h5>
+                                <p>${data.description}</p>
+                            </div>
+                        ` : ''}
+                        <button type="button" class="import-book-button" onclick="importBookInfo('${formType}')">
+                            Buchdaten in Formular übernehmen
+                        </button>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                infoContainer.innerHTML = `<div class="error-message">${error.message}</div>`;
+                currentBookData = null;
+            });
+    }
+
+    // Function to import book information into form
+    function importBookInfo(formType) {
+        if (!currentBookData) {
+            alert('Keine Buchdaten verfügbar zum Import.');
+            return;
+        }
+        
+        // Get form fields
+        const nameField = document.getElementById('name');
+        const descriptionField = document.getElementById('beschreibung');
+        
+        if (!nameField || !descriptionField) {
+            alert('Fehler: Formularfelder nicht gefunden.');
+            return;
+        }
+        
+        // Generate book title
+        let bookTitle = currentBookData.title || '';
+        if (currentBookData.authors && currentBookData.authors !== 'Unknown Author') {
+            bookTitle += ` - ${currentBookData.authors}`;
+        }
+        
+        // Generate description
+        let description = '';
+        if (currentBookData.description && currentBookData.description !== 'No description available') {
+            description = currentBookData.description;
+        } else {
+            // Fallback description with available info
+            description = `Buch: ${currentBookData.title}`;
+            if (currentBookData.authors && currentBookData.authors !== 'Unknown Author') {
+                description += `\nAutor(en): ${currentBookData.authors}`;
+            }
+            if (currentBookData.publisher && currentBookData.publisher !== 'Unknown Publisher') {
+                description += `\nVerlag: ${currentBookData.publisher}`;
+            }
+            if (currentBookData.publishedDate && currentBookData.publishedDate !== 'Unknown Date') {
+                description += `\nErscheinungsdatum: ${currentBookData.publishedDate}`;
+            }
+            if (currentBookData.pageCount && currentBookData.pageCount !== 'Unknown') {
+                description += `\nSeiten: ${currentBookData.pageCount}`;
+            }
+        }
+        
+        // Import the data into form fields
+        nameField.value = bookTitle;
+        descriptionField.value = description;
+        
+        // Download and import book cover image if available
+        if (currentBookData.thumbnail) {
+            downloadBookCover(currentBookData.thumbnail);
+        }
+        
+        // Show success message
+        const infoContainer = document.getElementById('book-info-container');
+        const successMessage = document.createElement('div');
+        successMessage.className = 'import-success-message';
+        successMessage.textContent = 'Buchdaten erfolgreich in das Formular übernommen!';
+        infoContainer.appendChild(successMessage);
+        
+        // Remove success message after 3 seconds
+        setTimeout(() => {
+            if (successMessage.parentNode) {
+                successMessage.parentNode.removeChild(successMessage);
+            }
+        }, 3000);
+    }
+
+    // Function to download book cover image
+    function downloadBookCover(imageUrl) {
+        if (!imageUrl) {
+            console.log('No image URL provided');
+            return;
+        }
+        
+        // Show loading indicator for image download
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        if (imagePreviewContainer) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'image-loading';
+            loadingDiv.innerHTML = '<div class="loading-spinner">Buchcover wird heruntergeladen...</div>';
+            imagePreviewContainer.appendChild(loadingDiv);
+        }
+        
+        // Download the image via backend
+        fetch('/download_book_cover', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: imageUrl })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove loading indicator
+            const loadingDiv = imagePreviewContainer?.querySelector('.image-loading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            
+            if (data.success) {
+                // Create a preview of the downloaded image
+                const imagePreview = document.createElement('div');
+                imagePreview.className = 'book-cover-preview';
+                imagePreview.innerHTML = `
+                    <div class="preview-item">
+                        <img src="{{ url_for('uploaded_file', filename='') }}${data.filename}" 
+                             alt="Buchcover" style="max-width: 100px; max-height: 150px; border: 1px solid #ddd; border-radius: 3px;">
+                        <p style="font-size: 0.8em; color: #666; margin: 5px 0;">Buchcover automatisch heruntergeladen</p>
+                        <input type="hidden" name="book_cover_image" value="${data.filename}">
+                        <button type="button" onclick="removeBookCover(this)" 
+                                style="background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 0.8em;">
+                            Entfernen
+                        </button>
+                    </div>
+                `;
+                
+                if (imagePreviewContainer) {
+                    imagePreviewContainer.appendChild(imagePreview);
+                }
+                
+                console.log('Book cover downloaded successfully:', data.filename);
+            } else {
+                console.error('Failed to download book cover:', data.error);
+                // Show error message to user
+                if (imagePreviewContainer) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-message';
+                    errorDiv.textContent = 'Fehler beim Herunterladen des Buchcovers: ' + data.error;
+                    errorDiv.style.fontSize = '0.8em';
+                    errorDiv.style.padding = '5px';
+                    errorDiv.style.marginTop = '5px';
+                    imagePreviewContainer.appendChild(errorDiv);
+                    
+                    // Remove error message after 5 seconds
+                    setTimeout(() => errorDiv.remove(), 5000);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error downloading book cover:', error);
+            // Remove loading indicator
+            const loadingDiv = imagePreviewContainer?.querySelector('.image-loading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            
+            // Show error message
+            if (imagePreviewContainer) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = 'Netzwerkfehler beim Herunterladen des Buchcovers';
+                errorDiv.style.fontSize = '0.8em';
+                errorDiv.style.padding = '5px';
+                errorDiv.style.marginTop = '5px';
+                imagePreviewContainer.appendChild(errorDiv);
+                
+                // Remove error message after 5 seconds
+                setTimeout(() => errorDiv.remove(), 5000);
+            }
+        });
+    }
+    
+    // Function to remove downloaded book cover
+    function removeBookCover(button) {
+        const previewItem = button.closest('.preview-item');
+        if (previewItem) {
+            previewItem.remove();
+        }
+    }
+
+    // Code validation functions
+    function checkCodeUnique(code, excludeId, callback) {
+        if (!code || code.trim() === '') {
+            callback(true);
+            return;
+        }
+        
+        const url = excludeId ? `/check_code_unique/${encodeURIComponent(code)}?exclude_id=${excludeId}` : `/check_code_unique/${encodeURIComponent(code)}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                callback(data.is_unique);
+            })
+            .catch(error => {
+                console.error('Error checking code uniqueness:', error);
+                callback(true); // Assume unique if there's an error
+            });
+    }
+
+    function showDuplicateCodeWarning(code) {
+        // Remove any existing popup
+        const existingPopup = document.querySelector('.popup-overlay');
+        if (existingPopup) {
+            existingPopup.remove();
+        }
+        
+        // Create popup overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'popup-overlay';
+        
+        // Create popup content
+        overlay.innerHTML = `
+            <div class="duplicate-code-popup">
+                <button class="popup-close-x" onclick="this.closest('.popup-overlay').remove()">×</button>
+                <div class="popup-content">
+                    <h3>Code bereits vorhanden</h3>
+                    <p>Der Code <span class="duplicate-code">${code}</span> wird bereits von einem anderen Artikel verwendet.</p>
+                    <p>Bitte wählen Sie einen anderen Code oder lassen Sie das Feld leer, um automatisch einen Code zu generieren.</p>
+                </div>
+                <button class="popup-close-button" onclick="this.closest('.popup-overlay').remove()">Verstanden</button>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.remove();
+            }
+        }, 10000);
+    }
+
+    function validateCodeField(input, excludeId = null) {
+        const code = input.value.trim();
+        
+        if (!code) {
+            // Clear any existing validation styling
+            input.classList.remove('code-invalid', 'code-valid');
+            return;
+        }
+        
+        // Show loading state
+        input.classList.add('code-checking');
+        
+        checkCodeUnique(code, excludeId, (isUnique) => {
+            input.classList.remove('code-checking');
+            
+            if (isUnique) {
+                input.classList.remove('code-invalid');
+                input.classList.add('code-valid');
+            } else {
+                input.classList.remove('code-valid');
+                input.classList.add('code-invalid');
+                showDuplicateCodeWarning(code);
+            }
+        });
+    }
+
+    // Image preview functionality
+    function setupImagePreview() {
+        const imageInput = document.getElementById('images');
+        const previewContainer = document.getElementById('image-preview-container');
+        
+        if (imageInput && previewContainer) {
+            imageInput.addEventListener('change', function(e) {
+                previewContainer.innerHTML = '';
+                
+                const files = e.target.files;
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const preview = document.createElement('div');
+                            preview.className = 'image-preview';
+                            preview.innerHTML = `
+                                <img src="${e.target.result}" alt="Preview">
+                                <button type="button" class="remove-image" onclick="removeImagePreview(this, ${i})">×</button>
+                            `;
+                            previewContainer.appendChild(preview);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+            });
+        }
+    }
+
+    function removeImagePreview(button, index) {
+        const preview = button.closest('.image-preview');
+        if (preview) {
+            preview.remove();
+        }
+        
+        // Remove the file from the input
+        const imageInput = document.getElementById('images');
+        if (imageInput) {
+            const dt = new DataTransfer();
+            const files = imageInput.files;
+            
+            for (let i = 0; i < files.length; i++) {
+                if (i !== index) {
+                    dt.items.add(files[i]);
+                }
+            }
+            
+            imageInput.files = dt.files;
+        }
+    }
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load predefined filter values for dropdowns
+        loadPredefinedFilterValues(1);
+        loadPredefinedFilterValues(2);
+        
+        // Load location options
+        loadLocationOptions();
+        
+        // Setup image preview
+        setupImagePreview();
+        
+        // Setup code validation
+        const codeField = document.getElementById('code_4');
+        if (codeField) {
+            codeField.addEventListener('blur', function() {
+                validateCodeField(this);
+            });
+        }
+        
+        // Setup add new location button
+        const addLocationBtn = document.getElementById('add-new-location-btn');
+        if (addLocationBtn) {
+            addLocationBtn.addEventListener('click', function() {
+                const container = document.getElementById('new-location-container');
+                if (container) {
+                    container.style.display = container.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
