@@ -309,6 +309,7 @@ def upload_admin():
     """
     Admin upload page route.
     Only accessible by users with admin privileges.
+    Supports duplication by passing duplicate_from parameter.
     
     Returns:
         flask.Response: Rendered template or redirect
@@ -319,7 +320,44 @@ def upload_admin():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    return render_template('upload_admin.html', username=session['username'])
+    
+    # Check if this is a duplication request
+    duplicate_from = request.args.get('duplicate_from')
+    duplicate_data = None
+    
+    if duplicate_from:
+        try:
+            original_item = it.get_item(duplicate_from)
+            if original_item:
+                duplicate_data = {
+                    'name': original_item.get('Name', ''),
+                    'description': original_item.get('Beschreibung', ''),
+                    'location': original_item.get('Ort', ''),
+                    'room': original_item.get('Raum', ''),
+                    'category': original_item.get('Kategorie', ''),
+                    'year': original_item.get('Anschaffungsjahr', ''),
+                    'cost': original_item.get('Anschaffungskosten', ''),
+                    'filter1': original_item.get('Filter1', ''),
+                    'filter2': original_item.get('Filter2', ''),
+                    'filter3': original_item.get('Filter3', ''),
+                    'images': original_item.get('Images', []),
+                    'original_id': duplicate_from
+                }
+                # Copy all filter fields (Filter1_1 through Filter3_5)
+                for i in range(1, 4):  # Filter1, Filter2, Filter3
+                    for j in range(1, 6):  # _1 through _5
+                        filter_key = f'Filter{i}_{j}'
+                        if filter_key in original_item:
+                            duplicate_data[f'filter{i}_{j}'] = original_item[filter_key]
+                
+                flash('Element wird dupliziert. Bitte überprüfen Sie die Daten und passen Sie sie bei Bedarf an.', 'info')
+            else:
+                flash('Ursprungs-Element für Duplizierung nicht gefunden.', 'error')
+        except Exception as e:
+            print(f"Error loading item for duplication: {e}")
+            flash('Fehler beim Laden der Duplizierungsdaten.', 'error')
+    
+    return render_template('upload_admin.html', username=session['username'], duplicate_data=duplicate_data)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -652,6 +690,59 @@ def upload_item():
         # Handle case where item couldn't be retrieved
         flash('QR-Code konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.', 'warning')
         return redirect(url_for('home_admin'))
+
+
+@app.route('/duplicate_item', methods=['POST'])
+def duplicate_item():
+    """
+    Route for duplicating an existing item.
+    Returns JSON response with success status.
+    
+    Returns:
+        flask.Response: JSON response with success status and data
+    """
+    try:
+        # Check authentication
+        if 'username' not in session:
+            return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
+        
+        # Check if user is admin
+        username = session['username']
+        if not us.check_admin(username):
+            return jsonify({'success': False, 'message': 'Keine Administratorrechte'}), 403
+        
+        # Get original item ID
+        original_item_id = request.form.get('original_item_id')
+        if not original_item_id:
+            return jsonify({'success': False, 'message': 'Ursprungs-Element-ID fehlt'}), 400
+        
+        # Fetch original item data
+        original_item = it.get_item(original_item_id)
+        if not original_item:
+            return jsonify({'success': False, 'message': 'Ursprungs-Element nicht gefunden'}), 404
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Duplication data prepared successfully',
+            'item_data': {
+                'name': original_item.get('Name', ''),
+                'description': original_item.get('Beschreibung', ''),
+                'location': original_item.get('Ort', ''),
+                'room': original_item.get('Raum', ''),
+                'category': original_item.get('Kategorie', ''),
+                'year': original_item.get('Anschaffungsjahr', ''),
+                'cost': original_item.get('Anschaffungskosten', ''),
+                'filter1': original_item.get('Filter1', ''),
+                'filter2': original_item.get('Filter2', ''),
+                'filter3': original_item.get('Filter3', ''),
+                'images': original_item.get('Images', [])
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error in duplicate_item: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Serverfehler beim Duplizieren'}), 500
 
 
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
@@ -1794,6 +1885,7 @@ def download_book_cover():
         
     except Exception as e:
         print(f"Error downloading book cover: {e}")
+       
         return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
 
 @app.route('/proxy_image')

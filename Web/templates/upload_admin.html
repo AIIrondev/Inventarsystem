@@ -1215,6 +1215,126 @@
                 }
             });
         }
+        
+        // Handle duplication data if available
+        if (typeof prefillFormWithDuplicateData === 'function') {
+            setTimeout(() => {
+                prefillFormWithDuplicateData();
+            }, 500); // Wait for all dropdowns to load
+        }
     });
+
+    // Handle duplication data if available
+    {% if duplicate_data %}
+    const duplicateData = {{ duplicate_data | tojson }};
+    
+    // Function to prefill form with duplicate data
+    function prefillFormWithDuplicateData() {
+        if (!duplicateData) return;
+        
+        // Fill basic fields
+        const nameField = document.getElementById('name');
+        if (nameField && duplicateData.name) nameField.value = duplicateData.name;
+        
+        const descField = document.getElementById('beschreibung');
+        if (descField && duplicateData.description) descField.value = duplicateData.description;
+        
+        const yearField = document.getElementById('anschaffungsjahr');
+        if (yearField && duplicateData.year) yearField.value = duplicateData.year;
+        
+        const costField = document.getElementById('anschaffungskosten');
+        if (costField && duplicateData.cost) costField.value = duplicateData.cost;
+        
+        // Fill location dropdown
+        const locationField = document.getElementById('ort');
+        if (locationField && duplicateData.location) {
+            // Wait for locations to load, then set value
+            setTimeout(() => {
+                locationField.value = duplicateData.location;
+            }, 100);
+        }
+        
+        // Fill filter dropdowns
+        for (let i = 1; i <= 3; i++) {
+            for (let j = 1; j <= 5; j++) {
+                const filterKey = `filter${i}_${j}`;
+                const filterField = document.getElementById(`filter${i}-${j}`);
+                if (filterField && duplicateData[filterKey]) {
+                    setTimeout(() => {
+                        filterField.value = duplicateData[filterKey];
+                    }, 200); // Wait for filter options to load
+                }
+            }
+        }
+        
+        // Handle images - add hidden inputs for duplicate images
+        if (duplicateData.images && duplicateData.images.length > 0) {
+            const form = document.querySelector('form[action*="upload_item"]');
+            if (form) {
+                // Add hidden field to indicate duplication
+                const isDuplicatingField = document.createElement('input');
+                isDuplicatingField.type = 'hidden';
+                isDuplicatingField.name = 'is_duplicating';
+                isDuplicatingField.value = 'true';
+                form.appendChild(isDuplicatingField);
+                
+                // Add each image as a duplicate image
+                duplicateData.images.forEach(imageName => {
+                    const imageField = document.createElement('input');
+                    imageField.type = 'hidden';
+                    imageField.name = 'duplicate_images';
+                    imageField.value = imageName;
+                    form.appendChild(imageField);
+                });
+                
+                // Show image preview
+                showDuplicateImagePreview(duplicateData.images);
+            }
+        }
+    }
+    
+    // Function to show preview of duplicate images
+    function showDuplicateImagePreview(images) {
+        const previewContainer = document.getElementById('image-preview-container');
+        if (!previewContainer) return;
+        
+        previewContainer.innerHTML = '';
+        
+        images.forEach((imageName, index) => {
+            const preview = document.createElement('div');
+            preview.className = 'image-preview-item';
+            preview.innerHTML = `
+                <img src="/uploads/${imageName}" alt="Duplicate Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">
+                <div class="image-controls">
+                    <span>Von Original übernommen</span>
+                    <button type="button" onclick="removeDuplicateImage('${imageName}', this)" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px;">Entfernen</button>
+                </div>
+            `;
+            previewContainer.appendChild(preview);
+        });
+    }
+    
+    // Function to remove a duplicate image
+    function removeDuplicateImage(imageName, button) {
+        // Remove the hidden input
+        const hiddenInputs = document.querySelectorAll('input[name="duplicate_images"]');
+        hiddenInputs.forEach(input => {
+            if (input.value === imageName) {
+                input.remove();
+            }
+        });
+        
+        // Remove the preview
+        const previewItem = button.closest('.image-preview-item');
+        if (previewItem) {
+            previewItem.remove();
+        }
+    }
+    {% else %}
+    const duplicateData = null;
+    function prefillFormWithDuplicateData() {
+        // No duplicate data available
+    }
+    {% endif %}
 </script>
 {% endblock %}

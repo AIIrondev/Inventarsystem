@@ -158,7 +158,7 @@ def check_admin(username):
     users = db['users']
     user = users.find_one({'Username': username})
     client.close()
-    return user['Admin']
+    return user and user.get('Admin', False)
 
 
 def update_active_ausleihung(username, id_item, ausleihung):

@@ -514,7 +514,7 @@
         margin: 0;
     }
 
-    .ausleihen, .edit-button, .delete-button, .details-button {
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button {
         padding: 10px 20px;
         border: none;
         border-radius: 5px;
@@ -608,6 +608,27 @@
     .details-button:active {
         transform: translateY(0);
         box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Duplicate Button */
+    .duplicate-button {
+        background-color: #6f42c1;
+        color: white;
+        border: 2px solid #6f42c1;
+    }
+
+    .duplicate-button:hover {
+        background-color: #5a32a3;
+        border-color: #4e2a8e;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(111, 66, 193, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .duplicate-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
     }
 
     /* Disabled Button */
@@ -1475,9 +1496,12 @@
 <!-- Initialize template variables before any JavaScript code -->
 <script>
     // Create a global object to hold server-side template values
-    window.serverVars = {
-        highlightItemId: {% if highlight_item is defined and highlight_item %}"{{ highlight_item }}"{% else %}null{% endif %}
-    };
+    window.serverVars = {};
+    {% if highlight_item is defined and highlight_item %}
+    window.serverVars.highlightItemId = "{{ highlight_item }}";
+    {% else %}
+    window.serverVars.highlightItemId = null;
+    {% endif %}
     
     window.isDebug = false; // Set to true only for development environment
 </script>
@@ -1974,6 +1998,7 @@
                                     <button class="delete-button">Löschen</button>
                                 </a>
                                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
+                                <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                             </div>
                         `;
                         itemsContainer.appendChild(card);
@@ -2277,6 +2302,7 @@
                     : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
+                <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                 <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
                     <button class="delete-button">Löschen</button>
                 </a>
@@ -2544,6 +2570,32 @@
         });
     }
 
+    // Load location options for edit modal
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('edit-location');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        ortSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
     // Edit modal functions
     function openEditModal(itemId) {
         // Find the item data from allItems array
@@ -2606,246 +2658,109 @@
         document.getElementById('edit-modal').style.display = 'none';
     }
 
-    function loadLocationOptions() {
-        fetch('/get_predefined_locations')
-            .then(response => response.json())
-            .then(data => {
-                const locationSelect = document.getElementById('edit-location');
-                if (locationSelect && data.locations) {
-                    // Clear existing options except the first one
-                    while (locationSelect.children.length > 1) {
-                        locationSelect.removeChild(locationSelect.lastChild);
-                    }
-                    
-                    // Add location options
-                    data.locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location;
-                        option.textContent = location;
-                        locationSelect.appendChild(option);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading locations:', error);
-            });
-    }
-
-    function addNewLocation(context) {
-        const inputField = document.getElementById(`${context}-new-location-input`);
-        const newLocation = inputField.value.trim();
-        
-        if (!newLocation) {
-            alert('Bitte geben Sie einen Ortsnamen ein.');
-            return;
-        }
-        
-        // Send request to add new location
-        fetch('/add_location', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ location: newLocation })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Reload location options
-                loadLocationOptions();
-                
-                // Hide the new location input
-                document.getElementById(`${context}-new-location-container`).style.display = 'none';
-                inputField.value = '';
-                
-                // Set the newly added location as selected
-                setTimeout(() => {
-                    const locationSelect = document.getElementById(`${context}-location`);
-                    if (locationSelect) {
-                        locationSelect.value = newLocation;
-                    }
-                }, 100);
-            } else {
-                alert('Fehler beim Hinzufügen des Ortes: ' + (data.message || 'Unbekannter Fehler'));
-            }
-        })
-        .catch(error => {
-            console.error('Error adding location:', error);
-            alert('Fehler beim Hinzufügen des Ortes.');
-        });
-    }
-    
-    function cancelAddLocation(context) {
-        const container = document.getElementById(`${context}-new-location-container`);
-        const inputField = document.getElementById(`${context}-new-location-input`);
-        
-        container.style.display = 'none';
-        inputField.value = '';
-    }
-
-    // Set up form submission handler for edit form
+    // Setup edit form submission handler
     function setupEditFormSubmission() {
         const editForm = document.getElementById('edit-item-form');
         if (editForm) {
             editForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                const formData = new FormData(editForm);
+                // Get the item ID from the hidden field
                 const itemId = document.getElementById('edit-item-id').value;
+                if (!itemId) {
+                    alert('Fehler: Element-ID nicht gefunden.');
+                    return;
+                }
                 
-                // Set the form action to the edit endpoint
-                formData.append('_method', 'PUT'); // Some frameworks use this for PUT requests
+                // Set the form action dynamically
+                this.action = `{{ url_for('edit_item', id='') }}${itemId}`;
                 
-                fetch(`/edit_item/${itemId}`, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (response.ok) {
-                        return response.json();
-                    }
-                    throw new Error('Network response was not ok');
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Close modal and reload items
-                        closeEditModal();
-                        loadItems();
-                        
-                        // Show success message
-                        alert('Objekt wurde erfolgreich aktualisiert!');
-                    } else {
-                        alert('Fehler beim Speichern: ' + (data.message || 'Unbekannter Fehler'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error updating item:', error);
-                    alert('Fehler beim Speichern des Objekts.');
-                });
+                // Submit the form
+                this.submit();
             });
         }
     }
 
-    // Function to fetch book information (for ISBN lookup)
-    function fetchBookInfo(context) {
-        const isbnField = document.getElementById(`${context}-isbn`);
-        const isbn = isbnField.value.trim();
-        
-        if (!isbn) {
-            alert('Bitte geben Sie eine ISBN ein.');
+    // Duplication function
+    function duplicateItem(itemId) {
+        // Find the item data from allItems array
+        const item = allItems.find(i => i._id === itemId);
+        if (!item) {
+            console.error('Item not found:', itemId);
+            alert('Fehler: Element nicht gefunden.');
             return;
         }
+
+        // Create form data for duplication
+        const formData = new FormData();
+        formData.append('is_duplicating', 'true');
+        formData.append('original_item_id', itemId);
         
-        const infoContainer = document.getElementById(`${context}-book-info-container`);
-        infoContainer.innerHTML = '<div style="padding: 10px; text-align: center;">Lade Buchinformationen...</div>';
+        // Copy all relevant item data except unique identifiers
+        formData.append('name', item.Name || '');
+        formData.append('description', item.Beschreibung || '');
+        formData.append('year', item.Anschaffungsjahr || '');
+        formData.append('cost', item.Anschaffungskosten || '');
+        formData.append('location', item.Ort || '');
+        formData.append('room', item.Raum || '');
+        formData.append('category', item.Kategorie || '');
         
-        fetch('/fetch_book_info', {
+        // Copy filter data
+        if (item.Filter1) formData.append('filter1', item.Filter1);
+        if (item.Filter2) formData.append('filter2', item.Filter2);
+        if (item.Filter3) formData.append('filter3', item.Filter3);
+        
+        // Copy all filter fields (Filter1_1 through Filter3_5)
+        for (let i = 1; i <= 3; i++) {
+            for (let j = 1; j <= 5; j++) {
+                const filterKey = `Filter${i}_${j}`;
+                if (item[filterKey]) {
+                    formData.append(`filter${i}_${j}`, item[filterKey]);
+                }
+            }
+        }
+
+        // Show loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                        background: rgba(0,0,0,0.5); z-index: 10000; display: flex; 
+                        align-items: center; justify-content: center;">
+                <div style="background: white; padding: 20px; border-radius: 5px; text-align: center;">
+                    <div>Element wird dupliziert...</div>
+                    <div style="margin-top: 10px;">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(loadingDiv);
+
+        // Send duplication request
+        fetch('/duplicate_item', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ isbn: isbn })
+            body: formData
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.book_info) {
-                const bookInfo = data.book_info;
-                
-                // Auto-fill form fields if they're empty
-                const nameField = document.getElementById(`${context}-name`);
-                const descField = document.getElementById(`${context}-description`);
-                
-                if (nameField && !nameField.value && bookInfo.title) {
-                    nameField.value = bookInfo.title;
-                }
-                
-                if (descField && !descField.value && bookInfo.description) {
-                    descField.value = bookInfo.description;
-                }
-                
-                // Display book information
-                let bookHtml = `
-                    <div class="book-info">
-                        <h4>${bookInfo.title || 'Unbekannt'}</h4>
-                        ${bookInfo.thumbnail ? `<img src="${bookInfo.thumbnail}" alt="Buchcover" class="book-thumbnail">` : ''}
-                        <p><strong>Autor(en):</strong> ${bookInfo.authors ? bookInfo.authors.join(', ') : 'Unbekannt'}</p>
-                        <p><strong>Verlag:</strong> ${bookInfo.publisher || 'Unbekannt'}</p>
-                        <p><strong>Erscheinungsdatum:</strong> ${bookInfo.publishedDate || 'Unbekannt'}</p>
-                        <p><strong>Seiten:</strong> ${bookInfo.pageCount || 'Unbekannt'}</p>
-                        <p><strong>Kategorien:</strong> ${bookInfo.categories ? bookInfo.categories.join(', ') : 'Unbekannt'}</p>
-                `;
-                
-                if (bookInfo.description) {
-                    bookHtml += `
-                        <div class="book-description">
-                            <h5>Beschreibung:</h5>
-                            <p>${bookInfo.description}</p>
-                        </div>
-                    `;
-                }
-                
-                bookHtml += `
-                        <button type="button" class="import-book-button" onclick="importBookInfo('${context}')">
-                            Buchinformationen übernehmen
-                        </button>
-                    </div>
-                `;
-                
-                infoContainer.innerHTML = bookHtml;
-                
-                // Store book info for later use
-                window.currentBookInfo = bookInfo;
+            document.body.removeChild(loadingDiv);
+            
+            if (data.success) {
+                // Redirect to upload admin page with duplicated data
+                const uploadUrl = new URL('/upload_admin', window.location.origin);
+                uploadUrl.searchParams.set('duplicate_from', itemId);
+                window.location.href = uploadUrl.toString();
             } else {
-                infoContainer.innerHTML = `
-                    <div style="padding: 10px; color: #dc3545; border: 1px solid #f5c6cb; background-color: #f8d7da; border-radius: 4px;">
-                        Keine Buchinformationen gefunden oder Fehler beim Abrufen der Daten.
-                    </div>
-                `;
+                alert('Fehler beim Duplizieren: ' + (data.message || 'Unbekannter Fehler'));
             }
         })
         .catch(error => {
-            console.error('Error fetching book info:', error);
-            infoContainer.innerHTML = `
-                <div style="padding: 10px; color: #dc3545; border: 1px solid #f5c6cb; background-color: #f8d7da; border-radius: 4px;">
-                    Fehler beim Abrufen der Buchinformationen.
-                </div>
-            `;
+            document.body.removeChild(loadingDiv);
+            console.error('Error duplicating item:', error);
+            alert('Fehler beim Duplizieren des Elements. Bitte versuchen Sie es erneut.');
         });
     }
-    
-    function importBookInfo(context) {
-        if (!window.currentBookInfo) {
-            alert('Keine Buchinformationen zum Importieren verfügbar.');
-            return;
-        }
-        
-        const bookInfo = window.currentBookInfo;
-        
-        // Fill form fields
-        const nameField = document.getElementById(`${context}-name`);
-        const descField = document.getElementById(`${context}-description`);
-        
-        if (nameField && bookInfo.title) {
-            nameField.value = bookInfo.title;
-        }
-        
-        if (descField && bookInfo.description) {
-            descField.value = bookInfo.description;
-        }
-        
-        // Clear the book info display
-        const infoContainer = document.getElementById(`${context}-book-info-container`);
-        infoContainer.innerHTML = '<div style="padding: 10px; color: #28a745; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">Buchinformationen wurden übernommen!</div>';
-        
-        // Clear the timeout if it exists
-        if (window.clearBookInfoTimeout) {
-            clearTimeout(window.clearBookInfoTimeout);
-        }
-        
-        // Clear the success message after 3 seconds
-        window.clearBookInfoTimeout = setTimeout(() => {
-            infoContainer.innerHTML = '';
-        }, 3000);
-    }
+
+    // ...existing code...
 </script>
 {% endblock %}
