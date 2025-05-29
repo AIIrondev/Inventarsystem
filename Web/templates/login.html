@@ -28,10 +28,40 @@
             </div>
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password" required>
+                <div class="password-input-container">
+                    <input type="password" class="form-control" id="password" name="password" required>
+                    <button type="button" class="password-toggle-btn" id="togglePassword" aria-label="Show password">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path class="eye-open" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <circle class="eye-open" cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path class="eye-closed" d="m1 1 22 22M6.71 6.71C4.5 8.9 2 12 2 12s4 8 11 8c1.78 0 3.42-.58 4.71-1.29m-6.71-6.71a3 3 0 1 0 4.24 4.24m-4.24-4.24L15 15m-4.24-4.24L12 12l3-3" stroke="currentColor" stroke-width="2" fill="none" style="display: none;"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary w-100">Login</button>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    const passwordContainer = document.querySelector('.password-input-container');
+
+    togglePassword.addEventListener('click', function() {
+        // Toggle the password field type
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        // Toggle the visual state of the container
+        passwordContainer.classList.toggle('password-visible');
+        
+        // Update aria-label for accessibility
+        const isVisible = type === 'text';
+        togglePassword.setAttribute('aria-label', isVisible ? 'Hide password' : 'Show password');
+    });
+});
+</script>
 {% endblock %}

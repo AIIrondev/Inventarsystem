@@ -48,3 +48,51 @@
 .input-area button:hover {
     background-color: #0056b3;
 }
+
+/* Password toggle styles */
+.password-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-container input {
+    padding-right: 45px;
+    flex: 1;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: #6c757d;
+    transition: color 0.2s ease;
+    z-index: 10;
+}
+
+.password-toggle-btn:hover {
+    color: #495057;
+}
+
+.password-toggle-btn:focus {
+    outline: none;
+    color: #007bff;
+}
+
+.password-toggle-btn svg {
+    display: block;
+}
+
+/* Hide/show eye states */
+.password-visible .eye-open {
+    display: none;
+}
+
+.password-visible .eye-closed {
+    display: block !important;
+}
