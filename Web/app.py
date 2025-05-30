@@ -49,20 +49,21 @@ import time
 import traceback
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
+import threading
+import sys
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 # Initialize Flask application
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')  # Correctly set static folder
 app.secret_key = 'Hsse783942h2342f342342i34hwebf8'  # For production, use a secure key!
 app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
-app.config['STATIC_FOLDER'] = os.path.join(BASE_DIR, 'static')  # Explicitly set static folder
 
 __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
@@ -189,6 +190,123 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
 if not os.path.exists(app.config['QR_CODE_FOLDER']):
     os.makedirs(app.config['QR_CODE_FOLDER'])
 
+# Create backup directories
+BACKUP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backups')
+if not os.path.exists(BACKUP_FOLDER):
+    os.makedirs(BACKUP_FOLDER)
+
+def create_daily_backup():
+    """
+    Erstellt täglich ein Backup der Ausleihungsdatenbank
+    """
+    try:
+        print(f"[{datetime.datetime.now()}] Erstelle Backup der Ausleihungsdatenbank...")
+        result = au.create_backup_database()
+        if result:
+            print(f"[{datetime.datetime.now()}] Backup erfolgreich erstellt")
+        else:
+            print(f"[{datetime.datetime.now()}] Fehler beim Erstellen des Backups")
+    except Exception as e:
+        print(f"[{datetime.datetime.now()}] Ausnahme beim Erstellen des Backups: {str(e)}")
+
+def update_appointment_statuses():
+    """
+    Aktualisiert automatisch die Status aller Terminplaner-Einträge.
+    Diese Funktion wird jede Minute ausgeführt und überprüft:
+    - Geplante Termine, die aktiviert werden sollten
+    - Aktive Termine, die beendet werden sollten
+    """
+    try:
+        current_time = datetime.datetime.now()
+        
+        # Log to file for debugging
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        log_file = os.path.join(log_dir, 'scheduler.log')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"[{current_time}] Starte automatische Statusaktualisierung...\n")
+        
+        print(f"[{current_time}] Starte automatische Statusaktualisierung...")
+        
+        # Hole alle Termine mit Status 'planned' oder 'active'
+        from pymongo import MongoClient
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Finde alle Termine, die status updates benötigen
+        appointments_to_check = list(ausleihungen.find({
+            'Status': {'$in': ['planned', 'active']}
+        }))
+        
+        updated_count = 0
+        activated_count = 0
+        completed_count = 0
+        
+        for appointment in appointments_to_check:
+            old_status = appointment.get('Status')
+            
+            # Aktuellen Status bestimmen
+            new_status = au.get_current_status(appointment, log_changes=True, user='scheduler')
+            
+            # Wenn sich der Status geändert hat, aktualisiere in der Datenbank
+            if new_status != old_status:
+                result = ausleihungen.update_one(
+                    {'_id': appointment['_id']},
+                    {'$set': {
+                        'Status': new_status,
+                        'LastUpdated': current_time
+                    }}
+                )
+                
+                if result.modified_count > 0:
+                    updated_count += 1
+                    if new_status == 'active':
+                        activated_count += 1
+                    elif new_status == 'completed':
+                        completed_count += 1
+                    
+                    log_msg = f"  - Termin {appointment['_id']}: {old_status} → {new_status}"
+                    print(log_msg)
+                    with open(log_file, 'a', encoding='utf-8') as f:
+                        f.write(f"[{current_time}] {log_msg}\n")
+        
+        client.close()
+        
+        if updated_count > 0:
+            result_msg = f"Statusaktualisierung abgeschlossen: {updated_count} Termine aktualisiert"
+            detail_msg = f"  - {activated_count} aktiviert, {completed_count} abgeschlossen"
+            print(f"[{current_time}] {result_msg}")
+            print(f"[{current_time}] {detail_msg}")
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{current_time}] {result_msg}\n")
+                f.write(f"[{current_time}] {detail_msg}\n")
+        else:
+            result_msg = "Statusaktualisierung abgeschlossen: Keine Änderungen erforderlich"
+            print(f"[{current_time}] {result_msg}")
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{current_time}] {result_msg}\n")
+            
+    except Exception as e:
+        error_msg = f"Fehler bei der automatischen Statusaktualisierung: {str(e)}"
+        print(f"[{datetime.datetime.now()}] {error_msg}")
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"[{datetime.datetime.now()}] {error_msg}\n")
+        import traceback
+        traceback.print_exc()
+
+# Schedule jobs
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=create_daily_backup, trigger="interval", hours=24)
+# Add minute-based status updates for the Terminplaner
+scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=1)
+scheduler.start()
+
+# Register shutdown handler to stop scheduler when app is terminated
+import atexit
+atexit.register(lambda: scheduler.shutdown())
 
 def allowed_file(filename):
     """
@@ -586,6 +704,53 @@ def get_item_json(id):
     item = it.get_item(id)
     if item:
         item['_id'] = str(item['_id'])  # Convert ObjectId to string
+        
+        # Fetch all appointments for this item and perform client-side status verification
+        try:
+            # Get all appointments, not just those marked as 'planned' in the database
+            all_appointments = au.get_ausleihungen()
+            item_appointments = []
+            
+            # Filter appointments for this specific item
+            for appointment in all_appointments:
+                appt_item_id = appointment.get('Item')
+                if appt_item_id:
+                    # For exemplars, extract the parent item ID
+                    parent_id = appt_item_id
+                    if '_' in appt_item_id:  # Format is parent_id_exemplar_number
+                        parent_id = appt_item_id.split('_')[0]
+                        
+                    # Check if this appointment is for the current item
+                    if parent_id == id:
+                        # Get verified status using client-side verification with logging
+                        verified_status = au.get_current_status(
+                            appointment,
+                            log_changes=True,
+                            user=session.get('username', None)
+                        )
+                        
+                        # Format the appointment data
+                        formatted_appointment = {
+                            'id': str(appointment.get('_id')),
+                            'start': appointment.get('Start'),
+                            'end': appointment.get('End'),
+                            'user': appointment.get('User'),
+                            'notes': appointment.get('Notes', ''),
+                            'period': appointment.get('Period'),
+                            'status': verified_status,
+                            'databaseStatus': appointment.get('Status')
+                        }
+                        item_appointments.append(formatted_appointment)
+            
+            # Sort appointments by date
+            item_appointments.sort(key=lambda x: x.get('start') or datetime.datetime.now())
+            
+            # Add to item response
+            item['PlannedAppointments'] = item_appointments
+            
+        except Exception as e:
+            print(f"Error retrieving planned appointments: {e}")
+        
         return {'item': item, 'status': 'success'}
     else:
         return {'error': 'Item not found', 'status': 'not_found'}, 404
@@ -1070,6 +1235,12 @@ def zurueckgeben(id):
         else:
             flash('You have no copies to return', 'error')
     
+    # Check if request came from my_borrowed_items page
+    source_page = request.form.get('source_page')
+    referrer = request.headers.get('Referer', '')
+    if source_page == 'my_borrowed_items' or '/my_borrowed_items' in referrer:
+        return redirect(url_for('my_borrowed_items'))
+    
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
@@ -1092,7 +1263,7 @@ def get_ausleihung_by_item_route(id):
     API endpoint to retrieve borrowing details for a specific item.
     
     Args:
-        id (str): ID of the item
+        id (str): ID of the item to retrieve
         
     Returns:
         dict: Borrowing details for the item
@@ -1101,7 +1272,15 @@ def get_ausleihung_by_item_route(id):
         return {'error': 'Not authorized', 'status': 'forbidden'}, 403
     
     # Get the borrowing record
-    ausleihung = au.get_ausleihung_by_item(id, include_history=False)
+    ausleihung = au.get_ausleihung_by_item(id, include_history=False)        # Add client-side status verification if a borrowing record exists
+    if ausleihung:
+        # Add verified status to each borrowing record with logging
+        current_status = au.get_current_status(
+            ausleihung,
+            log_changes=True, 
+            user=session.get('username', None)
+        )
+        ausleihung['VerifiedStatus'] = current_status
     
     # Admin users can see all borrowing details
     # Regular users can only see their own borrowings
@@ -1682,6 +1861,7 @@ def get_usernames():
 @app.route('/manage_filters')
 def manage_filters():
     """
+"
     Admin page to manage predefined filter values.
     
     Returns:
@@ -1764,6 +1944,7 @@ def get_predefined_filter_values(filter_num):
     
     Args:
         filter_num (int): Filter number (1 or 2)
+
         
     Returns:
         dict: Dictionary containing predefined filter values
@@ -1991,6 +2172,7 @@ def my_borrowed_items():
     
     # Method 1: Get borrowed items directly from the items collection
     borrowed_items = []
+    planned_items = []
     try:
         # Get all items borrowed by this user
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
@@ -2032,7 +2214,178 @@ def my_borrowed_items():
         # Sort by name
         all_borrowed.sort(key=lambda x: x.get('Name', '').lower())
         
+        print(f"Found {len(all_borrowed)} items directly from items collection")
+        
+        # We'll use this as our main list - direct borrowings from items collection
         borrowed_items = all_borrowed
+        
+        # Create a set for tracking item IDs to avoid duplicates
+        processed_item_ids = set(item.get('_id') for item in borrowed_items)
+        
+        # Step 2: Get ALL appointments for the current user
+        try:
+            print(f"Retrieving appointments for user: {username}")
+            # Get all non-cancelled appointments with client-side verification enabled
+            # This ensures that planned appointments are properly identified regardless of DB status
+            all_ausleihungen = au.get_ausleihung_by_user(username, use_client_side_verification=True)
+            print(f"Found {len(all_ausleihungen)} total appointments")
+            
+            # Debug - print all appointments for troubleshooting
+            for a in all_ausleihungen:
+                print(f"Appointment: ID={str(a.get('_id'))}, Status={a.get('Status')}, Start={a.get('Start')}, Item={a.get('Item')}")
+            
+            planned_ausleihungen = []
+            active_ausleihungen = []
+            
+            # Current time for status verification
+            current_time = datetime.datetime.now()
+            print(f"Current time: {current_time}")
+            
+            for appointment in all_ausleihungen:
+                # Get appointment ID for debugging
+                appointment_id = str(appointment.get('_id', 'unknown'))
+                original_status = appointment.get('Status', 'unknown')
+                start_time = appointment.get('Start')
+                end_time = appointment.get('End')
+                
+                # Skip cancelled appointments
+                if original_status == 'cancelled':
+                    continue
+                
+                # Use the verified status if available, otherwise get it fresh
+                current_status = appointment.get('VerifiedStatus')
+                if not current_status:
+                    current_status = au.get_current_status(
+                        appointment,
+                        log_changes=True,
+                        user=username
+                    )
+                    appointment['VerifiedStatus'] = current_status
+                
+                print(f"Appointment {appointment_id}: Original status={original_status}, Verified status={current_status}")
+                print(f"  - Start: {start_time}, End: {end_time}")
+                
+                # Store the verified status on the appointment object
+                appointment['VerifiedStatus'] = current_status
+                
+                # Organize appointments by their status
+                if current_status == 'planned':
+                    planned_ausleihungen.append(appointment)
+                elif current_status == 'active':
+                    active_ausleihungen.append(appointment)
+                    print(f"  - Added to active appointments")
+                else:
+                    print(f"  - Skipping appointment with status {current_status}")
+            
+            # Merge all appointments and group them by status
+            planned_items = []
+            active_items = []  # This will be combined with borrowed_items later
+            
+            # Get item details for each planned and active appointment
+            for appointment in planned_ausleihungen:
+                item_id = appointment.get('Item')
+                if item_id:
+                    # For exemplars, extract the parent item ID
+                    parent_id = item_id
+                    if '_' in item_id:  # Format is parent_id_exemplar_number
+                        parent_id = item_id.split('_')[0]
+                    
+                    # Get the item details
+                    item = it.get_item(parent_id)
+                    if item:
+                        # Mark as planned and add status
+                        item['_id'] = str(item['_id'])
+                        item['PlannedAppointment'] = True
+                        item['AppointmentStatus'] = 'planned'
+                        
+                        # Add appointment details
+                        item['AppointmentData'] = {
+                            'start': appointment.get('Start'),
+                            'end': appointment.get('End'),
+                            'notes': appointment.get('Notes', ''),
+                            'period': appointment.get('Period'),
+                            'id': str(appointment.get('_id')),
+                            'status': appointment.get('VerifiedStatus', appointment.get('Status', 'planned'))
+                        }
+                        
+                        planned_items.append(item)
+            
+            # Add active appointments to borrowed items later
+            for appointment in active_ausleihungen:
+                item_id = appointment.get('Item')
+                if item_id:
+                    # For exemplars, extract the parent item ID
+                    parent_id = item_id
+                    if '_' in item_id:  # Format is parent_id_exemplar_number
+                        parent_id = item_id.split('_')[0]
+                    
+                    # Get the item details - will be combined with borrowed_items
+                    item = it.get_item(parent_id)
+                    if item:
+                        # Format item ID consistently
+                        str_item_id = str(item['_id'])
+                        item['_id'] = str_item_id
+                        
+                        # If this item is already in the borrowed_items list, update it
+                        if str_item_id in processed_item_ids:
+                            # Find the existing item and add appointment data to it
+                            for existing_item in borrowed_items:
+                                if existing_item.get('_id') == str_item_id:
+                                    print(f"Adding appointment data to existing item: {str_item_id}")
+                                    existing_item['ActiveAppointment'] = True
+                                    existing_item['AppointmentStatus'] = 'active'
+                                    existing_item['AppointmentData'] = {
+                                        'start': appointment.get('Start'),
+                                        'end': appointment.get('End'),
+                                        'notes': appointment.get('Notes', ''),
+                                        'period': appointment.get('Period'),
+                                        'id': str(appointment.get('_id')),
+                                        'status': appointment.get('VerifiedStatus', appointment.get('Status', 'active'))
+                                    }
+                                    break
+                        else:
+                            # This is a new item not already in borrowed_items
+                            print(f"Adding new active item from appointment: {str_item_id}")
+                            # Mark as active
+                            item['ActiveAppointment'] = True
+                            item['AppointmentStatus'] = 'active'
+                            
+                            # Add appointment details
+                            item['AppointmentData'] = {
+                                'start': appointment.get('Start'),
+                                'end': appointment.get('End'),
+                                'notes': appointment.get('Notes', ''),
+                                'period': appointment.get('Period'),
+                                'id': str(appointment.get('_id')),
+                                'status': appointment.get('VerifiedStatus', appointment.get('Status', 'active'))
+                            }
+                            
+                            # Add to tracking set and active_items list
+                            processed_item_ids.add(str_item_id)
+                            active_items.append(item)
+            
+            # Sort by appointment date
+            planned_items.sort(key=lambda x: x.get('AppointmentData', {}).get('start') or datetime.datetime.now())
+            
+            # With our improved code above, we already handled merging of duplicate items
+            # Just add any new active_items that don't exist in borrowed_items
+            print(f"Found {len(active_items)} active appointment items")
+            
+            # Combine only unique active_items with borrowed_items
+            borrowed_items.extend(active_items)
+            
+            # Final count of items
+            print(f"Final borrowed_items count: {len(borrowed_items)}")
+            
+            # Log all items for debugging purposes
+            for idx, item in enumerate(borrowed_items):
+                item_id = item.get('_id')
+                has_appointment = 'Yes' if item.get('AppointmentData') else 'No'
+                print(f"Item {idx+1}: ID={item_id}, Name={item.get('Name')}, Has Appointment Data: {has_appointment}")
+        
+        except Exception as e:
+            print(f"Error retrieving planned appointments: {e}")
+        
         client.close()
         
     except Exception as e:
@@ -2040,7 +2393,8 @@ def my_borrowed_items():
         flash(f'Fehler beim Laden der ausgeliehenen Objekte: {str(e)}', 'error')
     
     return render_template('my_borrowed_items.html', 
-                          items=borrowed_items, 
+                          items=borrowed_items,
+                          planned_items=planned_items,
                           username=username)
 
 @app.route('/favicon.ico')
@@ -2051,7 +2405,7 @@ def favicon():
     Returns:
         flask.Response: The favicon.ico file
     """
-    return send_from_directory(app.config['STATIC_FOLDER'], 'favicon.ico')
+    return send_from_directory(app.static_folder, 'favicon.ico')
 
 @app.route('/get_predefined_locations')
 def get_predefined_locations_route():
@@ -2155,3 +2509,234 @@ def check_code_unique(code):
         'is_unique': is_unique,
         'code': code
     })
+
+@app.route('/schedule_appointment', methods=['POST'])
+def schedule_appointment():
+    """
+    Schedule an appointment for an item
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+        
+    try:
+        # Extract form data
+        item_id = request.form.get('item_id')
+        schedule_date = request.form.get('schedule_date')
+        start_period = request.form.get('start_period')
+        end_period = request.form.get('end_period')
+        notes = request.form.get('notes', '')
+        
+        # Validate inputs
+        if not all([item_id, schedule_date, start_period, end_period]):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+            
+        # Parse the date
+        try:
+            appointment_date_obj = datetime.datetime.strptime(schedule_date, '%Y-%m-%d')
+            appointment_date = appointment_date_obj.date()  # Get date part only
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid date format'}), 400
+            
+        # Validate periods
+        try:
+            start_period_num = int(start_period)
+            end_period_num = int(end_period)
+            
+            if start_period_num > end_period_num:
+                return jsonify({'success': False, 'message': 'Start period cannot be after end period'}), 400
+                
+            if not (1 <= start_period_num <= 10) or not (1 <= end_period_num <= 10):
+                return jsonify({'success': False, 'message': 'Invalid period numbers'}), 400
+                
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid period values'}), 400
+            
+        # Check if item exists
+        item = it.get_item(item_id)
+        if not item:
+            return jsonify({'success': False, 'message': 'Item not found'}), 404
+            
+        # Calculate start and end times for the appointment
+        # Make sure we're passing the correct datetime object
+        period_start_datetime = datetime.datetime.combine(appointment_date, datetime.time())
+        period_times_start = get_period_times(period_start_datetime, start_period_num)
+        period_times_end = get_period_times(period_start_datetime, end_period_num)
+        
+        # Check if we got valid period times
+        if not period_times_start or not period_times_end:
+            print(f"Invalid period times: start={period_times_start}, end={period_times_end}")
+            return jsonify({'success': False, 'message': 'Invalid period times'}), 400
+            
+        start_datetime = period_times_start['start']
+        end_datetime = period_times_end['end']
+        
+        # Check for conflicts
+        try:
+            has_conflict = au.check_booking_conflict(item_id, start_datetime, end_datetime, period=start_period_num)
+            if has_conflict:
+                return jsonify({'success': False, 'message': 'Appointment conflicts with existing booking'}), 409
+        except Exception as e:
+            print(f"Error checking for booking conflicts: {e}")
+            return jsonify({'success': False, 'message': f'Error checking availability: {str(e)}'}), 500
+            
+        # Create the appointment as a planned booking
+        try:
+            appointment_id = au.add_planned_booking(
+                item_id=item_id,
+                user=session['username'],
+                start_date=start_datetime,
+                end_date=end_datetime,
+                notes=notes,
+                period=start_period_num
+            )
+            
+            if not appointment_id:
+                return jsonify({'success': False, 'message': 'Failed to create appointment'}), 500
+        except Exception as e:
+            print(f"Error creating planned booking: {e}")
+            return jsonify({'success': False, 'message': f'Error creating appointment: {str(e)}'}), 500
+        
+        # If we got this far, we have a valid appointment_id
+        try:
+            # Update item with next scheduled appointment info
+            # Convert date to datetime for MongoDB storage if needed
+            if isinstance(appointment_date, datetime.date) and not isinstance(appointment_date, datetime.datetime):
+                appointment_datetime = datetime.datetime.combine(appointment_date, datetime.time())
+            else:
+                appointment_datetime = appointment_date
+                
+            result = it.update_item_next_appointment(item_id, {
+                'date': appointment_datetime,
+                'start_period': start_period_num,
+                'end_period': end_period_num,
+                'user': session['username'],
+                'notes': notes,
+                'appointment_id': str(appointment_id)
+            })
+            
+            if result:
+                return jsonify({'success': True, 'appointment_id': str(appointment_id)})
+            else:
+                print("Failed to update item with appointment info")
+                return jsonify({'success': False, 'message': 'Failed to update item with appointment info'}), 500
+                
+        except Exception as e:
+            print(f"Error updating item with appointment info: {e}")
+            return jsonify({'success': False, 'message': f'Error updating item: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"Error creating appointment: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Server error occurred: {str(e)}'}), 500
+
+@app.route('/cancel_ausleihung/<id>', methods=['POST'])
+def cancel_ausleihung_route(id):
+    """
+    Route for canceling a planned or active ausleihung.
+    
+    Args:
+        id (str): ID of the ausleihung to cancel
+        
+    Returns:
+        flask.Response: Redirect to My Ausleihungen page
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+        
+    username = session['username']
+    
+    try:
+        print(f"Attempting to cancel ausleihung with ID: {id}")
+        
+        # Get the ausleihung record to check if it belongs to the current user
+        ausleihung = au.get_ausleihung(id)
+        
+        if not ausleihung:
+            print(f"Ausleihung not found with ID: {id}")
+            flash('Ausleihung nicht gefunden', 'error')
+            return redirect(url_for('my_borrowed_items'))
+            
+        # Log ausleihung details for debugging
+        ausleihung_status = ausleihung.get('Status', 'unknown')
+        ausleihung_user = ausleihung.get('User', 'unknown')
+        print(f"Found ausleihung: ID={id}, User={ausleihung_user}, Status={ausleihung_status}")
+            
+        # Check if the ausleihung belongs to the current user
+        if ausleihung_user != username and not us.check_admin(username):
+            print(f"Authorization failure: {username} attempted to cancel ausleihung belonging to {ausleihung_user}")
+            flash('Sie sind nicht berechtigt, diese Ausleihung zu stornieren', 'error')
+            return redirect(url_for('my_borrowed_items'))
+            
+        # Cancel the ausleihung
+        if au.cancel_ausleihung(id):
+            print(f"Successfully canceled ausleihung with ID: {id}")
+            flash('Ausleihung wurde erfolgreich storniert', 'success')
+        else:
+            print(f"Failed to cancel ausleihung with ID: {id}")
+            flash('Fehler beim Stornieren der Ausleihung', 'error')
+            
+    except Exception as e:
+        print(f"Error canceling ausleihung: {e}")
+        flash(f'Fehler: {str(e)}', 'error')
+        
+    return redirect(url_for('my_borrowed_items'))
+
+@app.route('/static/css/<path:filename>')
+def serve_css(filename):
+    """
+    Explicitly serve CSS files from the static/css directory.
+    This can help resolve permission issues with CSS files.
+    
+    Args:
+        filename (str): Name of the CSS file to serve
+        
+    Returns:
+        flask.Response: The requested CSS file
+    """
+    return send_from_directory(os.path.join(app.static_folder, 'css'), filename)
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """
+    Explicitly serve static files from the static directory.
+    This provides an alternative route for static assets.
+    
+    Args:
+        filename (str): Name of the file to serve
+        
+    Returns:
+        flask.Response: The requested static file
+    """
+    return send_from_directory(app.static_folder, filename)
+
+@app.route('/test_scheduler', methods=['GET'])
+def test_scheduler():
+    """
+    Test endpoint to manually trigger the appointment status update scheduler.
+    Only accessible by admin users for testing purposes.
+    
+    Returns:
+        dict: Result of the scheduler execution
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+        
+    if not us.check_admin(session['username']):
+        return jsonify({'error': 'Admin access required'}), 403
+        
+    try:
+        # Manually trigger the scheduler function
+        update_appointment_statuses()
+        return jsonify({
+            'success': True, 
+            'message': 'Scheduler manually triggered successfully',
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500

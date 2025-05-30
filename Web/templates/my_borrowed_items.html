@@ -22,11 +22,14 @@
     <div class="content">
         <h1>Meine aktuellen Ausleihungen</h1>
         
-        {% if not items %}
+        {% if not items and not planned_items %}
         <div class="no-items-message">
-            Sie haben derzeit keine Objekte ausgeliehen.
+            Sie haben derzeit keine Objekte ausgeliehen oder geplant.
         </div>
         {% else %}
+        
+        {% if items %}
+        <h2 class="section-title">Aktive Ausleihungen</h2>
         <div class="borrowed-items">
             {% for item in items %}
             <div class="borrowed-item">
@@ -34,6 +37,9 @@
                     <h3>{{ item.Name }}</h3>
                     {% if item.UserExemplarCount is defined and item.UserExemplarCount > 0 %}
                     <span class="exemplar-count">{{ item.UserExemplarCount }} Exemplar(e)</span>
+                    {% endif %}
+                    {% if item.ActiveAppointment %}
+                    <span class="appointment-status status-active">Aktiv</span>
                     {% endif %}
                 </div>
                 
@@ -90,7 +96,21 @@
                 </div>
                 
                 <div class="item-actions">
+                    {% if item.AppointmentData is defined and item.AppointmentData %}
+                    <!-- Item with appointment data (from active/planned appointments) -->
+                    <div class="action-buttons-container">
+                        <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                            <input type="hidden" name="source_page" value="my_borrowed_items">
+                            <button class="return-button" type="submit">Zurückgeben</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('cancel_ausleihung_route', id=item.AppointmentData.id) }}" onsubmit="return confirm('Möchten Sie diese aktive Ausleihung wirklich stornieren?');">
+                            <button class="cancel-button" type="submit">Stornieren</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <!-- Regular borrowed item without appointment data -->
                     <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                        <input type="hidden" name="source_page" value="my_borrowed_items">
                         {% if item.UserExemplarCount is defined and item.UserExemplarCount > 1 %}
                         <div class="return-count-group">
                             <label for="exemplare_count_{{ loop.index }}">Anzahl zurückgeben:</label>
@@ -100,10 +120,99 @@
                         {% endif %}
                         <button class="return-button" type="submit">Zurückgeben</button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
+        {% endif %}
+        
+        {% if planned_items %}
+        <h2 class="section-title">Geplante Ausleihungen</h2>
+        <div class="borrowed-items planned-items">
+            {% for item in planned_items %}
+            <div class="borrowed-item planned-item">
+                <div class="item-header">
+                    <h3>{{ item.Name }}</h3>
+                    {% set status = item.AppointmentData.status | default('planned') %}
+                    <span class="appointment-status status-{{ status }}">
+                        {% if status == 'planned' %}
+                            Geplant
+                        {% elif status == 'active' %}
+                            Aktiv
+                        {% elif status == 'completed' %}
+                            Abgeschlossen
+                        {% elif status == 'cancelled' %}
+                            Storniert
+                        {% else %}
+                            {{ status }}
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="item-details">
+                    <div class="item-info">
+                        <p><strong>Ort:</strong> {{ item.Ort or '-' }}</p>
+                        
+                        {% if item.Filter is defined %}
+                        <p><strong>Unterrichtsfach:</strong> 
+                            {% if item.Filter is string %}
+                                {{ item.Filter }}
+                            {% elif item.Filter | length > 0 %}
+                                {{ item.Filter | join(', ') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </p>
+                        {% endif %}
+                        
+                        {% if item.Filter2 is defined %}
+                        <p><strong>Jahrgangsstufe:</strong> 
+                            {% if item.Filter2 is string %}
+                                {{ item.Filter2 }}
+                            {% elif item.Filter2 | length > 0 %}
+                                {{ item.Filter2 | join(', ') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </p>
+                        {% endif %}
+                        
+                        <p><strong>Barcode:</strong> {{ item.Code_4 or '-' }}</p>
+                        
+                        <div class="appointment-details">
+                            <p><strong>Termin:</strong></p>
+                            {% set start_date = item.AppointmentData.start %}
+                            {% set end_date = item.AppointmentData.end %}
+                            <p class="appointment-date">
+                                {% if start_date %}{{ start_date.strftime('%d.%m.%Y') }}{% else %}Unbekannt{% endif %}
+                                {% if item.AppointmentData.period %}
+                                    <span class="appointment-period">{{ item.AppointmentData.period }}. Stunde</span>
+                                {% endif %}
+                            </p>
+                            {% if item.AppointmentData.notes %}
+                            <p class="appointment-notes"><i>{{ item.AppointmentData.notes }}</i></p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if item.Images and item.Images | length > 0 %}
+                    <div class="item-image">
+                        <img src="{{ url_for('uploaded_file', filename=item.Images[0]) }}" alt="{{ item.Name }}">
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="item-actions">
+                    <form method="POST" action="{{ url_for('cancel_ausleihung_route', id=item.AppointmentData.id) }}" onsubmit="return confirm('Möchten Sie diesen geplanten Termin wirklich stornieren?');">
+                        <button class="cancel-button" type="submit">Stornieren</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
         {% endif %}
     </div>
 </div>
@@ -233,6 +342,107 @@
         margin-top: 20px;
     }
     
+    /* Planned items styling */
+    .section-title {
+        margin-top: 30px;
+        margin-bottom: 20px;
+        font-size: 1.5rem;
+        color: #343a40;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 10px;
+    }
+    
+    .planned-badge {
+        background-color: #17a2b8;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .planned-item {
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .appointment-details {
+        margin-top: 10px;
+        background-color: #e1f5fe;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 3px solid #17a2b8;
+    }
+    
+    .appointment-date {
+        font-weight: bold;
+        color: #0277bd;
+    }
+    
+    .appointment-period {
+        font-weight: normal;
+        font-style: italic;
+        margin-left: 10px;
+    }
+    
+    .appointment-notes {
+        margin-top: 5px;
+        font-style: italic;
+    }
+    
+    .action-buttons-container {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+    }
+    
+    .action-buttons-container form {
+        flex: 1;
+    }
+    
+    .action-buttons-container .return-button,
+    .action-buttons-container .cancel-button {
+        width: 100%;
+    }
+    
+    .cancel-button {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    
+    .cancel-button:hover {
+        background-color: #c82333;
+    }
+    
+    .appointment-status {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        font-weight: bold;
+        color: white;
+        margin-left: 10px;
+    }
+    
+    .status-planned {
+        background-color: #03a9f4;
+    }
+    
+    .status-active {
+        background-color: #4CAF50;
+    }
+    
+    .status-completed {
+        background-color: #9E9E9E;
+    }
+    
+    .status-cancelled {
+        background-color: #F44336;
+    }
+
     /* Responsive layout */
     @media (max-width: 768px) {
         .item-details {

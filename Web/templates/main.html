@@ -336,7 +336,7 @@
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                        const imagesHtml = item.Images ? item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
                         
                         // Check if item is borrowed by current user
                         const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
@@ -401,7 +401,7 @@
                                 
                                 // Get full item data with correct image paths
                                 const modalItemData = {...item};
-                                modalItemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
+                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
                                 
                                 openItemModal(modalItemData);
                             });
@@ -643,10 +643,56 @@
             `;
         }
         
+        // Build planned appointments section if applicable
+        let plannedAppointmentsHtml = '';
+        if (item.PlannedAppointments && item.PlannedAppointments.length > 0) {
+            const appointmentsHtml = item.PlannedAppointments.map(appointment => {
+                const startDate = appointment.start ? new Date(appointment.start) : null;
+                const formattedDate = startDate ? 
+                    startDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 
+                    'Unbekannt';
+                
+                const periodText = appointment.period ? `${appointment.period}. Stunde` : '';
+                const notes = appointment.notes || '';
+                const user = appointment.user || '';
+                
+                // Bestimmen Sie die Statusklasse und Text
+                const status = appointment.status || 'planned';
+                const statusClass = `status-${status}`;
+                
+                let statusText = 'Geplant';
+                if (status === 'active') statusText = 'Aktiv';
+                if (status === 'completed') statusText = 'Abgeschlossen';
+                if (status === 'cancelled') statusText = 'Storniert';
+                
+                return `
+                    <div class="appointment-item">
+                        <div class="appointment-header">
+                            <span class="appointment-date">${formattedDate}</span>
+                            ${periodText ? `<span class="appointment-period">${periodText}</span>` : ''}
+                            <span class="appointment-status ${statusClass}">${statusText}</span>
+                            <span class="appointment-user">Nutzer: ${user}</span>
+                        </div>
+                        ${notes ? `<div class="appointment-notes">${notes}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            plannedAppointmentsHtml = `
+                <div class="planned-appointments-panel">
+                    <h4>Geplante Ausleihungen</h4>
+                    <div class="appointment-list">
+                        ${appointmentsHtml}
+                    </div>
+                </div>
+            `;
+        }
+        
         // Build modal content HTML
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
             ${borrowerInfoHtml}
+            ${plannedAppointmentsHtml}
             
             <div class="modal-image-container">
                 ${imagesHtml}
@@ -1846,6 +1892,36 @@
     .status-borrowed {
         color: #dc3545;
         font-weight: bold;
+    }
+    
+    /* Appointment status styles */
+    .appointment-status {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        font-weight: bold;
+        display: inline-block;
+        margin: 0 5px;
+    }
+    
+    .status-planned {
+        background-color: #03a9f4;
+        color: white;
+    }
+    
+    .status-active {
+        background-color: #4CAF50;
+        color: white;
+    }
+    
+    .status-completed {
+        background-color: #9E9E9E;
+        color: white;
+    }
+    
+    .status-cancelled {
+        background-color: #F44336;
+        color: white;
     }
 
     .disabled-button {

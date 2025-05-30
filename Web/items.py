@@ -806,3 +806,110 @@ def remove_predefined_location(location):
     except Exception as e:
         print(f"Error removing predefined location: {str(e)}")
         return False
+
+
+def update_item_next_appointment(item_id, appointment_data):
+    """
+    Update an item with information about its next scheduled appointment.
+    
+    Args:
+        item_id (str): ID of the item to update
+        appointment_data (dict): Appointment information containing:
+            - date: Date of the appointment
+            - start_period: Start period number
+            - end_period: End period number
+            - user: Username who scheduled the appointment
+            - notes: Optional notes
+            - appointment_id: ID of the appointment booking
+            
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        
+        # Format the appointment data for storage
+        # Ensure date is a datetime object for MongoDB storage
+        appointment_date = appointment_data['date']
+        if isinstance(appointment_date, datetime.date) and not isinstance(appointment_date, datetime.datetime):
+            # Convert date to datetime for MongoDB compatibility
+            appointment_date = datetime.datetime.combine(appointment_date, datetime.time())
+        
+        next_appointment = {
+            'date': appointment_date,
+            'start_period': appointment_data['start_period'],
+            'end_period': appointment_data['end_period'],
+            'user': appointment_data['user'],
+            'notes': appointment_data.get('notes', ''),
+            'appointment_id': appointment_data['appointment_id'],
+            'scheduled_at': datetime.datetime.now()
+        }
+        
+        update_data = {
+            'NextAppointment': next_appointment,
+            'LastUpdated': datetime.datetime.now()
+        }
+        
+        result = items.update_one(
+            {'_id': ObjectId(item_id)},
+            {'$set': update_data}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error updating item next appointment: {e}")
+        return False
+
+
+def clear_item_next_appointment(item_id):
+    """
+    Clear the next appointment information from an item.
+    
+    Args:
+        item_id (str): ID of the item to update
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        
+        result = items.update_one(
+            {'_id': ObjectId(item_id)},
+            {'$unset': {'NextAppointment': ""}, '$set': {'LastUpdated': datetime.datetime.now()}}
+        )
+        
+        client.close()
+        return result.modified_count > 0
+    except Exception as e:
+        print(f"Error clearing item next appointment: {e}")
+        return False
+
+
+def get_items_with_appointments():
+    """
+    Retrieve all items that have scheduled appointments.
+    
+    Returns:
+        list: List of items with NextAppointment field
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        
+        items_return = items.find({'NextAppointment': {'$exists': True}})
+        items_list = []
+        for item in items_return:
+            item['_id'] = str(item['_id'])
+            items_list.append(item)
+        client.close()
+        return items_list
+    except Exception as e:
+        print(f"Error retrieving items with appointments: {e}")
+        return []

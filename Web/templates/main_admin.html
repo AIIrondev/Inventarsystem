@@ -514,7 +514,7 @@
         margin: 0;
     }
 
-    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button {
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
         padding: 10px 20px;
         border: none;
         border-radius: 5px;
@@ -610,6 +610,27 @@
         box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
     }
 
+    /* Schedule Button */
+    .schedule-button {
+        background-color: #17a2b8;
+        color: white;
+        border: 2px solid #17a2b8;
+    }
+
+    .schedule-button:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .schedule-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
     /* Duplicate Button */
     .duplicate-button {
         background-color: #6f42c1;
@@ -627,6 +648,27 @@
     }
 
     .duplicate-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
+    }
+
+    /* Schedule Button */
+    .schedule-button {
+        background-color: #6f42c1;
+        color: white;
+        border: 2px solid #6f42c1;
+    }
+
+    .schedule-button:hover {
+        background-color: #5a32a3;
+        border-color: #4e2a8e;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(111, 66, 193, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .schedule-button:active {
         transform: translateY(0);
         box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
     }
@@ -766,6 +808,27 @@
     .borrower-name, .borrow-time {
         margin: 5px 0;
         color: #856404;
+        font-weight: 500;
+    }
+
+    /* Appointment Info Panel */
+    .appointment-info-panel {
+        background-color: #e1f5fe;
+        border: 1px solid #81d4fa;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .appointment-info-panel h4 {
+        color: #0277bd;
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+    }
+
+    .appointment-date, .appointment-time, .appointment-user {
+        margin: 5px 0;
+        color: #0277bd;
         font-weight: 500;
     }
 
@@ -1193,6 +1256,29 @@
         color: #533f03;
     }
 
+    /* Appointment badge */
+    .appointment-badge {
+        background-color: #e1f5fe;
+        border: 1px solid #81d4fa;
+        border-radius: 4px;
+        padding: 8px;
+        margin-top: 10px;
+        font-size: 0.85rem;
+        color: #0277bd;
+    }
+
+    .appointment-badge strong {
+        color: #01579b;
+    }
+
+    .appointment-time {
+        font-size: 0.8rem;
+        color: #0288d1;
+        font-style: italic;
+        display: block;
+        margin-top: 3px;
+    }
+
     .borrow-time {
         font-size: 0.8rem;
         opacity: 0.8;
@@ -1240,7 +1326,7 @@
         border-radius: 4px;
     }
 
-    /* ...existing code... */
+
 </style>
 
 <div class="container">
@@ -1490,6 +1576,66 @@
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Schedule Appointment Modal -->
+<div id="schedule-modal" class="item-modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeScheduleModal()">&times;</span>
+        <h2>Termin planen</h2>
+        <form id="schedule-form">
+            <input type="hidden" id="schedule-item-id" name="item_id">
+            
+            <div class="form-group">
+                <label for="schedule-date">Datum:</label>
+                <input type="date" id="schedule-date" name="schedule_date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-start-period">Von Schulstunde:</label>
+                <select id="schedule-start-period" name="start_period" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="1">1. Stunde (08:00 - 08:45)</option>
+                    <option value="2">2. Stunde (08:45 - 09:30)</option>
+                    <option value="3">3. Stunde (09:45 - 10:30)</option>
+                    <option value="4">4. Stunde (10:30 - 11:15)</option>
+                    <option value="5">5. Stunde (11:30 - 12:15)</option>
+                    <option value="6">6. Stunde (12:15 - 13:00)</option>
+                    <option value="7">7. Stunde (13:30 - 14:15)</option>
+                    <option value="8">8. Stunde (14:15 - 15:00)</option>
+                    <option value="9">9. Stunde (15:15 - 16:00)</option>
+                    <option value="10">10. Stunde (16:00 - 16:45)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-end-period">Bis Schulstunde:</label>
+                <select id="schedule-end-period" name="end_period" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="1">1. Stunde (08:00 - 08:45)</option>
+                    <option value="2">2. Stunde (08:45 - 09:30)</option>
+                    <option value="3">3. Stunde (09:45 - 10:30)</option>
+                    <option value="4">4. Stunde (10:30 - 11:15)</option>
+                    <option value="5">5. Stunde (11:30 - 12:15)</option>
+                    <option value="6">6. Stunde (12:15 - 13:00)</option>
+                    <option value="7">7. Stunde (13:30 - 14:15)</option>
+                    <option value="8">8. Stunde (14:15 - 15:00)</option>
+                    <option value="9">9. Stunde (15:15 - 16:00)</option>
+                    <option value="10">10. Stunde (16:00 - 16:45)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-notes">Notizen:</label>
+                <textarea id="schedule-notes" name="notes" placeholder="Optionale Notizen..."></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="save-button">Termin speichern</button>
+                <button type="button" class="cancel-button" onclick="closeScheduleModal()">Abbrechen</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -1802,6 +1948,9 @@
         // Set up edit form submission
         setupEditFormSubmission();
         
+        // Set up schedule form submission
+        setupScheduleFormSubmission();
+        
         // Set up add new location buttons
         const editAddLocationBtn = document.getElementById('edit-add-new-location-btn');
         if (editAddLocationBtn) {
@@ -1952,7 +2101,7 @@
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('');
+                        const imagesHtml = item.Images ? item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
                         
                         // Check if item is borrowed by current user
                         const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
@@ -1965,6 +2114,23 @@
                                     Ausgeliehen von: <strong>${item.BorrowerInfo.username}</strong>
                                     ${item.BorrowerInfo.borrowTime ? '<br><span class="borrow-time">Seit: ' + item.BorrowerInfo.borrowTime + '</span>' : ''}
                                 </div>`;
+                        }
+
+                        // Add appointment badge if item has upcoming appointments
+                        let appointmentBadge = '';
+                        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+                            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+                            if (upcomingAppointment) {
+                                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                                
+                                appointmentBadge = `
+                                    <div class="appointment-badge">
+                                        <strong>Geplant für:</strong> ${formattedDate}<br>
+                                        <span class="appointment-time">${startPeriod}${endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : ''}</span>
+                                    </div>`;
+                            }
                         }
 
                         card.innerHTML = `
@@ -1981,6 +2147,7 @@
                                     <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
                                 </div>
                                 ${borrowerBadge}
+                                ${appointmentBadge}
                             </div>
                             <div class="actions">
                                 ${item.Verfuegbar ? 
@@ -1999,6 +2166,7 @@
                                 </a>
                                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
+                                <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
                             </div>
                         `;
                         itemsContainer.appendChild(card);
@@ -2019,7 +2187,7 @@
                                 e.stopPropagation();
                                 
                                 const modalItemData = {...item};
-                                modalItemData.Images = item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img);
+                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
                                 
                                 openItemModal(modalItemData);
                             });
@@ -2228,9 +2396,31 @@
             `;
         }
         
+        // Add appointment info panel if item has appointments
+        let appointmentInfoHtml = '';
+        if (item.appointments && Array.isArray(item.appointments) && item.appointments.length > 0) {
+            const upcomingAppointment = getUpcomingAppointment(item.appointments);
+            if (upcomingAppointment) {
+                const formattedDate = formatAppointmentDate(upcomingAppointment.date);
+                const startPeriod = formatAppointmentPeriod(upcomingAppointment.start_period);
+                const endPeriod = formatAppointmentPeriod(upcomingAppointment.end_period);
+                const timeDisplay = startPeriod + (endPeriod && endPeriod !== startPeriod ? ' - ' + endPeriod : '');
+                
+                appointmentInfoHtml = `
+                    <div class="appointment-info-panel">
+                        <h4>Geplanter Termin</h4>
+                        <p class="appointment-date">Datum: ${formattedDate}</p>
+                        <p class="appointment-time">Zeit: ${timeDisplay}</p>
+                        ${upcomingAppointment.notes ? `<p class="appointment-notes">Notizen: ${upcomingAppointment.notes}</p>` : ''}
+                    </div>
+                `;
+            }
+        }
+        
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
             ${borrowerInfoHtml}
+            ${appointmentInfoHtml}
             
             <div class="modal-image-container">
                 ${imagesHtml}
@@ -2303,6 +2493,7 @@
                 }
                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
+                <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
                 <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
                     <button class="delete-button">Löschen</button>
                 </a>
@@ -2658,25 +2849,114 @@
         document.getElementById('edit-modal').style.display = 'none';
     }
 
-    // Setup edit form submission handler
+    // Schedule modal functions
+    function openScheduleModal(itemId) {
+        document.getElementById('schedule-item-id').value = itemId;
+        
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('schedule-date').value = today;
+        
+        // Clear form
+        document.getElementById('schedule-notes').value = '';
+        document.getElementById('schedule-start-period').value = '';
+        document.getElementById('schedule-end-period').value = '';
+        
+        document.getElementById('schedule-modal').style.display = 'block';
+    }
+
+    function closeScheduleModal() {
+        document.getElementById('schedule-modal').style.display = 'none';
+    }
+
+    // Setup schedule form submission
+    function setupScheduleFormSubmission() {
+        const scheduleForm = document.getElementById('schedule-form');
+        if (scheduleForm) {
+            scheduleForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                
+                // Use the current origin (protocol + hostname) to ensure we're using the correct protocol
+                fetch(window.location.origin + '/schedule_appointment', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    // Check if response is 409 Conflict
+                    if (response.status === 409) {
+                        return response.json().then(data => {
+                            alert('Terminkonflikt: ' + (data.message || 'Der gewählte Termin steht nicht zur Verfügung.'));
+                            return { success: false };
+                        });
+                    } else if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('Error response:', data);
+                            return { success: false, message: data.message };
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        alert('Termin wurde erfolgreich geplant!');
+                        closeScheduleModal();
+                        // Reload items to show updated appointment info
+                        loadItems();
+                    } else if (data.message) {
+                        alert('Fehler beim Planen des Termins: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error scheduling appointment:', error);
+                    alert('Fehler beim Planen des Termins');
+                });
+            });
+        }
+    }
+
+    // Setup edit form submission
     function setupEditFormSubmission() {
         const editForm = document.getElementById('edit-item-form');
         if (editForm) {
             editForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                // Get the item ID from the hidden field
                 const itemId = document.getElementById('edit-item-id').value;
-                if (!itemId) {
-                    alert('Fehler: Element-ID nicht gefunden.');
-                    return;
-                }
+                const formData = new FormData(this);
                 
-                // Set the form action dynamically
-                this.action = `{{ url_for('edit_item', id='') }}${itemId}`;
-                
-                // Submit the form
-                this.submit();
+                fetch(`/edit_item/${itemId}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        closeEditModal();
+                        // Reload items to show updated information
+                        loadItems();
+                        // Show success message
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'alert alert-success';
+                        successMsg.textContent = 'Item wurde erfolgreich aktualisiert!';
+                        successMsg.style.position = 'fixed';
+                        successMsg.style.top = '20px';
+                        successMsg.style.right = '20px';
+                        successMsg.style.zIndex = '9999';
+                        document.body.appendChild(successMsg);
+                        setTimeout(() => {
+                            if (successMsg.parentNode) {
+                                successMsg.parentNode.removeChild(successMsg);
+                            }
+                        }, 3000);
+                    } else {
+                        alert('Fehler beim Aktualisieren des Items');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating item:', error);
+                    alert('Fehler beim Aktualisieren des Items');
+                });
             });
         }
     }
@@ -2761,6 +3041,76 @@
         });
     }
 
-    // ...existing code...
+    // Helper functions for appointment display
+    function formatAppointmentDate(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateString;
+        }
+    }
+
+    function formatAppointmentTime(timeString) {
+        if (!timeString) return '';
+        // timeString format: "HH:MM" or "HH:MM:SS"
+        const timeParts = timeString.split(':');
+        if (timeParts.length >= 2) {
+            return `${timeParts[0]}:${timeParts[1]}`;
+        }
+        return timeString;
+    }
+
+    function formatAppointmentPeriod(period) {
+        if (!period) return '';
+        const periodMap = {
+            '1': '1. Stunde',
+            '2': '2. Stunde',
+            '3': '3. Stunde',
+            '4': '4. Stunde',
+            '5': '5. Stunde',
+            '6': '6. Stunde',
+            '7': '7. Stunde',
+            '8': '8. Stunde',
+            '9': '9. Stunde',
+            '10': '10. Stunde',
+            'pause1': '1. Pause',
+            'pause2': '2. Pause',
+            'mittagspause': 'Mittagspause'
+        };
+        return periodMap[period] || period;
+    }
+
+    function getUpcomingAppointment(appointments) {
+        if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
+            return null;
+        }
+        
+        const now = new Date();
+        const today = now.toDateString();
+        
+        // Filter appointments that are today or in the future
+        const futureAppointments = appointments.filter(apt => {
+            try {
+                const aptDate = new Date(apt.date);
+                return aptDate.toDateString() === today || aptDate >= now.setHours(0, 0, 0, 0);
+            } catch (e) {
+                return false;
+            }
+        });
+        
+        if (futureAppointments.length === 0) return null;
+        
+        // Sort by date and return the earliest
+        futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
+        return futureAppointments[0];
+    }
+
+    /* ...existing code... */
 </script>
 {% endblock %}

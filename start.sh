@@ -398,6 +398,26 @@ server {
     # Static files
     location /static {
         alias $PROJECT_ROOT/Web/static;
+        add_header 'Access-Control-Allow-Origin' '*';
+        expires 30d;
+        access_log off;
+        autoindex off;
+        try_files \$uri \$uri/ =404;
+    }
+    
+    # Explicitly handle CSS files
+    location ~ ^/static/css/(.+\.css)$ {
+        alias $PROJECT_ROOT/Web/static/css/\$1;
+        add_header Content-Type text/css;
+        expires 30d;
+        access_log off;
+    }
+    
+    # Explicitly handle favicon.ico
+    location = /favicon.ico {
+        alias $PROJECT_ROOT/Web/static/favicon.ico;
+        access_log off;
+        expires 30d;
     }
 }
 EOF

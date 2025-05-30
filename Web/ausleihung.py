@@ -37,6 +37,9 @@ from bson.objectid import ObjectId
 import datetime
 import pytz
 from datetime import timezone
+import os
+import json
+import shutil
 
 # Add this helper function after imports
 def ensure_timezone_aware(dt):
@@ -47,6 +50,133 @@ def ensure_timezone_aware(dt):
         # Treat naive datetimes as UTC
         return dt.replace(tzinfo=None)
     return dt
+
+def get_current_status(ausleihung, log_changes=False, user=None):
+    """
+    Ermittelt den aktuellen Status einer Ausleihung basierend auf den Zeitstempeln
+    und dem gespeicherten Status. Diese Funktion berücksichtigt das aktuelle Datum
+    und aktualisiert den Status entsprechend dem realen Zustand.
+    
+    Status-Werte:
+    - 'planned': Eine zukünftige Ausleihung, die noch nicht begonnen hat
+    - 'active': Eine aktive Ausleihung, die gerade läuft
+    - 'completed': Eine beendete Ausleihung
+    - 'cancelled': Eine stornierte Ausleihung
+    
+    Args:
+        ausleihung (dict): Der Ausleihungsdatensatz
+        log_changes (bool): Ob Statusänderungen protokolliert werden sollen
+        user (str): Der Benutzer, der die Prüfung durchführt (für Logs)
+        
+    Returns:
+        str: Der aktuelle Status ('planned', 'active', 'completed', 'cancelled')
+    """
+    # Speichern Sie den ursprünglichen Status für Logging-Zwecke
+    original_status = ausleihung.get('Status', 'unknown')
+    
+    # Bei stornierten Ausleihungen bleibt der Status immer storniert
+    if original_status == 'cancelled':
+        return 'cancelled'
+    
+    current_time = datetime.datetime.now()
+    start_time = ausleihung.get('Start')
+    end_time = ausleihung.get('End')
+    
+    # Wenn kein Startdatum vorhanden ist, Status auf 'planned' setzen
+    if not start_time:
+        new_status = 'planned'
+    # Wenn die Ausleihung als 'completed' markiert wurde und ein Enddatum hat,
+    # bleibt sie bei 'completed'
+    elif original_status == 'completed' and end_time:
+        new_status = 'completed'
+    # Wenn die aktuelle Zeit vor dem Startdatum liegt, ist die Ausleihung geplant
+    elif current_time < start_time:
+        new_status = 'planned'
+    # Wenn kein Enddatum gesetzt ist oder die aktuelle Zeit vor dem Enddatum liegt,
+    # ist die Ausleihung aktiv
+    elif not end_time or current_time < end_time:
+        new_status = 'active'
+    # Wenn die aktuelle Zeit nach dem Enddatum liegt, ist die Ausleihung beendet
+    else:
+        new_status = 'completed'
+    
+    # Protokollieren Sie Statusänderungen, wenn aktiviert und eine Änderung stattgefunden hat
+    if log_changes and new_status != original_status and '_id' in ausleihung:
+        try:
+            # Importieren Sie das Modul nur bei Bedarf, um zirkuläre Importe zu vermeiden
+            import ausleihung_log
+            ausleihung_log.log_status_change(
+                str(ausleihung['_id']), 
+                original_status, 
+                new_status,
+                user
+            )
+        except Exception as e:
+            print(f"Fehler beim Protokollieren der Statusänderung: {e}")
+    
+    return new_status
+
+def create_backup_database():
+    """
+    Erstellt eine Sicherungskopie der Ausleihungsdatenbank.
+    
+    Returns:
+        bool: True wenn Backup erfolgreich erstellt wurde, sonst False
+    """
+    try:
+        # Verbindung zur Datenbank herstellen
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        ausleihungen = db['ausleihungen']
+        
+        # Backup-Verzeichnis erstellen, falls es nicht existiert
+        backup_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backups')
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        
+        # Aktuelles Datum für den Dateinamen
+        current_date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        backup_file = os.path.join(backup_dir, f'ausleihungen_backup_{current_date}.json')
+        
+        # Ausleihungen abrufen und als JSON speichern
+        all_ausleihungen = list(ausleihungen.find({}))
+        
+        # ObjectId in String umwandeln für JSON-Serialisierung
+        for ausleihung in all_ausleihungen:
+            ausleihung['_id'] = str(ausleihung['_id'])
+            if 'Start' in ausleihung and ausleihung['Start']:
+                ausleihung['Start'] = ausleihung['Start'].isoformat()
+            if 'End' in ausleihung and ausleihung['End']:
+                ausleihung['End'] = ausleihung['End'].isoformat()
+            if 'LastUpdated' in ausleihung and ausleihung['LastUpdated']:
+                ausleihung['LastUpdated'] = ausleihung['LastUpdated'].isoformat()
+        
+        with open(backup_file, 'w', encoding='utf-8') as f:
+            json.dump(all_ausleihungen, f, ensure_ascii=False, indent=4)
+        
+        # Log-Eintrag erstellen
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        log_file = os.path.join(log_dir, 'ausleihungen_backup.log')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"{current_date}: Backup erstellt: {backup_file}, {len(all_ausleihungen)} Einträge\n")
+        
+        client.close()
+        return True
+    except Exception as e:
+        # Fehler protokollieren
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        log_file = os.path.join(log_dir, 'ausleihungen_error.log')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}: Backup-Fehler: {str(e)}\n")
+        
+        print(f"Fehler beim Erstellen des Backups: {e}")
+        return False
 
 
 # === AUSLEIHUNG MANAGEMENT ===
@@ -401,13 +531,14 @@ def get_cancelled_ausleihungen(start=None, end=None):
 
 # === SEARCH FUNCTIONS ===
 
-def get_ausleihung_by_user(user_id, status=None):
+def get_ausleihung_by_user(user_id, status=None, use_client_side_verification=True):
     """
-    Ruft Ausleihungen für einen bestimmten Benutzer ab.
+    Ruft Ausleihungen für einen bestimmten Benutzer ab und verifiziert den Status clientseitig.
     
     Args:
         user_id (str): ID oder Benutzername des Benutzers
         status (str/list, optional): Status(se) der Ausleihungen
+        use_client_side_verification (bool, optional): Ob der Status clientseitig verifiziert werden soll
         
     Returns:
         list: Liste von Ausleihungsdatensätzen des Benutzers
@@ -418,21 +549,71 @@ def get_ausleihung_by_user(user_id, status=None):
         ausleihungen = db['ausleihungen']
         
         query = {'User': user_id}
-        if status is not None:
-            if isinstance(status, list):
-                query['Status'] = {'$in': status}
+        
+        # Wenn clientseitige Verifikation verwendet wird, holen wir ALLE Ausleihungen
+        # und filtern später clientseitig
+        if use_client_side_verification:
+            # Bei clientseitiger Verifikation alle Ausleihungen holen (auch cancelled)
+            # da wir den Status später neu berechnen
+            pass  # query bleibt unverändert
+        else:
+            # Exclude only cancelled status by default - we want to see planned, active, and completed
+            if status is not None:
+                if isinstance(status, list):
+                    query['Status'] = {'$in': status}
+                else:
+                    query['Status'] = status
             else:
-                query['Status'] = status
+                # Otherwise exclude only cancelled appointments
+                query['Status'] = {'$ne': 'cancelled'}
             
-        results = list(ausleihungen.find(query))
+        # Get appointments from database
+        if not use_client_side_verification:
+            results = list(ausleihungen.find(query))
+            client.close()
+            return results
+        
+        # Wenn clientseitige Statusverifikation aktiviert ist, holen wir alle Ausleihungen
+        # des Benutzers und verifizieren den Status anschließend
+        all_ausleihungen = list(ausleihungen.find(query))
         client.close()
-        return results
+        
+        # Immer clientseitige Statusverifikation durchführen wenn aktiviert
+        if use_client_side_verification:
+            for ausleihung in all_ausleihungen:
+                # Clientseitige Statusverifizierung für alle Ausleihungen
+                current_status = get_current_status(ausleihung)
+                ausleihung['VerifiedStatus'] = current_status
+        
+        # Wenn keine Filterung erforderlich ist, geben wir alle Ausleihungen zurück
+        if status is None:
+            return all_ausleihungen
+        
+        # Statusfilterung durchführen
+        filtered_results = []
+        for ausleihung in all_ausleihungen:
+            # Clientseitige Statusverifizierung
+            current_status = get_current_status(ausleihung)
+            
+            # Status-Matching
+            if isinstance(status, list):
+                if current_status in status:
+                    # Status aktualisieren und zur Ergebnismenge hinzufügen
+                    ausleihung['VerifiedStatus'] = current_status
+                    filtered_results.append(ausleihung)
+            else:
+                if current_status == status:
+                    # Status aktualisieren und zur Ergebnismenge hinzufügen
+                    ausleihung['VerifiedStatus'] = current_status
+                    filtered_results.append(ausleihung)
+        
+        return filtered_results
     except Exception as e:
         # print(f"Error retrieving ausleihungen for user {user_id}: {e}") # Log the error
         return []
 
 
-def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=False):
+def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=False, use_client_side_verification=True):
     """
     Get active borrowing record for an item.
     
@@ -440,6 +621,7 @@ def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=F
         item_id (str): ID of the item
         include_history (bool): Whether to include completed records
         include_exemplar_id (bool): Whether to match exact exemplar IDs
+        use_client_side_verification (bool): Whether to use client-side status verification
         
     Returns:
         dict: Borrowing record or None if not found
@@ -451,8 +633,8 @@ def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=F
         
         query = {'Item': item_id}
         
-        # If not checking history, only look for active borrowings
-        if not include_history:
+        # If not using client-side verification and not checking history, only look for active borrowings
+        if not use_client_side_verification and not include_history:
             query['Status'] = 'active'
             
         # If considering exemplar IDs specifically
@@ -469,12 +651,23 @@ def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=F
                     {'Item': item_id},  # Exact match
                     {'ExemplarData.parent_id': item_id}  # Parent ID match
                 ]}
-                if not include_history:
+                if not use_client_side_verification and not include_history:
                     parent_query['Status'] = 'active'
                 
                 ausleihung = ausleihungen.find_one(parent_query)
         
         client.close()
+        
+        # Apply client-side status verification if enabled and a record is found
+        if use_client_side_verification and ausleihung:
+            # Determine the current status based on timestamps
+            current_status = get_current_status(ausleihung)
+            ausleihung['VerifiedStatus'] = current_status
+            
+            # If not including history and the status is not 'active', return None
+            if not include_history and current_status != 'active':
+                return None
+        
         return ausleihung
     except Exception as e:
         print(f"Error getting ausleihung by item: {e}")
@@ -552,13 +745,20 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
                     continue
                     
                 # Compare just the date part
-                existing_date = booking_start.date()
-                if existing_date == booking_date:
-                    # If this booking has the same period, it's a conflict
-                    if booking.get('Period') == period_int:
-                        print(f"CONFLICT: Same day, same period. Period: {period_int}, Date: {booking_date}")
-                        client.close()
-                        return True
+                try:
+                    # Ensure we're comparing date objects, not datetime objects
+                    existing_date = booking_start.date()
+                    if existing_date == booking_date:
+                        # If this booking has the same period, it's a conflict
+                        booking_period = booking.get('Period')
+                        # Convert to integer for proper comparison
+                        if booking_period is not None and int(booking_period) == period_int:
+                            print(f"CONFLICT: Same day, same period. Period: {period_int}, Date: {booking_date}")
+                            client.close()
+                            return True
+                except Exception as e:
+                    print(f"Error comparing dates: {e}")
+                    # Continue checking other bookings if there's an error with one
         
         # If no period specified, check for time overlaps
         else:
@@ -597,7 +797,7 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
         return True  # Bei Fehler Konflikt annehmen, um auf Nummer sicher zu gehen
 
 
-def check_booking_conflict(item_id, start_date, end_date, period=None, period_end=None):
+def check_booking_period_range_conflict(item_id, start_date, end_date, period=None, period_end=None):
     """
     Checks for conflicts with existing bookings, supporting period ranges
     
