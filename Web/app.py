@@ -436,7 +436,7 @@ def upload_admin():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrresse zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
     # Check if this is a duplication request
@@ -1169,20 +1169,32 @@ def zurueckgeben(id):
         if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
             try:
                 # Get existing borrowing record BEFORE updating the item status
-                ausleihung_data = au.get_ausleihung_by_item(id)
+                ausleihung_data = au.get_ausleihung_by_item(id, include_history=True)
                 end_date = datetime.datetime.now()
                 
                 # Store the borrower's username before updating item status
                 original_user = item.get('User', username)
                 
                 if ausleihung_data and '_id' in ausleihung_data:
-                    # Update existing record
+                    # Get fresh status verification without relying on cached VerifiedStatus
+                    current_status = au.get_current_status(ausleihung_data, log_changes=False, user=username)
+                    database_status = ausleihung_data.get('Status', 'unknown');
+                    
+                    # Only prevent return if the database status is already 'completed'
+                    # Don't use client-side verification here as it may be incorrect for active appointments
+                    if database_status == 'completed':
+                        flash('Item has already been returned', 'info')
+                        if 'username' in session and not us.check_admin(session['username']):
+                            return redirect(url_for('home'))
+                        return redirect(url_for('home_admin'))
+                    
+                    # Update existing record only if it's not already completed
                     ausleihung_id = str(ausleihung_data['_id'])
                     user = ausleihung_data.get('User', original_user)
                     start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
                     
                     # Update the ausleihung first
-                    au.update_ausleihung(ausleihung_id, id, user, start, end_date, status='completed')
+                    au.update_ausleihung(ausleihung_id, item_id=id, user_id=user, start=start, end=end_date, status='completed')
                     
                     # Then update the item status (only once)
                     it.update_item_status(id, True, original_user)
@@ -1224,12 +1236,18 @@ def zurueckgeben(id):
             end_date = datetime.datetime.now()
             for exemplar in exemplars_to_return:
                 exemplar_id = f"{id}_{exemplar['number']}"
-                ausleihung_data = au.get_ausleihung_by_item(exemplar_id, include_exemplar_id=True)
+                ausleihung_data = au.get_ausleihung_by_item(exemplar_id, include_exemplar_id=True, include_history=True)
                 
                 if ausleihung_data and '_id' in ausleihung_data:
-                    ausleihung_id = str(ausleihung_data['_id'])
-                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
-                    au.update_ausleihung(ausleihung_id, exemplar_id, username, start, end_date, status='completed')
+                    # Check if this exemplar's ausleihung is already completed
+                    current_status = ausleihung_data.get('Status', 'unknown')
+                    verified_status = ausleihung_data.get('VerifiedStatus', current_status)
+                    
+                    if verified_status != 'completed':
+                        # Only update if not already completed
+                        ausleihung_id = str(ausleihung_data['_id'])
+                        start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
+                        au.update_ausleihung(ausleihung_id, item_id=exemplar_id, user_id=username, start=start, end=end_date, status='completed')
             
             flash(f'{exemplare_count} copies returned successfully', 'success')
         else:
@@ -2252,25 +2270,21 @@ def my_borrowed_items():
                 if original_status == 'cancelled':
                     continue
                 
-                # Use the verified status if available, otherwise get it fresh
-                current_status = appointment.get('VerifiedStatus')
-                if not current_status:
-                    current_status = au.get_current_status(
-                        appointment,
-                        log_changes=True,
-                        user=username
-                    )
-                    appointment['VerifiedStatus'] = current_status
+                # Use fresh status verification for each appointment
+                # This ensures we get the most accurate status based on current time
+                current_status = au.get_current_status(
+                    appointment,
+                    log_changes=False,  # Don't log changes during dashboard loading
+                    user=username
+                )
                 
                 print(f"Appointment {appointment_id}: Original status={original_status}, Verified status={current_status}")
                 print(f"  - Start: {start_time}, End: {end_time}")
                 
-                # Store the verified status on the appointment object
-                appointment['VerifiedStatus'] = current_status
-                
-                # Organize appointments by their status
+                # Organize appointments by their current verified status
                 if current_status == 'planned':
                     planned_ausleihungen.append(appointment)
+                    print(f"  - Added to planned appointments")
                 elif current_status == 'active':
                     active_ausleihungen.append(appointment)
                     print(f"  - Added to active appointments")
@@ -2740,3 +2754,6 @@ def test_scheduler():
             'error': str(e),
             'timestamp': datetime.datetime.now().isoformat()
         }), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
