@@ -233,56 +233,65 @@ def add_ausleihung(item_id, user, start_date, end_date=None, notes="", status="a
 
 def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, notes=None, status=None, period=None):
     """
-    Aktualisiert einen bestehenden Ausleihungsdatensatz.
-    Nur die angegebenen Felder werden aktualisiert.
+    Update an existing ausleihung record.
     
     Args:
-        id (str): ID des zu aktualisierenden Ausleihungsdatensatzes
-        item_id (str, optional): ID des ausgeliehenen Gegenstands
-        user_id (str, optional): ID oder Benutzername des Ausleihers
-        start (datetime, optional): Startdatum/-zeit der Ausleihperiode
-        end (datetime, optional): Enddatum/-zeit der Ausleihperiode
-        notes (str, optional): Zusätzliche Notizen zu dieser Ausleihe
-        status (str, optional): Status der Ausleihe
-        period (int, optional): Schulstunde (1-10) der Ausleihung
+        id (str): ID of the ausleihung to update
+        item_id (str, optional): New item ID
+        user_id (str, optional): New user ID
+        start (datetime, optional): New start time
+        end (datetime, optional): New end time
+        notes (str, optional): New notes
+        status (str, optional): New status
+        period (int, optional): New period
         
     Returns:
-        bool: True bei Erfolg, sonst False
+        bool: True if successful, False otherwise
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
-        update_data = {'LastUpdated': datetime.datetime.now()}
+        # Build update data with only the fields that are provided
+        update_data = {}
         
-        # Nur angegebene Felder aktualisieren
         if item_id is not None:
             update_data['Item'] = item_id
         if user_id is not None:
             update_data['User'] = user_id
         if start is not None:
-            update_data['Start'] = start
+            # Ensure timezone-aware datetime
+            update_data['Start'] = ensure_timezone_aware(start)
         if end is not None:
-            update_data['End'] = end
+            # Ensure timezone-aware datetime
+            update_data['End'] = ensure_timezone_aware(end)
         if notes is not None:
             update_data['Notes'] = notes
         if status is not None:
             update_data['Status'] = status
         if period is not None:
-            update_data['Period'] = int(period)
+            update_data['Period'] = period
             
+        # Always update the LastUpdated timestamp
+        update_data['LastUpdated'] = datetime.datetime.now()
+        
+        # Perform the update
         result = ausleihungen.update_one(
-            {'_id': ObjectId(id)}, 
+            {'_id': ObjectId(id)},
             {'$set': update_data}
         )
         
         client.close()
+        
+        # Log the update for debugging
+        print(f"Updated ausleihung {id}: modified_count={result.modified_count}, update_data={update_data}")
+        
         return result.modified_count > 0
+        
     except Exception as e:
-        # print(f"Error updating ausleihung: {e}") # Log the error
+        print(f"Error updating ausleihung: {e}")
         return False
-
 
 def complete_ausleihung(id, end_time=None):
     """
@@ -630,62 +639,40 @@ def get_ausleihung_by_user(user_id, status=None, use_client_side_verification=Tr
         return []
 
 
-def get_ausleihung_by_item(item_id, include_history=False, include_exemplar_id=False, use_client_side_verification=True):
+def get_ausleihung_by_item(item_id, status=None, include_history=False):
     """
-    Get active borrowing record for an item.
+    Get ausleihung record(s) for a specific item.
     
     Args:
         item_id (str): ID of the item
-        include_history (bool): Whether to include completed records
-        include_exemplar_id (bool): Whether to match exact exemplar IDs
-        use_client_side_verification (bool): Whether to use client-side status verification
+        status (str, optional): Filter by status
+        include_history (bool): If True, return the most recent record regardless of status
         
     Returns:
-        dict: Borrowing record or None if not found
+        dict or None: Ausleihung record or None if not found
     """
     try:
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
         
+        # Build query
         query = {'Item': item_id}
+        if status and not include_history:
+            query['Status'] = status
         
-        # If not using client-side verification and not checking history, only look for active borrowings
-        if not use_client_side_verification and not include_history:
-            query['Status'] = 'active'
+        # Get the most recent record by sorting by Start date descending
+        ausleihung = ausleihungen.find(query).sort('Start', -1).limit(1)
+        
+        result = None
+        for record in ausleihung:
+            record['_id'] = str(record['_id'])
+            result = record
+            break
             
-        # If considering exemplar IDs specifically
-        if include_exemplar_id:
-            ausleihung = ausleihungen.find_one(query)
-        else:
-            # Check for both exact ID match and parent_id match for exemplars
-            if '_' in item_id:
-                # It's an exemplar ID, so find by exact match
-                ausleihung = ausleihungen.find_one(query)
-            else:
-                # It's a parent ID, so also check for exemplar records
-                parent_query = {'$or': [
-                    {'Item': item_id},  # Exact match
-                    {'ExemplarData.parent_id': item_id}  # Parent ID match
-                ]}
-                if not use_client_side_verification and not include_history:
-                    parent_query['Status'] = 'active'
-                
-                ausleihung = ausleihungen.find_one(parent_query)
-        
         client.close()
+        return result
         
-        # Apply client-side status verification if enabled and a record is found
-        if use_client_side_verification and ausleihung:
-            # Determine the current status based on timestamps
-            current_status = get_current_status(ausleihung)
-            ausleihung['VerifiedStatus'] = current_status
-            
-            # If not including history and the status is not 'active', return None
-            if not include_history and current_status != 'active':
-                return None
-        
-        return ausleihung
     except Exception as e:
         print(f"Error getting ausleihung by item: {e}")
         return None
@@ -1141,6 +1128,8 @@ def get_bookings_starting_now(current_time):
 def get_bookings_ending_now(current_time):
     """Kompatibilitätsfunktion - ruft endende Ausleihungen ab"""
     return get_ausleihungen_ending_now(current_time)
+
+
 
 
 def reset_item_completely(item_id):

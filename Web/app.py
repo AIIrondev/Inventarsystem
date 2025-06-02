@@ -1143,6 +1143,8 @@ def ausleihen(id):
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
+
+
 @app.route('/zurueckgeben/<id>', methods=['POST'])
 def zurueckgeben(id): 
     """
@@ -1166,68 +1168,57 @@ def zurueckgeben(id):
         
     username = session['username']
     
-    # If it's a simple item without exemplars
+    print("Code 1169: zurueckgeben called with item ID:", id)
+
     if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
+        print("Code 1172: Item is not available, proceeding with return")
         try:
-            # Get existing borrowing record BEFORE updating the item status
-            ausleihung_data = au.get_ausleihung_by_item(id, include_history=True)
-            end_date = datetime.datetime.now()
+            # Get ALL active borrowing records for this item and complete them
+            client = MongoClient('localhost', 27017)
+            db = client['Inventarsystem']
+            ausleihungen = db['ausleihungen']
             
-            # Store the borrower's username before updating item status
+            # Find all active records for this item
+            active_records = ausleihungen.find({
+                'Item': id,
+                'Status': 'active'
+            })
+            
+            end_date = datetime.datetime.now()
             original_user = item.get('User', username)
             
-            if ausleihung_data and '_id' in ausleihung_data:
-                # Get fresh status verification without relying on cached VerifiedStatus
-                current_status = it.get_current_status(id)
-                database_status = ausleihung_data.get('Status', 'unknown');
+            updated_count = 0
+            for record in active_records:
+                ausleihung_id = str(record['_id'])
+                print(f"Completing active ausleihung {ausleihung_id} for item {id}")
                 
-                # Only prevent return if the database status is already 'completed'
-                # Don't use client-side verification here as it may be incorrect for active appointments
-                if database_status == 'completed' and current_status == 'completed':
-                    flash('Item has already been returned', 'info')
-                    if 'username' in session and not us.check_admin(session['username']):
-                        return redirect(url_for('home'))
-                    return redirect(url_for('home_admin'))
-                
-                # Update existing record only if it's not already completed
-                ausleihung_id = str(ausleihung_data['_id'])
-                user = ausleihung_data.get('User', original_user)
-                start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
-                
-                print(f"Updating ausleihung {ausleihung_id} for item {id} with user {user}, start {start}, end {end_date}")
-
-                # Update the ausleihung first - CORRECTED FUNCTION CALL
-                au.update_ausleihung(
-                    ausleihung_id, 
-                    item_id=id,
-                    user_id=user, 
-                    start=start, 
-                    end=end_date, 
-                    status='completed'
+                # Update each active record
+                result = ausleihungen.update_one(
+                    {'_id': ObjectId(ausleihung_id)},
+                    {'$set': {
+                        'Status': 'completed',
+                        'End': end_date,
+                        'LastUpdated': datetime.datetime.now()
+                    }}
                 )
                 
-                # Update the item status
-                # This will also log the return action
-                it.update_item_status(id, True, original_user)
-                flash('Item returned successfully', 'success')
-            elif not ausleihung_data:
-                # If no existing record, create a new one
-                # Create a new ausleihung record
-                au.add_ausleihung(  
-                    id, 
-                    original_user, 
-                    datetime.datetime.now() - datetime.timedelta(hours=1),  # Use a default start time
-                    end_date=end_date, 
-                    status='completed'
-                )
-                flash('Item returned successfully', 'success')
+                if result.modified_count > 0:
+                    updated_count += 1
+            
+            client.close()
+            
+            # Update the item status
+            it.update_item_status(id, True, original_user)
+            
+            if updated_count > 0:
+                flash(f'Item returned successfully ({updated_count} record(s) completed)', 'success')
             else:
-                # Fallback for missing record
-                it.update_item_status(id, True, original_user)
-                flash('Item returned successfully (new record created)', 'success')
+                flash('Item returned successfully', 'success')
+                
         except Exception as e:
+            print(f"Error in return process: {e}")
             it.update_item_status(id, True)
-            flash(f'Item returned but encountered an error in record-keeping: {str(e)}', 'warning')
+            flash(f'Item returned but encountered an error: {str(e)}', 'warning')
     else:
         flash('You are not authorized to return this item or it is already available', 'error')
 
@@ -2760,4 +2751,8 @@ def reset_item(id):
             'success': False,
             'error': f'Server error: {str(e)}'
         }), 500
-    
+
+
+if __name__ == '__main__':
+    # Run the Flask app
+    app.run(debug=True, host='0.0.0.0', port=5001)
