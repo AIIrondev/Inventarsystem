@@ -1,0 +1,255 @@
+<!--
+   Copyright 2025 Maximilian Gründinger
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<!-- Edit Item Functions -->
+<script>
+    // Load location options for edit modal
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('edit-location');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    data.locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location;
+                        option.textContent = location;
+                        ortSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
+    // Edit modal functions
+    function openEditModal(itemId) {
+        // Find the item data from allItems array
+        const item = allItems.find(i => i._id === itemId);
+        if (!item) {
+            console.error('Item not found:', itemId);
+            return;
+        }
+
+        // Populate the edit form with current item data
+        document.getElementById('edit-item-id').value = item._id;
+        document.getElementById('edit-name').value = item.Name || '';
+        document.getElementById('edit-description').value = item.Beschreibung || '';
+        document.getElementById('edit-code4').value = item.Code_4 || '';
+        document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
+        document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
+
+        // Load location options
+        loadLocationOptions();
+
+        // Set the current location
+        setTimeout(() => {
+            const locationSelect = document.getElementById('edit-location');
+            if (locationSelect && item.Ort) {
+                locationSelect.value = item.Ort;
+            }
+        }, 100);
+
+        // Handle filter arrays - set current values
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+
+        // Set filter dropdowns (up to 4 each)
+        for (let i = 1; i <= 4; i++) {
+            // Filter 1
+            const filter1Select = document.getElementById(`edit-filter1-${i}`);
+            if (filter1Select) {
+                filter1Select.value = filter1Array[i-1] || '';
+            }
+            
+            // Filter 2
+            const filter2Select = document.getElementById(`edit-filter2-${i}`);
+            if (filter2Select) {
+                filter2Select.value = filter2Array[i-1] || '';
+            }
+            
+            // Filter 3
+            const filter3Select = document.getElementById(`edit-filter3-${i}`);
+            if (filter3Select) {
+                filter3Select.value = filter3Array[i-1] || '';
+            }
+        }
+
+        // Populate existing images
+        populateExistingImages(item.Images || []);
+
+        // Show the modal
+        document.getElementById('edit-modal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+    
+    // Function to add new location (for edit modal)
+    function addNewLocation(prefix) {
+        // Use different input IDs based on whether we're in edit mode
+        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
+        const selectId = prefix === 'edit' ? 'edit-location' : 'ort';
+        
+        const newLocationInput = document.getElementById(inputId);
+        const newLocation = newLocationInput.value.trim();
+        
+        if (!newLocation) {
+            alert('Bitte geben Sie einen Ort ein.');
+            return;
+        }
+        
+        // Add to dropdown
+        const ortSelect = document.getElementById(selectId);
+        const option = document.createElement('option');
+        option.value = newLocation;
+        option.textContent = newLocation;
+        ortSelect.appendChild(option);
+        ortSelect.value = newLocation;
+        
+        // Hide the input field
+        document.getElementById(prefix + '-new-location-container').style.display = 'none';
+        newLocationInput.value = '';
+        
+        // Save to server
+        fetch('/add_location_value', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'value=' + encodeURIComponent(newLocation)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.warn('Failed to save location to server:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving location:', error);
+        });
+    }
+    
+    // Function to cancel adding a new location
+    function cancelAddLocation(prefix) {
+        const containerId = prefix === 'edit' ? 'edit-new-location-container' : 'new-location-container';
+        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
+        document.getElementById(containerId).style.display = 'none';
+        document.getElementById(inputId).value = '';
+    }
+
+    // Function to populate existing images in edit modal
+    function populateExistingImages(images) {
+        const previewContainer = document.getElementById('edit-image-preview-container');
+        if (!previewContainer) return;
+        
+        previewContainer.innerHTML = '';
+        
+        if (!images || images.length === 0) {
+            previewContainer.innerHTML = '<p>Keine Bilder vorhanden</p>';
+            return;
+        }
+        
+        images.forEach((imageName, index) => {
+            const preview = document.createElement('div');
+            preview.className = 'image-preview-item';
+            preview.innerHTML = `
+                <img src="/uploads/${imageName}" alt="Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">
+                <div class="image-controls">
+                    <button type="button" onclick="removeExistingImage('${imageName}', this)" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px;">Entfernen</button>
+                </div>
+            `;
+            previewContainer.appendChild(preview);
+            
+            // Add hidden input for the image
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'existing_images';
+            hiddenInput.value = imageName;
+            previewContainer.appendChild(hiddenInput);
+        });
+    }
+    
+    // Function to remove an existing image
+    function removeExistingImage(imageName, button) {
+        // Remove the preview element
+        const previewItem = button.closest('.image-preview-item');
+        if (previewItem) {
+            previewItem.remove();
+        }
+        
+        // Find and remove the corresponding hidden input
+        const form = document.getElementById('edit-item-form');
+        if (form) {
+            const hiddenInputs = form.querySelectorAll('input[name="existing_images"]');
+            hiddenInputs.forEach(input => {
+                if (input.value === imageName) {
+                    input.remove();
+                }
+            });
+        }
+        
+        // Remove the hidden input
+        const hiddenInputs = document.querySelectorAll('input[name="existing_images"]');
+        hiddenInputs.forEach(input => {
+            if (input.value === imageName) {
+                input.remove();
+            }
+        });
+        
+        // Add to removed images
+        const removedInput = document.createElement('input');
+        removedInput.type = 'hidden';
+        removedInput.name = 'removed_images';
+        removedInput.value = imageName;
+        document.getElementById('edit-form').appendChild(removedInput);
+    }
+    
+    // Validate file types for image uploads
+    document.addEventListener('DOMContentLoaded', function() {
+        const imageInput = document.getElementById('edit-new-images');
+        const previewContainer = document.getElementById('edit-image-preview-container');
+        
+        if (imageInput) {
+            imageInput.addEventListener('change', function(e) {
+                // Validate file types before preview
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                const files = this.files;
+                let hasInvalidFile = false;
+                
+                for (let i = 0; i < files.length; i++) {
+                    if (!allowedTypes.includes(files[i].type)) {
+                        hasInvalidFile = true;
+                        // Clear the file input to prevent submission
+                        this.value = '';
+                        alert('Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF');
+                        return; // Stop processing
+                    }
+                }
+                
+                // Continue with regular preview handling...
+            });
+        }
+    });
+</script>

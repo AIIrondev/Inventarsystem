@@ -696,7 +696,8 @@
             </div>
             <div class="form-group">
                 <label for="images">Bilder:</label>
-                <input type="file" id="images" name="images" accept="image/*" multiple>
+                <input type="file" id="images" name="images" accept=".jpg, .jpeg, .png, .gif" multiple>
+                <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF</div>
                 <!-- Add image preview area -->
                 <div class="image-preview-container" id="image-preview-container"></div>
             </div>
@@ -1143,6 +1144,20 @@
                 previewContainer.innerHTML = '';
                 
                 const files = e.target.files;
+                
+                // Validate file types before preview
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                let hasInvalidFile = false;
+                
+                for (let i = 0; i < files.length; i++) {
+                    if (!allowedTypes.includes(files[i].type)) {
+                        hasInvalidFile = true;
+                        // Clear the file input to prevent submission
+                        imageInput.value = '';
+                        previewContainer.innerHTML = '<div class="error-message">Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF</div>';
+                        return; // Stop processing
+                    }
+                }
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     if (file.type.startsWith('image/')) {

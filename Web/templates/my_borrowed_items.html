@@ -18,6 +18,114 @@
 {% block title %}Meine Ausleihungen{% endblock %}
 
 {% block content %}
+<style>
+    /* ...existing styles... */
+    
+    /* Reset button styling for item cards */
+    .item-reset-button {
+        background-color: #ffc107;
+        color: #212529;
+        border: 2px solid #ffc107;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.85rem;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        transition: all 0.3s ease;
+        margin-left: 10px;
+        min-width: 90px;
+    }
+    
+    .item-reset-button:hover {
+        background-color: #e0a800;
+        border-color: #d39e00;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(255, 193, 7, 0.3);
+    }
+    
+    .item-reset-button:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(255, 193, 7, 0.3);
+    }
+    
+    /* Admin-only indicator */
+    .admin-only-button {
+        opacity: 0.7;
+        pointer-events: none;
+    }
+    
+    .admin-only-tooltip {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .admin-only-tooltip:hover::after {
+        content: "Nur für Administratoren verfügbar";
+        position: absolute;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #333;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 1000;
+    }
+    
+    /* Card action buttons container */
+    .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+        align-items: center;
+    }
+    
+    .card-actions form {
+        display: inline-block;
+        margin: 0;
+    }
+    
+    /* Update action-buttons-container to also use flex layout */
+    .action-buttons-container {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    
+    .action-buttons-container form {
+        display: inline-block;
+        margin: 0;
+    }
+    
+    /* Ensure buttons have consistent spacing */
+    .action-buttons-container .return-button,
+    .action-buttons-container .cancel-button {
+        margin-right: 0;
+        flex: 0 0 auto;
+        width: auto;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .card-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .item-reset-button {
+            margin-left: 0;
+            margin-top: 5px;
+        }
+    }
+</style>
+
 <div class="container">
     <div class="content">
         <h1>Meine aktuellen Ausleihungen</h1>
@@ -106,20 +214,50 @@
                         <form method="POST" action="{{ url_for('cancel_ausleihung_route', id=item.AppointmentData.id) }}" onsubmit="return confirm('Möchten Sie diese aktive Ausleihung wirklich stornieren?');">
                             <button class="cancel-button" type="submit">Stornieren</button>
                         </form>
+                        
+                        <!-- Add reset button for admins -->
+                        {% if user_is_admin %}
+                            <button type="button" 
+                                    class="item-reset-button" 
+                                    onclick="resetItemBorrowingStatus('{{ item._id }}')"
+                                    title="Status des Items zurücksetzen">
+                                Status zurücksetzen
+                            </button>
+                        {% endif %}
                     </div>
                     {% else %}
                     <!-- Regular borrowed item without appointment data -->
-                    <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
-                        <input type="hidden" name="source_page" value="my_borrowed_items">
-                        {% if item.UserExemplarCount is defined and item.UserExemplarCount > 1 %}
-                        <div class="return-count-group">
-                            <label for="exemplare_count_{{ loop.index }}">Anzahl zurückgeben:</label>
-                            <input type="number" id="exemplare_count_{{ loop.index }}" name="exemplare_count" 
-                                   min="1" max="{{ item.UserExemplarCount }}" value="1" class="exemplare-count-input">
-                        </div>
+                    <div class="card-actions">
+                        <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}">
+                            <input type="hidden" name="source_page" value="my_borrowed_items">
+                            {% if item.UserExemplarCount is defined and item.UserExemplarCount > 1 %}
+                            <div class="return-count-group">
+                                <label for="exemplare_count_{{ loop.index }}">Anzahl zurückgeben:</label>
+                                <input type="number" id="exemplare_count_{{ loop.index }}" name="exemplare_count" 
+                                       min="1" max="{{ item.UserExemplarCount }}" value="1" class="exemplare-count-input">
+                            </div>
+                            {% endif %}
+                            <button class="return-button" type="submit">Zurückgeben</button>
+                        </form>
+
+                        <!-- Add reset button for every borrowed item -->
+                        {% if user_is_admin %}
+                            <button type="button" 
+                                    class="item-reset-button" 
+                                    onclick="resetItemBorrowingStatus('{{ item._id }}')"
+                                    title="Status des Items zurücksetzen">
+                                Status zurücksetzen
+                            </button>
+                        {% else %}
+                            <div class="admin-only-tooltip">
+                                <button type="button" 
+                                        class="item-reset-button admin-only-button"
+                                        title="Nur für Administratoren verfügbar">
+                                    Status zurücksetzen
+                                </button>
+                            </div>
                         {% endif %}
-                        <button class="return-button" type="submit">Zurückgeben</button>
-                    </form>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -204,9 +342,29 @@
                 </div>
                 
                 <div class="item-actions">
-                    <form method="POST" action="{{ url_for('cancel_ausleihung_route', id=item.AppointmentData.id) }}" onsubmit="return confirm('Möchten Sie diesen geplanten Termin wirklich stornieren?');">
-                        <button class="cancel-button" type="submit">Stornieren</button>
-                    </form>
+                    <div class="card-actions">
+                        <form method="POST" action="{{ url_for('cancel_ausleihung_route', id=item.AppointmentData.id) }}" onsubmit="return confirm('Möchten Sie diesen geplanten Termin wirklich stornieren?');">
+                            <button class="cancel-button" type="submit">Stornieren</button>
+                        </form>
+                        
+                        <!-- Add reset button for planned items too -->
+                        {% if user_is_admin %}
+                            <button type="button" 
+                                    class="item-reset-button" 
+                                    onclick="resetItemBorrowingStatus('{{ item._id }}')"
+                                    title="Status des Items zurücksetzen">
+                                Status zurücksetzen
+                            </button>
+                        {% else %}
+                            <div class="admin-only-tooltip">
+                                <button type="button" 
+                                        class="item-reset-button admin-only-button"
+                                        title="Nur für Administratoren verfügbar">
+                                    Status zurücksetzen
+                                </button>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -217,6 +375,27 @@
     </div>
 </div>
 
+<!-- Include reset item functions -->
+{% include "reset_item_functions.html" %}
+
+<!-- Include the new reset modal -->
+{% include "reset_item_modal.html" %}
+
+<!-- Add user admin status check -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if current user is admin and store globally
+    fetch('/user_status')
+        .then(response => response.json())
+        .then(data => {
+            window.currentUserIsAdmin = data.is_admin || false;
+        })
+        .catch(error => {
+            console.error('Error checking user status:', error);
+            window.currentUserIsAdmin = false;
+        });
+});
+</script>
 <style>
     .borrowed-items {
         display: flex;

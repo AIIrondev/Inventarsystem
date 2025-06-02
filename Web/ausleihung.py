@@ -303,6 +303,7 @@ def complete_ausleihung(id, end_time=None):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
+        item = db['items']
         
         result = ausleihungen.update_one(
             {'_id': ObjectId(id)},
@@ -313,6 +314,14 @@ def complete_ausleihung(id, end_time=None):
             }}
         )
         
+        item.update_one(
+            {'_id': ObjectId(id)},
+            {'$set': {
+                'Verfuegbar': True,
+                'LastUpdated': datetime.datetime.now()
+            }}
+        )
+
         client.close()
         return result.modified_count > 0
     except Exception as e:
@@ -334,6 +343,7 @@ def cancel_ausleihung(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
+        item = db['items']
         
         result = ausleihungen.update_one(
             {'_id': ObjectId(id)},
@@ -343,6 +353,13 @@ def cancel_ausleihung(id):
             }}
         )
         
+        item.update_one(
+            {'_id': ObjectId(id)},
+            {'$set': {
+                'Verfuegbar': True,
+                'LastUpdated': datetime.datetime.now()
+            }}
+        )
         client.close()
         return result.modified_count > 0
     except Exception as e:
@@ -1124,3 +1141,109 @@ def get_bookings_starting_now(current_time):
 def get_bookings_ending_now(current_time):
     """Kompatibilitätsfunktion - ruft endende Ausleihungen ab"""
     return get_ausleihungen_ending_now(current_time)
+
+
+def reset_item_completely(item_id):
+    """
+    Setzt den Ausleihstatus eines Items vollständig zurück.
+    
+    Diese Funktion:
+    - Markiert das Item als verfügbar
+    - Löscht alle Ausleihungsinformationen
+    - Setzt Exemplar-Status zurück
+    - Beendet alle aktiven Ausleihungen
+    
+    Args:
+        item_id (str): Die ID des Items das zurückgesetzt werden soll
+        
+    Returns:
+        dict: Erfolg-/Fehlerstatus mit Details
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items_collection = db['items']
+        ausleihungen_collection = db['ausleihungen']
+        
+        # Item abrufen
+        item = items_collection.find_one({'_id': ObjectId(item_id)})
+        if not item:
+            return {'success': False, 'message': 'Item nicht gefunden'}
+        
+        item_name = item.get('Name', 'Unbekannt')
+        
+        # 1. Alle aktiven Ausleihungen für dieses Item beenden
+        active_borrowings = ausleihungen_collection.find({
+            'Item': item_id,
+            'Status': {'$in': ['active', 'planned']}
+        })
+        
+        completed_count = 0
+        for borrowing in active_borrowings:
+            ausleihungen_collection.update_one(
+                {'_id': borrowing['_id']},
+                {
+                    '$set': {
+                        'Status': 'completed',
+                        'End': datetime.datetime.now(),
+                        'LastUpdated': datetime.datetime.now(),
+                        'CompletedBy': 'System Reset'
+                    }
+                }
+            )
+            completed_count += 1
+        
+        # 2. Item-Status zurücksetzen
+        update_data = {
+            'Verfuegbar': True,
+            'LastUpdated': datetime.datetime.now()
+        }
+        
+        # Entferne User-Zuordnung falls vorhanden
+        if 'User' in item:
+            update_data['$unset'] = {'User': ''}
+        
+        # Entferne BorrowerInfo falls vorhanden
+        if 'BorrowerInfo' in item:
+            if '$unset' not in update_data:
+                update_data['$unset'] = {}
+            update_data['$unset']['BorrowerInfo'] = ''
+        
+        # Setze ExemplareStatus zurück falls vorhanden
+        if 'ExemplareStatus' in item:
+            if '$unset' not in update_data:
+                update_data['$unset'] = {}
+            update_data['$unset']['ExemplareStatus'] = ''
+        
+        # Item aktualisieren
+        result = items_collection.update_one(
+            {'_id': ObjectId(item_id)},
+            update_data
+        )
+        
+        client.close()
+        
+        if result.modified_count > 0:
+            return {
+                'success': True,
+                'message': f'Item "{item_name}" wurde erfolgreich zurückgesetzt',
+                'details': {
+                    'completed_borrowings': completed_count,
+                    'item_reset': True
+                }
+            }
+        else:
+            return {
+                'success': True,
+                'message': f'Item "{item_name}" war bereits im korrekten Status',
+                'details': {
+                    'completed_borrowings': completed_count,
+                    'item_reset': False
+                }
+            }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'Fehler beim Zurücksetzen: {str(e)}'
+        }

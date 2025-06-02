@@ -530,21 +530,21 @@
 
     /* Ausleihen/Zurückgeben Button */
     .ausleihen {
-        background-color: #28a745;
+        background-color: #9dff00;
         color: white;
-        border: 2px solid #28a745;
+        border: 2px solid #007bff;
     }
 
     .ausleihen:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
+        background-color: #91ff00;
+        border-color: #004085;
         transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
     }
 
     .ausleihen:active {
         transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
     }
 
     /* Edit Button */
@@ -648,27 +648,6 @@
     }
 
     .duplicate-button:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
-    }
-
-    /* Schedule Button */
-    .schedule-button {
-        background-color: #6f42c1;
-        color: white;
-        border: 2px solid #6f42c1;
-    }
-
-    .schedule-button:hover {
-        background-color: #5a32a3;
-        border-color: #4e2a8e;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(111, 66, 193, 0.3);
-        color: white;
-        text-decoration: none;
-    }
-
-    .schedule-button:active {
         transform: translateY(0);
         box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
     }
@@ -1556,7 +1535,8 @@
                         <span>Neue Bilder hinzufügen:</span>
                         <span>(Bilder werden vom Original übernommen)</span>
                     </label>
-                    <input type="file" id="edit-new-images" name="new_images" accept="image/*" multiple>
+                    <input type="file" id="edit-new-images" name="new_images" accept=".jpg, .jpeg, .png, .gif" multiple>
+                    <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF</div>
                     <!-- Add image preview container -->
                     <div class="image-preview-container" id="edit-image-preview-container"></div>
                 </div>
@@ -2762,95 +2742,7 @@
     }
 
     // Load location options for edit modal
-    function loadLocationOptions() {
-        fetch('/get_predefined_locations')
-            .then(response => response.json())
-            .then(data => {
-                const ortSelect = document.getElementById('edit-location');
-                if (ortSelect) {
-                    // Clear existing options except the first one
-                    while (ortSelect.children.length > 1) {
-                        ortSelect.removeChild(ortSelect.lastChild);
-                    }
-                    
-                    // Add new options - data.locations contains the array
-                    data.locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location;
-                        option.textContent = location;
-                        ortSelect.appendChild(option);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading location options:', error);
-            });
-    }
-
-    // Edit modal functions
-    function openEditModal(itemId) {
-        // Find the item data from allItems array
-        const item = allItems.find(i => i._id === itemId);
-        if (!item) {
-            console.error('Item not found:', itemId);
-            return;
-        }
-
-        // Populate the edit form with current item data
-        document.getElementById('edit-item-id').value = item._id;
-        document.getElementById('edit-name').value = item.Name || '';
-        document.getElementById('edit-description').value = item.Beschreibung || '';
-        document.getElementById('edit-code4').value = item.Code_4 || '';
-        document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
-        document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
-
-        // Load location options
-        loadLocationOptions();
-
-        // Set the current location
-        setTimeout(() => {
-            const locationSelect = document.getElementById('edit-location');
-            if (locationSelect && item.Ort) {
-                locationSelect.value = item.Ort;
-            }
-        }, 100);
-
-        // Handle filter arrays - set current values
-        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
-        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
-        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
-
-        // Set filter dropdowns (up to 4 each)
-        for (let i = 1; i <= 4; i++) {
-            // Filter 1
-            const filter1Select = document.getElementById(`edit-filter1-${i}`);
-            if (filter1Select) {
-                filter1Select.value = filter1Array[i-1] || '';
-            }
-            
-            // Filter 2
-            const filter2Select = document.getElementById(`edit-filter2-${i}`);
-            if (filter2Select) {
-                filter2Select.value = filter2Array[i-1] || '';
-            }
-            
-            // Filter 3
-            const filter3Select = document.getElementById(`edit-filter3-${i}`);
-            if (filter3Select) {
-                filter3Select.value = filter3Array[i-1] || '';
-            }
-        }
-
-        // Populate existing images
-        populateExistingImages(item.Images || []);
-
-        // Show the modal
-        document.getElementById('edit-modal').style.display = 'block';
-    }
-
-    function closeEditModal() {
-        document.getElementById('edit-modal').style.display = 'none';
-    }
+    // Edit-related functions moved to edit_item_functions.html
 
     // Schedule modal functions
     function openScheduleModal(itemId) {
@@ -3113,7 +3005,14 @@
         futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
         return futureAppointments[0];
     }
-
-    /* ...existing code... */
 </script>
+
+<!-- Include edit item functions -->
+{% include "edit_item_functions.html" %}
+
+<!-- Include reset item functions -->
+{% include "reset_item_functions.html" %}
+
+<!-- Include the new reset modal -->
+{% include "reset_item_modal.html" %}
 {% endblock %}

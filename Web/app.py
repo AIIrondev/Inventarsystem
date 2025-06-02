@@ -40,6 +40,7 @@ import ausleihung as au
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 from urllib.parse import urlparse, urlunparse
 import requests
 import os
@@ -316,9 +317,17 @@ def allowed_file(filename):
         filename (str): Name of the file to check
         
     Returns:
-        bool: True if the file extension is allowed, False otherwise
+        tuple: (bool, str) - True if the file extension is allowed, False otherwise
+               along with an error message if not allowed
     """
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+    if '.' not in filename:
+        return False, f"Datei '{filename}' hat keine Dateiendung. Erlaubte Formate: {', '.join(app.config['ALLOWED_EXTENSIONS'])}"
+    
+    extension = filename.rsplit('.', 1)[1].lower()
+    if extension not in app.config['ALLOWED_EXTENSIONS']:
+        return False, f"Datei '{filename}' hat ein nicht unterstütztes Format ({extension}). Erlaubte Formate: {', '.join(app.config['ALLOWED_EXTENSIONS'])}"
+    
+    return True, ""
 
 
 def strip_whitespace(value):
@@ -809,15 +818,17 @@ def upload_item():
     # Process any new uploaded images
     image_filenames = []
     for image in images:
-        if image and image.filename and allowed_file(image.filename):
-            filename = secure_filename(image.filename)
-            timestamp = time.strftime("%Y%m%d%H%M%S")
-            saved_filename = f"{filename}_{timestamp}"
-            image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-            image_filenames.append(saved_filename)
-        elif image and image.filename:  # Only show error if there's an actual file
-            flash('Ungültiges Dateiformat', 'error')
-            return redirect(url_for('home_admin'))
+        if image and image.filename:
+            is_allowed, error_message = allowed_file(image.filename)
+            if is_allowed:
+                filename = secure_filename(image.filename)
+                timestamp = time.strftime("%Y%m%d%H%M%S")
+                saved_filename = f"{filename}_{timestamp}"
+                image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                image_filenames.append(saved_filename)
+            else:
+                flash(error_message, 'error')
+                return redirect(url_for('home_admin'))
 
     # Add the duplicate_images to the list
     if is_duplicating and duplicate_images:
@@ -994,10 +1005,15 @@ def edit_item(id):
     
     # Process any new image uploads
     for image in new_images:
-        if image and image.filename and allowed_file(image.filename):
-            filename = secure_filename(image.filename)
-            image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            images.append(filename)
+        if image and image.filename:
+            is_allowed, error_message = allowed_file(image.filename)
+            if is_allowed:
+                filename = secure_filename(image.filename)
+                image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                images.append(filename)
+            else:
+                flash(error_message, 'error')
+                return redirect(url_for('home_admin'))
 
     # If location is not in the predefined list, maybe add it (depending on policy)
     predefined_locations = it.get_predefined_locations()
@@ -1127,7 +1143,6 @@ def ausleihen(id):
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
-
 @app.route('/zurueckgeben/<id>', methods=['POST'])
 def zurueckgeben(id): 
     """
@@ -1148,111 +1163,74 @@ def zurueckgeben(id):
     if not item:
         flash('Item not found', 'error')
         return redirect(url_for('home'))
-    
-    # Get number of exemplars to return (default to 1)
-    exemplare_count = request.form.get('exemplare_count', 1)
-    try:
-        exemplare_count = int(exemplare_count)
-        if exemplare_count < 1:
-            exemplare_count = 1
-    except (ValueError, TypeError):
-        exemplare_count = 1
         
-    # Get current exemplar status
-    exemplare_status = item.get('ExemplareStatus', [])
-    total_exemplare = item.get('Exemplare', 1)
-    
     username = session['username']
     
     # If it's a simple item without exemplars
-    if total_exemplare <= 1 or not exemplare_status:
-        if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
-            try:
-                # Get existing borrowing record BEFORE updating the item status
-                ausleihung_data = au.get_ausleihung_by_item(id, include_history=True)
-                end_date = datetime.datetime.now()
-                
-                # Store the borrower's username before updating item status
-                original_user = item.get('User', username)
-                
-                if ausleihung_data and '_id' in ausleihung_data:
-                    # Get fresh status verification without relying on cached VerifiedStatus
-                    current_status = au.get_current_status(ausleihung_data, log_changes=False, user=username)
-                    database_status = ausleihung_data.get('Status', 'unknown');
-                    
-                    # Only prevent return if the database status is already 'completed'
-                    # Don't use client-side verification here as it may be incorrect for active appointments
-                    if database_status == 'completed':
-                        flash('Item has already been returned', 'info')
-                        if 'username' in session and not us.check_admin(session['username']):
-                            return redirect(url_for('home'))
-                        return redirect(url_for('home_admin'))
-                    
-                    # Update existing record only if it's not already completed
-                    ausleihung_id = str(ausleihung_data['_id'])
-                    user = ausleihung_data.get('User', original_user)
-                    start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
-                    
-                    # Update the ausleihung first
-                    au.update_ausleihung(ausleihung_id, item_id=id, user_id=user, start=start, end=end_date, status='completed')
-                    
-                    # Then update the item status (only once)
-                    it.update_item_status(id, True, original_user)
-                    flash('Item returned successfully', 'success')
-                else:
-                    # Fallback for missing record
-                    it.update_item_status(id, True, original_user)
-                    flash('Item returned successfully (new record created)', 'success')
-            except Exception as e:
-                it.update_item_status(id, True)
-                flash(f'Item returned but encountered an error in record-keeping: {str(e)}', 'warning')
-        else:
-            flash('You are not authorized to return this item or it is already available', 'error')
-    else:
-        # Handle multi-exemplar item
-        # Filter exemplars borrowed by current user
-        user_exemplars = [ex for ex in exemplare_status if ex.get('user') == username]
-        
-        # Check if user has borrowed enough exemplars to return
-        if len(user_exemplars) < exemplare_count:
-            flash(f'You can only return up to {len(user_exemplars)} copies', 'error')
-            exemplare_count = len(user_exemplars)
-            
-        if exemplare_count > 0:
-            # Get the exemplars to return (limited to requested count)
-            exemplars_to_return = user_exemplars[:exemplare_count]
-            
-            # Remove these exemplars from the status list
-            updated_status = [ex for ex in exemplare_status if ex not in exemplars_to_return]
-            
-            # Update the item status
-            it.update_item_exemplare_status(id, updated_status)
-            
-            # If all exemplars were borrowed but now some are available, update item status
-            if not item.get('Verfuegbar', True) and len(updated_status) < total_exemplare:
-                it.update_item_status(id, True)
-            
-            # Complete the ausleihungen for each returned exemplar
+    if not item.get('Verfuegbar', True) and (us.check_admin(session['username']) or item.get('User') == username):
+        try:
+            # Get existing borrowing record BEFORE updating the item status
+            ausleihung_data = au.get_ausleihung_by_item(id, include_history=True)
             end_date = datetime.datetime.now()
-            for exemplar in exemplars_to_return:
-                exemplar_id = f"{id}_{exemplar['number']}"
-                ausleihung_data = au.get_ausleihung_by_item(exemplar_id, include_exemplar_id=True, include_history=True)
-                
-                if ausleihung_data and '_id' in ausleihung_data:
-                    # Check if this exemplar's ausleihung is already completed
-                    current_status = ausleihung_data.get('Status', 'unknown')
-                    verified_status = ausleihung_data.get('VerifiedStatus', current_status)
-                    
-                    if verified_status != 'completed':
-                        # Only update if not already completed
-                        ausleihung_id = str(ausleihung_data['_id'])
-                        start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
-                        au.update_ausleihung(ausleihung_id, item_id=exemplar_id, user_id=username, start=start, end=end_date, status='completed')
             
-            flash(f'{exemplare_count} copies returned successfully', 'success')
-        else:
-            flash('You have no copies to return', 'error')
-    
+            # Store the borrower's username before updating item status
+            original_user = item.get('User', username)
+            
+            if ausleihung_data and '_id' in ausleihung_data:
+                # Get fresh status verification without relying on cached VerifiedStatus
+                current_status = it.get_current_status(id)
+                database_status = ausleihung_data.get('Status', 'unknown');
+                
+                # Only prevent return if the database status is already 'completed'
+                # Don't use client-side verification here as it may be incorrect for active appointments
+                if database_status == 'completed' and current_status == 'completed':
+                    flash('Item has already been returned', 'info')
+                    if 'username' in session and not us.check_admin(session['username']):
+                        return redirect(url_for('home'))
+                    return redirect(url_for('home_admin'))
+                
+                # Update existing record only if it's not already completed
+                ausleihung_id = str(ausleihung_data['_id'])
+                user = ausleihung_data.get('User', original_user)
+                start = ausleihung_data.get('Start', datetime.datetime.now() - datetime.timedelta(hours=1))
+                
+                print(f"Updating ausleihung {ausleihung_id} for item {id} with user {user}, start {start}, end {end_date}")
+
+                # Update the ausleihung first - CORRECTED FUNCTION CALL
+                au.update_ausleihung(
+                    ausleihung_id, 
+                    item_id=id,
+                    user_id=user, 
+                    start=start, 
+                    end=end_date, 
+                    status='completed'
+                )
+                
+                # Update the item status
+                # This will also log the return action
+                it.update_item_status(id, True, original_user)
+                flash('Item returned successfully', 'success')
+            elif not ausleihung_data:
+                # If no existing record, create a new one
+                # Create a new ausleihung record
+                au.add_ausleihung(  
+                    id, 
+                    original_user, 
+                    datetime.datetime.now() - datetime.timedelta(hours=1),  # Use a default start time
+                    end_date=end_date, 
+                    status='completed'
+                )
+                flash('Item returned successfully', 'success')
+            else:
+                # Fallback for missing record
+                it.update_item_status(id, True, original_user)
+                flash('Item returned successfully (new record created)', 'success')
+        except Exception as e:
+            it.update_item_status(id, True)
+            flash(f'Item returned but encountered an error in record-keeping: {str(e)}', 'warning')
+    else:
+        flash('You are not authorized to return this item or it is already available', 'error')
+
     # Check if request came from my_borrowed_items page
     source_page = request.form.get('source_page')
     referrer = request.headers.get('Referer', '')
@@ -1262,7 +1240,6 @@ def zurueckgeben(id):
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
     return redirect(url_for('home_admin'))
-
 
 @app.route('/get_filter', methods=['GET'])
 def get_filter():
@@ -2062,12 +2039,29 @@ def download_book_cover():
         if response.status_code != 200:
             return jsonify({"error": f"Failed to download image: Status {response.status_code}"}), 400
         
+        # Check content type to ensure it's an image of allowed format
+        content_type = response.headers.get('content-type', '')
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
+        
+        if not any(allowed_type in content_type.lower() for allowed_type in allowed_types):
+            return jsonify({
+                "error": f"Nicht unterstütztes Bildformat: {content_type}. Erlaubte Formate: JPG, JPEG, PNG, GIF"
+            }), 400
+        
         # Generate a unique filename
         import hashlib
         import uuid
         hash_object = hashlib.md5(image_url.encode())
         unique_id = str(uuid.uuid4())[:8]
-        filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}.jpg"
+        
+        # Use appropriate extension based on content type
+        extension = '.jpg'  # default
+        if 'image/png' in content_type.lower():
+            extension = '.png'
+        elif 'image/gif' in content_type.lower():
+            extension = '.gif'
+            
+        filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}{extension}"
         
         # Save the image to uploads folder
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -2187,6 +2181,7 @@ def my_borrowed_items():
         return redirect(url_for('login'))
     
     username = session['username']
+    user_is_admin = us.check_admin(username)
     
     # Method 1: Get borrowed items directly from the items collection
     borrowed_items = []
@@ -2259,6 +2254,9 @@ def my_borrowed_items():
             current_time = datetime.datetime.now()
             print(f"Current time: {current_time}")
             
+            # Track completed appointments to exclude from borrowed items
+            completed_item_ids = set()
+            
             for appointment in all_ausleihungen:
                 # Get appointment ID for debugging
                 appointment_id = str(appointment.get('_id', 'unknown'))
@@ -2281,6 +2279,17 @@ def my_borrowed_items():
                 
                 print(f"Appointment {appointment_id}: Original status={original_status}, Verified status={current_status}")
                 print(f"  - Start: {start_time}, End: {end_time}")
+                
+                # Track completed items to exclude from borrowed items list
+                if current_status == 'completed':
+                    item_id = appointment.get('Item')
+                    if item_id:
+                        # For exemplars, extract the parent item ID
+                        parent_id = item_id
+                        if '_' in item_id:  # Format is parent_id_exemplar_number
+                            parent_id = item_id.split('_')[0]
+                        completed_item_ids.add(parent_id)
+                        print(f"  - Marking item {parent_id} as completed (won't show in borrowed items)")
                 
                 # Organize appointments by their current verified status
                 if current_status == 'planned':
@@ -2382,6 +2391,14 @@ def my_borrowed_items():
             # Sort by appointment date
             planned_items.sort(key=lambda x: x.get('AppointmentData', {}).get('start') or datetime.datetime.now())
             
+            # Filter out completed items from borrowed_items to fix synchronization issue
+            if completed_item_ids:
+                print(f"Filtering out {len(completed_item_ids)} completed items from borrowed list")
+                original_count = len(borrowed_items)
+                borrowed_items = [item for item in borrowed_items if item.get('_id') not in completed_item_ids]
+                filtered_count = original_count - len(borrowed_items)
+                print(f"Removed {filtered_count} completed items from borrowed list")
+            
             # With our improved code above, we already handled merging of duplicate items
             # Just add any new active_items that don't exist in borrowed_items
             print(f"Found {len(active_items)} active appointment items")
@@ -2410,7 +2427,8 @@ def my_borrowed_items():
     return render_template('my_borrowed_items.html', 
                           items=borrowed_items,
                           planned_items=planned_items,
-                          username=username)
+                          username=username,
+                          user_is_admin=user_is_admin)
 
 @app.route('/favicon.ico')
 def favicon():
@@ -2698,63 +2716,48 @@ def cancel_ausleihung_route(id):
         
     return redirect(url_for('my_borrowed_items'))
 
-@app.route('/static/css/<path:filename>')
-def serve_css(filename):
+@app.route('/reset_item/<id>', methods=['POST'])
+def reset_item(id):
     """
-    Explicitly serve CSS files from the static/css directory.
-    This can help resolve permission issues with CSS files.
+    Route for completely resetting an item's borrowing status.
+    This handles items that have inconsistent borrowing states.
     
     Args:
-        filename (str): Name of the CSS file to serve
+        id (str): ID of the item to reset
         
     Returns:
-        flask.Response: The requested CSS file
-    """
-    return send_from_directory(os.path.join(app.static_folder, 'css'), filename)
-
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    """
-    Explicitly serve static files from the static directory.
-    This provides an alternative route for static assets.
-    
-    Args:
-        filename (str): Name of the file to serve
-        
-    Returns:
-        flask.Response: The requested static file
-    """
-    return send_from_directory(app.static_folder, filename)
-
-@app.route('/test_scheduler', methods=['GET'])
-def test_scheduler():
-    """
-    Test endpoint to manually trigger the appointment status update scheduler.
-    Only accessible by admin users for testing purposes.
-    
-    Returns:
-        dict: Result of the scheduler execution
+        JSON: Success status and details
     """
     if 'username' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-        
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
     if not us.check_admin(session['username']):
-        return jsonify({'error': 'Admin access required'}), 403
-        
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
     try:
-        # Manually trigger the scheduler function
-        update_appointment_statuses()
-        return jsonify({
-            'success': True, 
-            'message': 'Scheduler manually triggered successfully',
-            'timestamp': datetime.datetime.now().isoformat()
-        })
+        # Import the ausleihung module
+        import ausleihung as au
+        
+        result = au.reset_item_completely(id)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'details': result.get('details', {})
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': result['message']
+            }), 400
+            
     except Exception as e:
+        print(f"Error in reset_item route: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'success': False, 
-            'error': str(e),
-            'timestamp': datetime.datetime.now().isoformat()
+            'success': False,
+            'error': f'Server error: {str(e)}'
         }), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    

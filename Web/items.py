@@ -913,3 +913,32 @@ def get_items_with_appointments():
     except Exception as e:
         print(f"Error retrieving items with appointments: {e}")
         return []
+
+def get_current_status(item_id):
+    """
+    Retrieve the current status of an item, including availability and user.
+    
+    Args:
+        item_id (str): ID of the item to check
+        
+    Returns:
+        dict: Current status of the item or None if not found
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        items = db['items']
+        
+        item = items.find_one({'_id': ObjectId(item_id)}, {'Verfuegbar': 1, 'User': 1})
+        
+        if item:
+            # Convert ObjectId to string for consistency
+            item['_id'] = str(item['_id'])
+            client.close()
+            return item
+        else:
+            client.close()
+            return None
+    except Exception as e:
+        print(f"Error retrieving current status: {e}")
+        return None
