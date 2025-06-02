@@ -1,6 +1,7 @@
 .venv
 certs
 uploads
+
 __pycache__
 *.log
 *.cpython-312.pyc
