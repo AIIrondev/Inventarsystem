@@ -2841,6 +2841,9 @@
             }
         }
 
+        // Populate existing images
+        populateExistingImages(item.Images || []);
+
         // Show the modal
         document.getElementById('edit-modal').style.display = 'block';
     }
