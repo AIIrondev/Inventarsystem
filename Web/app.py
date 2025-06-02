@@ -2266,10 +2266,6 @@ def my_borrowed_items():
                 start_time = appointment.get('Start')
                 end_time = appointment.get('End')
                 
-                # Skip cancelled appointments
-                if original_status == 'cancelled':
-                    continue
-                
                 # Use fresh status verification for each appointment
                 # This ensures we get the most accurate status based on current time
                 current_status = au.get_current_status(
@@ -2277,6 +2273,11 @@ def my_borrowed_items():
                     log_changes=False,  # Don't log changes during dashboard loading
                     user=username
                 )
+                
+                # Skip cancelled appointments - check both original and verified status
+                if original_status == 'cancelled' or current_status == 'cancelled':
+                    print(f"  - Skipping cancelled appointment {appointment_id}")
+                    continue
                 
                 print(f"Appointment {appointment_id}: Original status={original_status}, Verified status={current_status}")
                 print(f"  - Start: {start_time}, End: {end_time}")
