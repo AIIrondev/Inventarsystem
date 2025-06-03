@@ -2162,264 +2162,121 @@ def get_period_times(booking_date, period_num):
 @app.route('/my_borrowed_items')
 def my_borrowed_items():
     """
-    Display items currently borrowed by the logged-in user.
+    Zeigt alle vom aktuellen Benutzer ausgeliehenen und geplanten Objekte an.
     
     Returns:
-        flask.Response: Rendered template of user's borrowed items
+        Response: Gerendertes Template mit den ausgeliehenen und geplanten Objekten des Benutzers
     """
     if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
+        flash('Bitte melden Sie sich an, um Ihre ausgeliehenen Objekte anzuzeigen', 'error')
+        return redirect(url_for('login', next=request.path))
     
     username = session['username']
-    user_is_admin = us.check_admin(username)
+    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+    db = client[MONGODB_DB]
+    items_collection = db.items
+    ausleihungen_collection = db.ausleihungen
     
-    # Method 1: Get borrowed items directly from the items collection
-    borrowed_items = []
+    # Get current time for comparison
+    current_time = datetime.datetime.now()
+    
+    # Check if user is admin
+    user_is_admin = False
+    if 'is_admin' in session:
+        user_is_admin = session['is_admin']
+    
+    # Get items currently borrowed by the user (where Verfuegbar=false and User=username)
+    borrowed_items = list(items_collection.find({'Verfuegbar': False, 'User': username}))
+    
+    # Get active and planned ausleihungen for the user
+    active_ausleihungen = list(ausleihungen_collection.find({
+        'User': username,
+        'Status': 'active'
+    }))
+    
+    planned_ausleihungen = list(ausleihungen_collection.find({
+        'User': username,
+        'Status': 'planned',
+        'Start': {'$gt': current_time}
+    }))
+    
+    # Process items
+    active_items = []
     planned_items = []
-    try:
-        # Get all items borrowed by this user
-        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client[MONGODB_DB]
-        items_collection = db['items']
-        
-        # Find items borrowed by this user (single items)
-        single_borrowed_items = list(items_collection.find({
-            'Verfuegbar': False,
-            'User': username
-        }))
-        
-        # Find items with exemplar borrowings by this user
-        multi_borrowed_items = list(items_collection.find({
-            'ExemplareStatus': {
-                '$elemMatch': {
-                    'user': username
-                }
-            }
-        }))
-        
-        # Process multi-exemplar items to extract only the exemplars borrowed by this user
-        for item in multi_borrowed_items:
-            item['_id'] = str(item['_id'])
-            
-            # Filter exemplars for only those borrowed by this user
-            if 'ExemplareStatus' in item:
-                user_exemplars = [ex for ex in item.get('ExemplareStatus', []) if ex.get('user') == username]
-                item['UserExemplars'] = user_exemplars
-                item['UserExemplarCount'] = len(user_exemplars)
-        
-        # Process single items
-        for item in single_borrowed_items:
-            item['_id'] = str(item['_id'])
-        
-        # Combine both types of borrowed items
-        all_borrowed = single_borrowed_items + [item for item in multi_borrowed_items if item not in single_borrowed_items]
-        
-        # Sort by name
-        all_borrowed.sort(key=lambda x: x.get('Name', '').lower())
-        
-        print(f"Found {len(all_borrowed)} items directly from items collection")
-        
-        # We'll use this as our main list - direct borrowings from items collection
-        borrowed_items = all_borrowed
-        
-        # Create a set for tracking item IDs to avoid duplicates
-        processed_item_ids = set(item.get('_id') for item in borrowed_items)
-        
-        # Step 2: Get ALL appointments for the current user
-        try:
-            print(f"Retrieving appointments for user: {username}")
-            # Get all non-cancelled appointments with client-side verification enabled
-            # This ensures that planned appointments are properly identified regardless of DB status
-            all_ausleihungen = au.get_ausleihung_by_user(username, use_client_side_verification=True)
-            print(f"Found {len(all_ausleihungen)} total appointments")
-            
-            # Debug - print all appointments for troubleshooting
-            for a in all_ausleihungen:
-                print(f"Appointment: ID={str(a.get('_id'))}, Status={a.get('Status')}, Start={a.get('Start')}, Item={a.get('Item')}")
-            
-            planned_ausleihungen = []
-            active_ausleihungen = []
-            
-            # Current time for status verification
-            current_time = datetime.datetime.now()
-            print(f"Current time: {current_time}")
-            
-            # Track completed appointments to exclude from borrowed items
-            completed_item_ids = set()
-            
-            for appointment in all_ausleihungen:
-                # Get appointment ID for debugging
-                appointment_id = str(appointment.get('_id', 'unknown'))
-                original_status = appointment.get('Status', 'unknown')
-                start_time = appointment.get('Start')
-                end_time = appointment.get('End')
-                
-                # Use fresh status verification for each appointment
-                # This ensures we get the most accurate status based on current time
-                current_status = au.get_current_status(
-                    appointment,
-                    log_changes=False,  # Don't log changes during dashboard loading
-                    user=username
-                )
-                
-                # Skip cancelled appointments - check both original and verified status
-                if original_status == 'cancelled' or current_status == 'cancelled':
-                    print(f"  - Skipping cancelled appointment {appointment_id}")
-                    continue
-                
-                print(f"Appointment {appointment_id}: Original status={original_status}, Verified status={current_status}")
-                print(f"  - Start: {start_time}, End: {end_time}")
-                
-                # Track completed items to exclude from borrowed items list
-                if current_status == 'completed':
-                    item_id = appointment.get('Item')
-                    if item_id:
-                        # For exemplars, extract the parent item ID
-                        parent_id = item_id
-                        if '_' in item_id:  # Format is parent_id_exemplar_number
-                            parent_id = item_id.split('_')[0]
-                        completed_item_ids.add(parent_id)
-                        print(f"  - Marking item {parent_id} as completed (won't show in borrowed items)")
-                
-                # Organize appointments by their current verified status
-                if current_status == 'planned':
-                    planned_ausleihungen.append(appointment)
-                    print(f"  - Added to planned appointments")
-                elif current_status == 'active':
-                    active_ausleihungen.append(appointment)
-                    print(f"  - Added to active appointments")
-                else:
-                    print(f"  - Skipping appointment with status {current_status}")
-            
-            # Merge all appointments and group them by status
-            planned_items = []
-            active_items = []  # This will be combined with borrowed_items later
-            
-            # Get item details for each planned and active appointment
-            for appointment in planned_ausleihungen:
-                item_id = appointment.get('Item')
-                if item_id:
-                    # For exemplars, extract the parent item ID
-                    parent_id = item_id
-                    if '_' in item_id:  # Format is parent_id_exemplar_number
-                        parent_id = item_id.split('_')[0]
-                    
-                    # Get the item details
-                    item = it.get_item(parent_id)
-                    if item:
-                        # Mark as planned and add status
-                        item['_id'] = str(item['_id'])
-                        item['PlannedAppointment'] = True
-                        item['AppointmentStatus'] = 'planned'
-                        
-                        # Add appointment details
-                        item['AppointmentData'] = {
-                            'start': appointment.get('Start'),
-                            'end': appointment.get('End'),
-                            'notes': appointment.get('Notes', ''),
-                            'period': appointment.get('Period'),
-                            'id': str(appointment.get('_id')),
-                            'status': appointment.get('VerifiedStatus', appointment.get('Status', 'planned'))
-                        }
-                        
-                        planned_items.append(item)
-            
-            # Add active appointments to borrowed items later
-            for appointment in active_ausleihungen:
-                item_id = appointment.get('Item')
-                if item_id:
-                    # For exemplars, extract the parent item ID
-                    parent_id = item_id
-                    if '_' in item_id:  # Format is parent_id_exemplar_number
-                        parent_id = item_id.split('_')[0]
-                    
-                    # Get the item details - will be combined with borrowed_items
-                    item = it.get_item(parent_id)
-                    if item:
-                        # Format item ID consistently
-                        str_item_id = str(item['_id'])
-                        item['_id'] = str_item_id
-                        
-                        # If this item is already in the borrowed_items list, update it
-                        if str_item_id in processed_item_ids:
-                            # Find the existing item and add appointment data to it
-                            for existing_item in borrowed_items:
-                                if existing_item.get('_id') == str_item_id:
-                                    print(f"Adding appointment data to existing item: {str_item_id}")
-                                    existing_item['ActiveAppointment'] = True
-                                    existing_item['AppointmentStatus'] = 'active'
-                                    existing_item['AppointmentData'] = {
-                                        'start': appointment.get('Start'),
-                                        'end': appointment.get('End'),
-                                        'notes': appointment.get('Notes', ''),
-                                        'period': appointment.get('Period'),
-                                        'id': str(appointment.get('_id')),
-                                        'status': appointment.get('VerifiedStatus', appointment.get('Status', 'active'))
-                                    }
-                                    break
-                        else:
-                            # This is a new item not already in borrowed_items
-                            print(f"Adding new active item from appointment: {str_item_id}")
-                            # Mark as active
-                            item['ActiveAppointment'] = True
-                            item['AppointmentStatus'] = 'active'
-                            
-                            # Add appointment details
-                            item['AppointmentData'] = {
-                                'start': appointment.get('Start'),
-                                'end': appointment.get('End'),
-                                'notes': appointment.get('Notes', ''),
-                                'period': appointment.get('Period'),
-                                'id': str(appointment.get('_id')),
-                                'status': appointment.get('VerifiedStatus', appointment.get('Status', 'active'))
-                            }
-                            
-                            # Add to tracking set and active_items list
-                            processed_item_ids.add(str_item_id)
-                            active_items.append(item)
-            
-            # Sort by appointment date
-            planned_items.sort(key=lambda x: x.get('AppointmentData', {}).get('start') or datetime.datetime.now())
-            
-            # Filter out completed items from borrowed_items to fix synchronization issue
-            if completed_item_ids:
-                print(f"Filtering out {len(completed_item_ids)} completed items from borrowed list")
-                original_count = len(borrowed_items)
-                borrowed_items = [item for item in borrowed_items if item.get('_id') not in completed_item_ids]
-                filtered_count = original_count - len(borrowed_items)
-                print(f"Removed {filtered_count} completed items from borrowed list")
-            
-            # With our improved code above, we already handled merging of duplicate items
-            # Just add any new active_items that don't exist in borrowed_items
-            print(f"Found {len(active_items)} active appointment items")
-            
-            # Combine only unique active_items with borrowed_items
-            borrowed_items.extend(active_items)
-            
-            # Final count of items
-            print(f"Final borrowed_items count: {len(borrowed_items)}")
-            
-            # Log all items for debugging purposes
-            for idx, item in enumerate(borrowed_items):
-                item_id = item.get('_id')
-                has_appointment = 'Yes' if item.get('AppointmentData') else 'No'
-                print(f"Item {idx+1}: ID={item_id}, Name={item.get('Name')}, Has Appointment Data: {has_appointment}")
-        
-        except Exception as e:
-            print(f"Error retrieving planned appointments: {e}")
-        
-        client.close()
-        
-    except Exception as e:
-        print(f"Error retrieving borrowed items: {e}")
-        flash(f'Fehler beim Laden der ausgeliehenen Objekte: {str(e)}', 'error')
+    processed_item_ids = set()  # Keep track of processed item IDs to avoid duplicates
     
-    return render_template('my_borrowed_items.html', 
-                          items=borrowed_items,
-                          planned_items=planned_items,
-                          username=username,
-                          user_is_admin=user_is_admin)
+    # First, process items that are directly marked as borrowed by the user
+    for item in borrowed_items:
+        # Convert ObjectId to string for template
+        item['_id'] = str(item['_id'])
+        active_items.append(item)
+        processed_item_ids.add(item['_id'])
+    
+    # Process active appointments
+    for appointment in active_ausleihungen:
+        # Get the item ID from the appointment
+        item_id = appointment.get('Item')
+        
+        if not item_id or str(item_id) in processed_item_ids:
+            continue  # Skip if we already processed this item or no item ID
+        
+        # Get item details
+        item_obj = items_collection.find_one({'_id': ObjectId(item_id)})
+        
+        if item_obj:
+            # Convert ObjectId to string for template
+            item_obj['_id'] = str(item_obj['_id'])
+            
+            # Add appointment data
+            item_obj['AppointmentData'] = {
+                'id': str(appointment['_id']),
+                'start': appointment.get('Start'),
+                'end': appointment.get('End'),
+                'notes': appointment.get('Notes'),
+                'period': appointment.get('Period'),
+                'status': appointment.get('VerifiedStatus', appointment.get('Status')),
+            }
+            
+            # Mark that this item is part of an active appointment
+            item_obj['ActiveAppointment'] = True
+            
+            # Add to the list only if not already there
+            if str(item_obj['_id']) not in processed_item_ids:
+                active_items.append(item_obj)
+                processed_item_ids.add(str(item_obj['_id']))
+    
+    # Process planned appointments
+    for appointment in planned_ausleihungen:
+        item_id = appointment.get('Item')
+        
+        if not item_id:
+            continue
+        
+        item_obj = items_collection.find_one({'_id': ObjectId(item_id)})
+        
+        if item_obj:
+            item_obj['_id'] = str(item_obj['_id'])
+            
+            # Add appointment data
+            item_obj['AppointmentData'] = {
+                'id': str(appointment['_id']),
+                'start': appointment.get('Start'),
+                'end': appointment.get('End'),
+                'notes': appointment.get('Notes'),
+                'period': appointment.get('Period'),
+                'status': appointment.get('Status'),
+            }
+            
+            planned_items.append(item_obj)
+    
+    client.close()
+    
+    return render_template(
+        'my_borrowed_items.html',
+        items=active_items,
+        planned_items=planned_items,
+        user_is_admin=user_is_admin
+    )
 
 @app.route('/favicon.ico')
 def favicon():
