@@ -15,6 +15,13 @@
 -->
 <!-- Edit Item Functions -->
 <script>
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
     // Load location options for edit modal
     function loadLocationOptions() {
         fetch('/get_predefined_locations')
@@ -174,8 +181,14 @@
         images.forEach((imageName, index) => {
             const preview = document.createElement('div');
             preview.className = 'image-preview-item';
+            
+            const isVideo = isVideoFile(imageName);
+            const mediaHtml = isVideo 
+                ? `<video src="/uploads/${imageName}" style="max-width: 150px; max-height: 150px; object-fit: cover;" controls preload="metadata"></video>`
+                : `<img src="/uploads/${imageName}" alt="Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">`;
+            
             preview.innerHTML = `
-                <img src="/uploads/${imageName}" alt="Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">
+                ${mediaHtml}
                 <div class="image-controls">
                     <button type="button" onclick="removeExistingImage('${imageName}', this)" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px;">Entfernen</button>
                 </div>
@@ -234,7 +247,9 @@
         if (imageInput) {
             imageInput.addEventListener('change', function(e) {
                 // Validate file types before preview
-                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+                                    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
+                                    'video/webm', 'video/x-flv', 'video/mp4', 'video/3gpp'];
                 const files = this.files;
                 let hasInvalidFile = false;
                 
@@ -243,7 +258,7 @@
                         hasInvalidFile = true;
                         // Clear the file input to prevent submission
                         this.value = '';
-                        alert('Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF');
+                        alert('Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP');
                         return; // Stop processing
                     }
                 }

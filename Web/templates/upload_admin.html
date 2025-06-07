@@ -459,6 +459,38 @@
         justify-content: center;
     }
 
+    /* Video preview styles */
+    .video-preview {
+        border: 2px dashed #17a2b8;
+        background-color: #f0f8ff;
+    }
+
+    .video-placeholder {
+        width: 100px;
+        height: 100px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        text-align: center;
+    }
+
+    .video-icon {
+        font-size: 30px;
+        margin-bottom: 5px;
+    }
+
+    .video-name {
+        font-size: 10px;
+        word-break: break-all;
+        max-width: 90px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     /* Book cover preview styles */
     .book-cover-preview {
         margin-top: 10px;
@@ -695,9 +727,9 @@
                 <input id="code_4" name="code_4" required>
             </div>
             <div class="form-group">
-                <label for="images">Bilder:</label>
-                <input type="file" id="images" name="images" accept=".jpg, .jpeg, .png, .gif" multiple>
-                <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF</div>
+                <label for="images">Bilder/Videos:</label>
+                <input type="file" id="images" name="images" accept=".jpg, .jpeg, .png, .gif, .mp4, .mov, .avi, .mkv, .webm, .flv, .m4v, .3gp" multiple>
+                <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>
                 <!-- Add image preview area -->
                 <div class="image-preview-container" id="image-preview-container"></div>
             </div>
@@ -718,6 +750,13 @@
 </div>
 
 <script>
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
     // Global variable to store fetched book data
     let currentBookData = null;
 
@@ -1146,7 +1185,9 @@
                 const files = e.target.files;
                 
                 // Validate file types before preview
-                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
+                                    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 
+                                    'video/webm', 'video/x-flv', 'video/mp4', 'video/3gpp'];
                 let hasInvalidFile = false;
                 
                 for (let i = 0; i < files.length; i++) {
@@ -1154,7 +1195,7 @@
                         hasInvalidFile = true;
                         // Clear the file input to prevent submission
                         imageInput.value = '';
-                        previewContainer.innerHTML = '<div class="error-message">Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF</div>';
+                        previewContainer.innerHTML = '<div class="error-message">Fehler: Datei "' + files[i].name + '" hat ein nicht unterstütztes Format. Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>';
                         return; // Stop processing
                     }
                 }
@@ -1172,6 +1213,17 @@
                             previewContainer.appendChild(preview);
                         };
                         reader.readAsDataURL(file);
+                    } else if (file.type.startsWith('video/')) {
+                        const preview = document.createElement('div');
+                        preview.className = 'image-preview video-preview';
+                        preview.innerHTML = `
+                            <div class="video-placeholder">
+                                <div class="video-icon">🎥</div>
+                                <div class="video-name">${file.name}</div>
+                            </div>
+                            <button type="button" class="remove-image" onclick="removeImagePreview(this, ${i})">×</button>
+                        `;
+                        previewContainer.appendChild(preview);
                     }
                 }
             });
@@ -1231,7 +1283,7 @@
             });
         }
         
-        // Handle duplication data if available
+        // Handle duplication data if available (from sessionStorage or server)
         if (typeof prefillFormWithDuplicateData === 'function') {
             setTimeout(() => {
                 prefillFormWithDuplicateData();
@@ -1239,9 +1291,24 @@
         }
     });
 
-    // Handle duplication data if available
+    // Initialize duplication data - handle both server-side and sessionStorage data
+    let duplicateData = null;
+    
+    // First, check for server-side template data
     {% if duplicate_data %}
-    const duplicateData = {{ duplicate_data | tojson }};
+    duplicateData = {{ duplicate_data | tojson }};
+    {% endif %}
+    
+    // Then check for sessionStorage data (takes priority)
+    const sessionData = sessionStorage.getItem('duplicateItemData');
+    if (sessionData) {
+        try {
+            duplicateData = JSON.parse(sessionData);
+            sessionStorage.removeItem('duplicateItemData'); // Clean up
+        } catch (e) {
+            console.error('Error parsing session duplicate data:', e);
+        }
+    }
     
     // Function to prefill form with duplicate data
     function prefillFormWithDuplicateData() {
@@ -1269,18 +1336,38 @@
             }, 100);
         }
         
-        // Fill filter dropdowns
-        for (let i = 1; i <= 3; i++) {
-            for (let j = 1; j <= 5; j++) {
-                const filterKey = `filter${i}_${j}`;
-                const filterField = document.getElementById(`filter${i}-${j}`);
-                if (filterField && duplicateData[filterKey]) {
-                    setTimeout(() => {
-                        filterField.value = duplicateData[filterKey];
-                    }, 200); // Wait for filter options to load
+        // Fill filter arrays - handle up to 4 values per filter type
+        setTimeout(() => {
+            // Filter 1 (Unterrichtsfach)
+            if (duplicateData.filter1 && Array.isArray(duplicateData.filter1)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter1.length); j++) {
+                    const filterField = document.getElementById(`filter1-${j}`);
+                    if (filterField && duplicateData.filter1[j-1]) {
+                        filterField.value = duplicateData.filter1[j-1];
+                    }
                 }
             }
-        }
+            
+            // Filter 2 (Jahrgangsstufe)
+            if (duplicateData.filter2 && Array.isArray(duplicateData.filter2)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter2.length); j++) {
+                    const filterField = document.getElementById(`filter2-${j}`);
+                    if (filterField && duplicateData.filter2[j-1]) {
+                        filterField.value = duplicateData.filter2[j-1];
+                    }
+                }
+            }
+            
+            // Filter 3 (Thema) - text inputs
+            if (duplicateData.filter3 && Array.isArray(duplicateData.filter3)) {
+                for (let j = 1; j <= Math.min(4, duplicateData.filter3.length); j++) {
+                    const filterField = document.getElementById(`filter3-${j}`);
+                    if (filterField && duplicateData.filter3[j-1]) {
+                        filterField.value = duplicateData.filter3[j-1];
+                    }
+                }
+            }
+        }, 200); // Wait for filter options to load
         
         // Handle images - add hidden inputs for duplicate images
         if (duplicateData.images && duplicateData.images.length > 0) {
@@ -1345,11 +1432,5 @@
             previewItem.remove();
         }
     }
-    {% else %}
-    const duplicateData = null;
-    function prefillFormWithDuplicateData() {
-        // No duplicate data available
-    }
-    {% endif %}
 </script>
 {% endblock %}

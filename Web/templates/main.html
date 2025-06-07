@@ -172,6 +172,13 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
+    // Video file detection function
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
     // Initialize QR Code scanner and global variables
     let html5QrcodeScanner = null;
     let codeSearchTerm = '';
@@ -399,7 +406,19 @@
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images ? item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
+                        const imagesHtml = item.Images ? item.Images.map((file, index) => {
+                            if (isVideoFile(file)) {
+                                return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                        <video src="{{ url_for('uploaded_file', filename='') }}${file}" class="item-image" data-index="${index}" preload="metadata" muted>
+                                        <source src="{{ url_for('uploaded_file', filename='') }}${file}" type="video/mp4">
+                                        Ihr Browser unterstützt keine Videos.
+                                        </video>
+                                        <div class="video-preview-overlay">▶</div>
+                                        </div>`;
+                            } else {
+                                return `<img src="{{ url_for('uploaded_file', filename='') }}${file}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                            }
+                        }).join('') : '';
                         
                         // Check if item is borrowed by current user
                         const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
@@ -695,6 +714,13 @@
         applyFilters();
     }
 
+    // Add video file detection function
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
     function openItemModal(item) {
         // Get modal elements
         const modal = document.getElementById('item-modal');
@@ -705,10 +731,18 @@
         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
         const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
         
-        // Build image HTML
-        const imagesHtml = item.Images ? item.Images.map((image, index) => 
-            `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
-             style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
+        // Build image/video HTML with proper tags
+        const imagesHtml = item.Images ? item.Images.map((file, index) => {
+            if (isVideoFile(file)) {
+                return `<video src="${file}" class="modal-image" id="modal-image-${index}" controls 
+                         style="display: ${index === 0 ? 'block' : 'none'};" preload="metadata">
+                         Your browser does not support the video tag.
+                         </video>`;
+            } else {
+                return `<img src="${file}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
+                         style="display: ${index === 0 ? 'block' : 'none'};">`;
+            }
+        }).join('') : '';
         
         // Check if item is borrowed
         const isBorrowed = !item.Verfuegbar;
@@ -1772,76 +1806,60 @@
         display: block;
     }
 
-    .clickable-card {
-        cursor: pointer;
-        position: relative;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .clickable-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0, 123, 255, 0.3);
-    }
-
-    .card-content {
-        cursor: pointer;
-        z-index: 1;
+    /* Video preview styling */
+    .item-card video.item-image {
+        background-color: #000;
         position: relative;
     }
 
-    .prev-image-button, .next-image-button {
+    .item-card video.item-image::after {
+        content: "▶";
         position: absolute;
         top: 50%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 0, 0, 0.5);
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
         color: white;
-        border: none;
-        cursor: pointer;
-        padding: 5px;
-        border-radius: 5px;
-    }
-
-    .prev-image-button {
-        left: -30px;
-    }
-
-    .next-image-button {
-        right: -30px;
-    }
-
-    .actions {
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
         display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        margin-top: 10px;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
     }
 
-    .actions form, 
-    .actions a {
-        flex: 1 1 calc(33% - 5px);
-        min-width: fit-content;
+    /* Video play button overlay using pseudo-element alternative */
+    .video-preview-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
     }
 
-    .actions form button,
-    .actions a {
+    /* Modal video styling */
+    .modal-image {
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+    }
+
+    video.modal-image {
         width: 100%;
-        font-size: 0.85rem;
-        padding: 8px 5px;
-        text-align: center;
-    }
-
-    button.ausleihen {
-        flex: 1;
-        padding: 10px;
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    button.ausleihen:hover {
-        background-color: #0056b3;
+        height: auto;
     }
 
     /* Appointment badge styling */
@@ -2129,9 +2147,13 @@
 
     .modal-image {
         max-width: 100%;
-        max-height: 400px;
+        max-height: 80vh;
         object-fit: contain;
-        border-radius: 5px;
+    }
+
+    video.modal-image {
+        width: 100%;
+        height: auto;
     }
 
     .modal-image-nav {

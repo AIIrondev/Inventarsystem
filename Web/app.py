@@ -62,7 +62,7 @@ app = Flask(__name__, static_folder='static')  # Correctly set static folder
 app.secret_key = 'Hsse783942h2342f342342i34hwebf8'  # For production, use a secure key!
 app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', '3gp'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 
@@ -450,8 +450,10 @@ def upload_admin():
     
     # Check if this is a duplication request
     duplicate_from = request.args.get('duplicate_from')
+    duplicate_flag = request.args.get('duplicate')  # Check for sessionStorage-based duplication
     duplicate_data = None
     
+    # Handle the old method (duplicate_from parameter with item ID)
     if duplicate_from:
         try:
             original_item = it.get_item(duplicate_from)
@@ -483,6 +485,12 @@ def upload_admin():
         except Exception as e:
             print(f"Error loading item for duplication: {e}")
             flash('Fehler beim Laden der Duplizierungsdaten.', 'error')
+    
+    # Handle the new method (sessionStorage-based duplication)
+    elif duplicate_flag == 'true':
+        # No server-side processing needed - JavaScript will handle sessionStorage data
+        # Just indicate that duplication mode is active
+        flash('Element wird dupliziert. Die Daten werden aus dem Session-Speicher geladen.', 'info')
     
     return render_template('upload_admin.html', username=session['username'], duplicate_data=duplicate_data)
 
@@ -823,7 +831,11 @@ def upload_item():
             if is_allowed:
                 filename = secure_filename(image.filename)
                 timestamp = time.strftime("%Y%m%d%H%M%S")
-                saved_filename = f"{filename}_{timestamp}"
+                
+                # Split filename into name and extension to insert timestamp properly
+                name_part, ext_part = os.path.splitext(filename)
+                saved_filename = f"{name_part}_{timestamp}{ext_part}"
+                
                 image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
                 image_filenames.append(saved_filename)
             else:
@@ -897,6 +909,19 @@ def duplicate_item():
         if not original_item:
             return jsonify({'success': False, 'message': 'Ursprungs-Element nicht gefunden'}), 404
         
+        # Process filters as arrays (same as stored in database)
+        filter1_array = original_item.get('Filter', [])
+        filter2_array = original_item.get('Filter2', [])
+        filter3_array = original_item.get('Filter3', [])
+        
+        # Ensure filters are arrays
+        if not isinstance(filter1_array, list):
+            filter1_array = [filter1_array] if filter1_array else []
+        if not isinstance(filter2_array, list):
+            filter2_array = [filter2_array] if filter2_array else []
+        if not isinstance(filter3_array, list):
+            filter3_array = [filter3_array] if filter3_array else []
+
         return jsonify({
             'success': True, 
             'message': 'Duplication data prepared successfully',
@@ -908,9 +933,9 @@ def duplicate_item():
                 'category': original_item.get('Kategorie', ''),
                 'year': original_item.get('Anschaffungsjahr', ''),
                 'cost': original_item.get('Anschaffungskosten', ''),
-                'filter1': original_item.get('Filter1', ''),
-                'filter2': original_item.get('Filter2', ''),
-                'filter3': original_item.get('Filter3', ''),
+                'filter1': filter1_array,
+                'filter2': filter2_array,
+                'filter3': filter3_array,
                 'images': original_item.get('Images', [])
             }
         })
@@ -2608,3 +2633,6 @@ def reset_item(id):
             'success': False,
             'error': f'Server error: {str(e)}'
         }), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5001)

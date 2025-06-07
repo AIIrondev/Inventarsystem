@@ -769,6 +769,36 @@
         font-size: 0.9rem;
     }
 
+    /* Video preview styling */
+    .item-card video.item-image {
+        background-color: #000;
+        position: relative;
+    }
+
+    .video-preview-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Modal video styling */
+    video.modal-image {
+        width: 100%;
+        height: auto;
+    }
+
     /* Borrower Info Panel */
     .borrower-info-panel {
         background-color: #fff3cd;
@@ -1532,11 +1562,11 @@
                 
                 <div class="form-group">
                     <label for="edit-new-images">
-                        <span>Neue Bilder hinzufügen:</span>
-                        <span>(Bilder werden vom Original übernommen)</span>
+                        <span>Neue Bilder/Videos hinzufügen:</span>
+                        <span>(Bilder/Videos werden vom Original übernommen)</span>
                     </label>
-                    <input type="file" id="edit-new-images" name="new_images" accept=".jpg, .jpeg, .png, .gif" multiple>
-                    <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF</div>
+                    <input type="file" id="edit-new-images" name="new_images" accept=".jpg, .jpeg, .png, .gif, .mp4, .mov, .avi, .mkv, .webm, .flv, .m4v, .3gp" multiple>
+                    <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>
                     <!-- Add image preview container -->
                     <div class="image-preview-container" id="edit-image-preview-container"></div>
                 </div>
@@ -1633,6 +1663,13 @@
 </script>
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
     // Initialize QR Code scanner and global variables
     let html5QrcodeScanner = null;
     let codeSearchTerm = '';
@@ -1839,7 +1876,7 @@
         }
         
         // Populate filter 2 dropdown with only available values
-        populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
+        populateFilterOptions('filter2-options', [...availableFilter2Selections].sort(), 2);
     }
 
     function saveFilterState() {
@@ -2081,7 +2118,20 @@
                         const filter2More = filter2Array.length > 1 ? ` (+${filter2Array.length - 1} mehr)` : '';
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
-                        const imagesHtml = item.Images ? item.Images.map((image, index) => `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
+                        const imagesHtml = item.Images ? item.Images.map((image, index) => {
+                            const isVideo = isVideoFile(image);
+                            if (isVideo) {
+                                return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                        <video src="{{ url_for('uploaded_file', filename='') }}${image}" class="item-image" data-index="${index}" preload="metadata" muted>
+                                        <source src="{{ url_for('uploaded_file', filename='') }}${image}" type="video/mp4">
+                                        Ihr Browser unterstützt keine Videos.
+                                        </video>
+                                        <div class="video-preview-overlay">▶</div>
+                                        </div>`;
+                            } else {
+                                return `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                            }
+                        }).join('') : '';
                         
                         // Check if item is borrowed by current user
                         const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
@@ -2359,9 +2409,14 @@
         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
         const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
         
-        const imagesHtml = item.Images ? item.Images.map((image, index) => 
-            `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
-             style="display: ${index === 0 ? 'block' : 'none'};">`).join('') : '';
+        const imagesHtml = item.Images ? item.Images.map((image, index) => {
+            const isVideo = isVideoFile(image);
+            if (isVideo) {
+                return `<video src="${image}" class="modal-image" id="modal-image-${index}" style="display: ${index === 0 ? 'block' : 'none'};" controls preload="metadata"></video>`;
+            } else {
+                return `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+            }
+        }).join('') : '';
         
         const isBorrowed = !item.Verfuegbar;
         
@@ -2858,43 +2913,6 @@
 
     // Duplication function
     function duplicateItem(itemId) {
-        // Find the item data from allItems array
-        const item = allItems.find(i => i._id === itemId);
-        if (!item) {
-            console.error('Item not found:', itemId);
-            alert('Fehler: Element nicht gefunden.');
-            return;
-        }
-
-        // Create form data for duplication
-        const formData = new FormData();
-        formData.append('is_duplicating', 'true');
-        formData.append('original_item_id', itemId);
-        
-        // Copy all relevant item data except unique identifiers
-        formData.append('name', item.Name || '');
-        formData.append('description', item.Beschreibung || '');
-        formData.append('year', item.Anschaffungsjahr || '');
-        formData.append('cost', item.Anschaffungskosten || '');
-        formData.append('location', item.Ort || '');
-        formData.append('room', item.Raum || '');
-        formData.append('category', item.Kategorie || '');
-        
-        // Copy filter data
-        if (item.Filter1) formData.append('filter1', item.Filter1);
-        if (item.Filter2) formData.append('filter2', item.Filter2);
-        if (item.Filter3) formData.append('filter3', item.Filter3);
-        
-        // Copy all filter fields (Filter1_1 through Filter3_5)
-        for (let i = 1; i <= 3; i++) {
-            for (let j = 1; j <= 5; j++) {
-                const filterKey = `Filter${i}_${j}`;
-                if (item[filterKey]) {
-                    formData.append(`filter${i}_${j}`, item[filterKey]);
-                }
-            }
-        }
-
         // Show loading indicator
         const loadingDiv = document.createElement('div');
         loadingDiv.innerHTML = `
@@ -2911,7 +2929,11 @@
         `;
         document.body.appendChild(loadingDiv);
 
-        // Send duplication request
+        // Create form data for the duplicate_item request
+        const formData = new FormData();
+        formData.append('original_item_id', itemId);
+
+        // Send duplication request to get item data
         fetch('/duplicate_item', {
             method: 'POST',
             body: formData
@@ -2921,10 +2943,11 @@
             document.body.removeChild(loadingDiv);
             
             if (data.success) {
-                // Redirect to upload admin page with duplicated data
-                const uploadUrl = new URL('/upload_admin', window.location.origin);
-                uploadUrl.searchParams.set('duplicate_from', itemId);
-                window.location.href = uploadUrl.toString();
+                // Store duplication data in sessionStorage for the upload page
+                sessionStorage.setItem('duplicateItemData', JSON.stringify(data.item_data));
+                
+                // Redirect to upload admin page
+                window.location.href = '/upload_admin?duplicate=true';
             } else {
                 alert('Fehler beim Duplizieren: ' + (data.message || 'Unbekannter Fehler'));
             }
