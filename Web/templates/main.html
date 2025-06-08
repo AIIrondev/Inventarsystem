@@ -407,16 +407,39 @@
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
                         const imagesHtml = item.Images ? item.Images.map((file, index) => {
+                            // Use thumbnail info if available
+                            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                            
                             if (isVideoFile(file)) {
-                                return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
-                                        <video src="{{ url_for('uploaded_file', filename='') }}${file}" class="item-image" data-index="${index}" preload="metadata" muted>
-                                        <source src="{{ url_for('uploaded_file', filename='') }}${file}" type="video/mp4">
-                                        Ihr Browser unterstützt keine Videos.
-                                        </video>
-                                        <div class="video-preview-overlay">▶</div>
-                                        </div>`;
+                                // For videos, use thumbnail if available, otherwise original video
+                                const videoSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : `{{ url_for('uploaded_file', filename='') }}${file}`;
+                                
+                                if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
+                                    // Show thumbnail image with video overlay for card view
+                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${file}">
+                                            <div class="video-preview-overlay">▶</div>
+                                            </div>`;
+                                } else {
+                                    // Fallback to video element
+                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                            <video src="${videoSrc}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${file}">
+                                            <source src="${videoSrc}" type="video/mp4">
+                                            Ihr Browser unterstützt keine Videos.
+                                            </video>
+                                            <div class="video-preview-overlay">▶</div>
+                                            </div>`;
+                                }
                             } else {
-                                return `<img src="{{ url_for('uploaded_file', filename='') }}${file}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                                // For images, use thumbnail if available
+                                const imageSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : `{{ url_for('uploaded_file', filename='') }}${file}`;
+                                    
+                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${file}" style="display: ${index === 0 ? 'block' : 'none'};">`;
                             }
                         }).join('') : '';
                         
@@ -731,15 +754,15 @@
         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
         const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
         
-        // Build image/video HTML with proper tags
+        // Build image/video HTML with proper tags - use full size for modal
         const imagesHtml = item.Images ? item.Images.map((file, index) => {
             if (isVideoFile(file)) {
-                return `<video src="${file}" class="modal-image" id="modal-image-${index}" controls 
+                return `<video src="{{ url_for('uploaded_file', filename='') }}${file}" class="modal-image" id="modal-image-${index}" controls 
                          style="display: ${index === 0 ? 'block' : 'none'};" preload="metadata">
                          Your browser does not support the video tag.
                          </video>`;
             } else {
-                return `<img src="${file}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
+                return `<img src="{{ url_for('uploaded_file', filename='') }}${file}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
                          style="display: ${index === 0 ? 'block' : 'none'};">`;
             }
         }).join('') : '';
@@ -1973,7 +1996,7 @@
         padding: 8px;
         margin: 10px 0;
         font-size: 0.85em;
-        border-radius: 4px;
+        border-radius:  4px;
     }
 
     .borrow-time {

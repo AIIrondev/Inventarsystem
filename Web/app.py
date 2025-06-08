@@ -52,6 +52,9 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_L
 import threading
 import sys
+from PIL import Image, ImageOps
+import mimetypes
+import subprocess
 
 # Set base directory for absolute path references
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -62,9 +65,15 @@ app = Flask(__name__, static_folder='static')  # Correctly set static folder
 app.secret_key = 'Hsse783942h2342f342342i34hwebf8'  # For production, use a secure key!
 app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
+app.config['THUMBNAIL_FOLDER'] = os.path.join(BASE_DIR, 'thumbnails')
+app.config['PREVIEW_FOLDER'] = os.path.join(BASE_DIR, 'previews')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', '3gp'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
+
+# Thumbnail sizes
+THUMBNAIL_SIZE = (150, 150)  # Small thumbnails for card view
+PREVIEW_SIZE = (400, 400)    # Medium previews for modal/detail view
 
 __version__ = '1.2.4'  # Version of the application
 Host = '0.0.0.0'
@@ -188,6 +197,10 @@ def inject_version():
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
+if not os.path.exists(app.config['THUMBNAIL_FOLDER']):
+    os.makedirs(app.config['THUMBNAIL_FOLDER'])
+if not os.path.exists(app.config['PREVIEW_FOLDER']):
+    os.makedirs(app.config['PREVIEW_FOLDER'])
 if not os.path.exists(app.config['QR_CODE_FOLDER']):
     os.makedirs(app.config['QR_CODE_FOLDER'])
 
@@ -359,6 +372,34 @@ def uploaded_file(filename):
         flask.Response: The requested file
     """
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/thumbnails/<filename>')
+def thumbnail_file(filename):
+    """
+    Serve thumbnail files from the thumbnails directory.
+    
+    Args:
+        filename (str): Name of the thumbnail file to serve
+        
+    Returns:
+        flask.Response: The requested thumbnail file
+    """
+    return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
+
+
+@app.route('/previews/<filename>')
+def preview_file(filename):
+    """
+    Serve preview files from the previews directory.
+    
+    Args:
+        filename (str): Name of the preview file to serve
+        
+    Returns:
+        flask.Response: The requested preview file
+    """
+    return send_from_directory(app.config['PREVIEW_FOLDER'], filename)
 
 
 @app.route('/test_connection', methods=['GET'])
@@ -652,6 +693,13 @@ def get_items():
     for item in items:
         item_id = str(item['_id'])
         
+        # Add thumbnail information for images
+        if 'Images' in item and item['Images']:
+            item['ThumbnailInfo'] = []
+            for image_filename in item['Images']:
+                thumbnail_info = get_thumbnail_info(image_filename)
+                item['ThumbnailInfo'].append(thumbnail_info)
+        
         # Add exemplar availability info
         if 'Exemplare' in item and item['Exemplare'] > 1:
             # Get exemplar status if available
@@ -837,6 +885,14 @@ def upload_item():
                 saved_filename = f"{name_part}_{timestamp}{ext_part}"
                 
                 image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                
+                # Generate optimized versions (thumbnails and previews)
+                try:
+                    optimization_result = generate_optimized_versions(saved_filename)
+                    print(f"Generated optimized versions for {saved_filename}: {optimization_result}")
+                except Exception as e:
+                    print(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
+                
                 image_filenames.append(saved_filename)
             else:
                 flash(error_message, 'error')
@@ -1722,6 +1778,7 @@ def delete_user():
         flash(f'Error deleting user: {str(e)}', 'error')
     
     return redirect(url_for('user_del'))
+
 
 @app.route('/admin_reset_user_password', methods=['POST'])
 def admin_reset_user_password():
@@ -2634,5 +2691,216 @@ def reset_item(id):
             'error': f'Server error: {str(e)}'
         }), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+# New image and video optimization functions
+def is_image_file(filename):
+    """
+    Check if a file is an image based on its extension.
+    
+    Args:
+        filename (str): Name of the file to check
+        
+    Returns:
+        bool: True if the file is an image, False otherwise
+    """
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+    extension = filename.lower()[filename.rfind('.'):]
+    return extension in image_extensions
+
+
+def is_video_file(filename):
+    """
+    Check if a file is a video based on its extension.
+    
+    Args:
+        filename (str): Name of the file to check
+        
+    Returns:
+        bool: True if the file is a video, False otherwise
+    """
+    video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'}
+    extension = filename.lower()[filename.rfind('.'):]
+    return extension in video_extensions
+
+
+def create_image_thumbnail(image_path, thumbnail_path, size):
+    """
+    Create a thumbnail for an image file.
+    
+    Args:
+        image_path (str): Path to the original image
+        thumbnail_path (str): Path where the thumbnail should be saved
+        size (tuple): Thumbnail size as (width, height)
+        
+    Returns:
+        bool: True if thumbnail was created successfully, False otherwise
+    """
+    try:
+        with Image.open(image_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Create a white background
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Create thumbnail with proper aspect ratio
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+            
+            # Create a new image with the exact size (add padding if needed)
+            thumb = Image.new('RGB', size, (255, 255, 255))
+            
+            # Calculate position to center the image
+            x = (size[0] - img.size[0]) // 2
+            y = (size[1] - img.size[1]) // 2
+            
+            thumb.paste(img, (x, y))
+            
+            # Save with optimization
+            thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+            return True
+            
+    except Exception as e:
+        print(f"Error creating image thumbnail for {image_path}: {str(e)}")
+        return False
+
+
+def create_video_thumbnail(video_path, thumbnail_path, size):
+    """
+    Create a thumbnail for a video file using ffmpeg.
+    
+    Args:
+        video_path (str): Path to the original video
+        thumbnail_path (str): Path where the thumbnail should be saved
+        size (tuple): Thumbnail size as (width, height)
+        
+    Returns:
+        bool: True if thumbnail was created successfully, False otherwise
+    """
+    try:
+        # Use ffmpeg to extract a frame from the video (at 1 second)
+        cmd = [
+            'ffmpeg', 
+            '-i', video_path,
+            '-ss', '00:00:01.000',  # Extract frame at 1 second
+            '-vframes', '1',
+            '-y',  # Overwrite output file
+            thumbnail_path + '.temp.jpg'
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0 and os.path.exists(thumbnail_path + '.temp.jpg'):
+            # Now resize the extracted frame using PIL
+            success = create_image_thumbnail(thumbnail_path + '.temp.jpg', thumbnail_path, size)
+            
+            # Clean up temporary file
+            try:
+                os.remove(thumbnail_path + '.temp.jpg')
+            except:
+                pass
+                
+            return success
+        else:
+            print(f"ffmpeg failed for {video_path}: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        print(f"Error creating video thumbnail for {video_path}: {str(e)}")
+        return False
+
+
+def generate_optimized_versions(filename):
+    """
+    Generate thumbnail and preview versions of uploaded files.
+    
+    Args:
+        filename (str): Name of the uploaded file
+        
+    Returns:
+        dict: Dictionary with paths to generated files
+    """
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    # Generate file paths
+    name_part, ext_part = os.path.splitext(filename)
+    thumbnail_filename = f"{name_part}_thumb.jpg"
+    preview_filename = f"{name_part}_preview.jpg"
+    
+    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    
+    result = {
+        'original': filename,
+        'thumbnail': None,
+        'preview': None,
+        'is_image': False,
+        'is_video': False
+    }
+    
+    if is_image_file(filename):
+        result['is_image'] = True
+        # Create thumbnail
+        if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+            result['thumbnail'] = thumbnail_filename
+            
+        # Create preview
+        if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+            result['preview'] = preview_filename
+            
+    elif is_video_file(filename):
+        result['is_video'] = True
+        # Create video thumbnail
+        if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+            result['thumbnail'] = thumbnail_filename
+            
+        # Create video preview
+        if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+            result['preview'] = preview_filename
+    
+    return result
+
+def get_thumbnail_info(filename):
+    """
+    Get thumbnail and preview information for a file.
+    Creates thumbnails if they don't exist.
+    
+    Args:
+        filename (str): Original filename
+        
+    Returns:
+        dict: Dictionary with thumbnail and preview information
+    """
+    if not filename:
+        return {'has_thumbnail': False, 'has_preview': False}
+    
+    name_part, ext_part = os.path.splitext(filename)
+    thumbnail_filename = f"{name_part}_thumb.jpg"
+    preview_filename = f"{name_part}_preview.jpg"
+    
+    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    
+    # Check if thumbnails exist, create if they don't
+    has_thumbnail = os.path.exists(thumbnail_path)
+    has_preview = os.path.exists(preview_path)
+    
+    if not has_thumbnail or not has_preview:
+        try:
+            result = generate_optimized_versions(filename)
+            has_thumbnail = result['thumbnail'] is not None
+            has_preview = result['preview'] is not None
+        except Exception as e:
+            print(f"Error generating thumbnails for {filename}: {str(e)}")
+    
+    return {
+        'has_thumbnail': has_thumbnail,
+        'has_preview': has_preview,
+        'thumbnail_url': f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None,
+        'preview_url': f"/previews/{preview_filename}" if has_preview else None,
+        'is_image': is_image_file(filename),
+        'is_video': is_video_file(filename)
+    }

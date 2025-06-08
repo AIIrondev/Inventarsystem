@@ -854,488 +854,516 @@
         .multi-filter {
             grid-template-columns: 1fr;
         }
-    }
-
-    /* Book information display styles */
-    .book-info-container {
-        margin-top: 10px;
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        background-color: #f9f9f9;
-        min-height: 40px;
-    }
-
-    .book-info {
-        padding: 15px;
-        background-color: #fff;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        margin-bottom: 10px;
-    }
-
-    .book-info h4 {
-        color: #333;
-        margin: 0 0 10px 0;
-        font-size: 1.2em;
-        font-weight: bold;
-    }
-
-    .book-info p {
-        margin: 5px 0;
-        color: #666;
-        line-height: 1.4;
-    }
-
-    .book-thumbnail {
-        max-width: 120px;
-        max-height: 180px;
-        float: right;
-        margin: 0 0 10px 15px;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .book-description {
-        clear: both;
-        margin-top: 15px;
-        padding-top: 10px;
-        border-top: 1px solid #eee;
-    }
-
-    .book-description h5 {
-        color: #333;
-        margin: 0 0 8px 0;
-        font-size: 1em;
-        font-weight: bold;
-    }
-
-    .book-description p {
-        max-height: 150px;
-        overflow-y: auto;
-        padding: 5px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 3px;
-        font-size: 0.9em;
-        line-height: 1.5;
-    }
-
-    /* Import button styling */
-    .import-book-button {
-        background-color: #28a745;
-        color: white;
-        border: none;
-        padding: 10px 15px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        margin-top: 15px;
-        transition: background-color 0.2s ease;
-        display: block;
-        width: 100%;
-    }
-
-    .import-book-button:hover {
-        background-color: #218838;
-    }
-
-    .import-book-button:active {
-        background-color: #1e7e34;
-    }
-
-    /* ISBN input group styling */
-    .isbn-input-group {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-
-    .isbn-input-group input {
-        flex: 1;
-    }
-
-    .fetch-isbn-button {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 8px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: background-color 0.2s ease;
-    }
-
-    .fetch-isbn-button:hover {
-        background-color: #0056b3;
-    }
-
-    /* Loading spinner */
-    .loading-spinner {
-        color: #007bff;
-        font-style: italic;
-        text-align: center;
-        padding: 20px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-    }
-
-    .loading-spinner::after {
-        content: "...";
-        animation: dots 1.5s steps(5, end) infinite;
-    }
-
-    @keyframes dots {
-        0%, 20% { 
-            color: rgba(0,0,0,0);
-            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        
+        /* Mobile-responsive styles for admin interface */
+        .container {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 15px !important;
         }
-        40% { 
-            color: #007bff;
-            text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+        
+        h1, h2 {
+            font-size: 1.4rem !important;
+            margin-bottom: 15px !important;
         }
-        60% { 
-            text-shadow: .25em 0 0 #007bff, .5em 0 0 rgba(0,0,0,0);
+        
+        .filter-container {
+            flex-direction: column !important;
+            gap: 15px !important;
+            margin-bottom: 15px !important;
         }
-        80%, 100% { 
-            text-shadow: .25em 0 0 #007bff, .5em 0 0 #007bff;
+        
+        .filter-group {
+            min-width: auto !important;
+            width: 100% !important;
+        }
+        
+        .filter-header {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        .filter-toggle, .clear-filter {
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .filter-dropdown {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            max-height: 200px !important;
+            margin-top: 10px !important;
+        }
+        
+        .filter-options {
+            padding: 5px !important;
+        }
+        
+        .filter-options label {
+            display: block !important;
+            padding: 10px 12px !important;
+            margin: 2px 0 !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .filter-options label:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .filter-options input[type="checkbox"] {
+            margin-right: 10px !important;
+            transform: scale(1.2) !important;
+        }
+        
+        /* Admin-specific button improvements */
+        .admin-actions {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 10px !important;
+            margin: 15px 0 !important;
+        }
+        
+        .admin-actions button {
+            width: 100% !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Search field mobile optimization */
+        .search-field input {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important; /* Prevents zoom on iOS */
+            border-radius: 6px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Table responsiveness */
+        .table-responsive {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        
+        .table-responsive table {
+            min-width: 600px !important;
+        }
+        
+        /* Form improvements */
+        .form-group {
+            margin-bottom: 15px !important;
+        }
+        
+        .form-group label {
+            display: block !important;
+            margin-bottom: 8px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border: 1px solid #ddd !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Modal improvements for admin */
+        .modal-content {
+            width: 95% !important;
+            max-width: 500px !important;
+            margin: 20px auto !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+        }
+        
+        /* Admin card improvements */
+        .admin-card {
+            margin-bottom: 15px !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Tooltip improvements for mobile */
+        .tooltip {
+            display: none !important; /* Hide tooltips on mobile */
+        }
+        
+        /* Tab navigation improvements */
+        .nav-tabs {
+            flex-wrap: wrap !important;
+            border-bottom: 1px solid #dee2e6 !important;
+        }
+        
+        .nav-tabs .nav-link {
+            padding: 12px 16px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Dropdown improvements */
+        .dropdown-menu {
+            width: 100% !important;
+            max-width: 300px !important;
+        }
+        
+        .dropdown-item {
+            padding: 12px 20px !important;
+            font-size: 0.9rem !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Status indicator improvements */
+        .status-indicator {
+            padding: 6px 12px !important;
+            border-radius: 12px !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Pagination improvements */
+        .pagination {
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+        }
+        
+        .pagination .page-link {
+            padding: 10px 15px !important;
+            margin: 2px !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Alert improvements */
+        .alert {
+            margin: 15px 0 !important;
+            padding: 15px !important;
+            border-radius: 8px !important;
+            font-size: 0.9rem !important;
+        }
+        
+        /* Card grid improvements */
+        .card-grid {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+        }
+        
+        .card {
+            padding: 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Upload area improvements */
+        .upload-area {
+            padding: 20px !important;
+            border: 2px dashed #ddd !important;
+            border-radius: 8px !important;
+            text-align: center !important;
+            background: #fafafa !important;
+        }
+        
+        .upload-area:hover {
+            border-color: #007bff !important;
+            background: #f0f8ff !important;
+        }
+        
+        /* Progress bar improvements */
+        .progress {
+            height: 8px !important;
+            border-radius: 4px !important;
+            background: #e9ecef !important;
+        }
+        
+        .progress-bar {
+            border-radius: 4px !important;
+        }
+        
+        /* Badge improvements */
+        .badge {
+            padding: 6px 10px !important;
+            font-size: 0.8rem !important;
+            border-radius: 12px !important;
+        }
+        
+        /* List group improvements */
+        .list-group-item {
+            padding: 15px !important;
+            border-radius: 6px !important;
+            margin-bottom: 8px !important;
+            border: 1px solid #dee2e6 !important;
+        }
+        
+        /* Accordion improvements */
+        .accordion-header button {
+            padding: 15px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .accordion-body {
+            padding: 20px !important;
         }
     }
-
-    /* Error message styling */
-    .error-message {
-        color: #721c24;
-        background-color: #f8d7da;
-        border: 1px solid #f5c6cb;
-        border-radius: 4px;
-        padding: 12px;
-        margin: 10px 0;
-        text-align: center;
-        font-weight: 500;
-    }
-
-    /* Success message styling */
-    .import-success-message {
-        color: #155724;
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 4px;
-        padding: 12px;
-        margin: 10px 0;
-        text-align: center;
-        font-weight: bold;
-        animation: fadeInOut 3s ease;
-    }
-
-    @keyframes fadeInOut {
-        0% { opacity: 0; transform: translateY(-10px); }
-        10%, 90% { opacity: 1; transform: translateY(0); }
-        100% { opacity: 0; transform: translateY(-10px); }
-    }
-
-    /* Code validation styling */
-    .code-checking {
-        background-color: #fff3cd !important;
-        border-color: #ffc107 !important;
-        position: relative;
-    }
-
-    .code-checking::after {
-        content: "Prüfe...";
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 0.8em;
-        color: #856404;
-        font-style: italic;
-    }
-
-    .code-valid {
-        background-color: #d4edda !important;
-        border-color: #28a745 !important;
-        color: #155724 !important;
-    }
-
-    .code-invalid {
-        background-color: #f8d7da !important;
-        border-color: #dc3545 !important;
-        color: #721c24 !important;
-    }
-
-    /* Duplicate code popup styling */
-    .popup-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.6);
-        z-index: 10000;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        animation: overlayFadeIn 0.3s ease;
-    }
-
-    @keyframes overlayFadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .duplicate-code-popup {
-        background-color: white;
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-        max-width: 500px;
-        width: 90%;
-        text-align: center;
-        position: relative;
-        animation: popupSlideIn 0.3s ease;
-    }
-
-    @keyframes popupSlideIn {
-        from { 
-            opacity: 0; 
-            transform: scale(0.8) translateY(-20px); 
+    
+    /* Tablet specific styles */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .container {
+            width: 90% !important;
         }
-        to { 
-            opacity: 1; 
-            transform: scale(1) translateY(0); 
+        
+        .filter-container {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
         }
-    }
-
-    .popup-content h3 {
-        color: #dc3545;
-        margin: 0 0 15px 0;
-        font-size: 1.3em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .popup-content h3::before {
-        content: "⚠️";
-        font-size: 1.2em;
-    }
-
-    .popup-content p {
-        color: #333;
-        margin: 15px 0;
-        line-height: 1.5;
-        font-size: 1em;
-    }
-
-    .popup-content .duplicate-code {
-        font-weight: bold;
-        color: #dc3545;
-        background-color: #f8d7da;
-        padding: 5px 10px;
-        border-radius: 3px;
-        font-family: monospace;
-        font-size: 1.1em;
-    }
-
-    .popup-close-button {
-        background-color: #6c757d;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        margin-top: 20px;
-        transition: background-color 0.2s ease;
-    }
-
-    .popup-close-button:hover {
-        background-color: #5a6268;
-    }
-
-    .popup-close-x {
-        position: absolute;
-        top: 10px;
-        right: 15px;
-        background: none;
-        border: none;
-        font-size: 24px;
-        color: #999;
-        cursor: pointer;
-        padding: 5px;
-        line-height: 1;
-    }
-
-    .popup-close-x:hover {
-        color: #333;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-        .isbn-input-group {
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .fetch-isbn-button {
-            width: 100%;
-        }
-
-        .book-thumbnail {
-            float: none;
-            display: block;
-            margin: 10px auto;
-        }
-
-        .duplicate-code-popup {
-            margin: 20px;
-            width: calc(100% - 40px);
-            padding: 20px;
-        }
-
-        .popup-content h3 {
-            font-size: 1.1em;
+        
+        .card-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
         }
     }
 
-    @media (max-width: 480px) {
-        .book-info {
-            padding: 10px;
+    /* Mobile-responsive styles for admin interface */
+    @media screen and (max-width: 768px) {
+        .container {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 15px !important;
         }
-
-        .book-description p {
-            max-height: 100px;
-            font-size: 0.8em;
+        
+        h1, h2 {
+            font-size: 1.4rem !important;
+            margin-bottom: 15px !important;
         }
-
-        .duplicate-code-popup {
-            padding: 15px;
+        
+        .filter-container {
+            flex-direction: column !important;
+            gap: 15px !important;
+            margin-bottom: 15px !important;
         }
-
-        .popup-content h3 {
-            font-size: 1em;
+        
+        .filter-group {
+            min-width: auto !important;
+            width: 100% !important;
         }
-
-        .popup-content p {
-            font-size: 0.9em;
+        
+        .filter-header {
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        
+        .filter-toggle, .clear-filter {
+            padding: 8px 12px !important;
+            font-size: 0.9rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        .filter-dropdown {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            max-height: 200px !important;
+            margin-top: 10px !important;
+        }
+        
+        .filter-options {
+            padding: 5px !important;
+        }
+        
+        .filter-options label {
+            display: block !important;
+            padding: 10px 12px !important;
+            margin: 2px 0 !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .filter-options label:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .filter-options input[type="checkbox"] {
+            margin-right: 10px !important;
+            transform: scale(1.2) !important;
+        }
+        
+        /* Items container mobile optimization */
+        .items-container {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 15px !important;
+            padding: 10px 0 !important;
+            overflow-x: visible !important;
+        }
+        
+        .item-card {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 15px !important;
+            scroll-snap-align: none !important;
+        }
+        
+        .item-card:hover {
+            transform: translateY(-2px) !important;
+        }
+        
+        /* Modal improvements for admin */
+        .modal-content {
+            width: 95% !important;
+            max-width: 500px !important;
+            margin: 20px auto !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+            padding: 20px !important;
+        }
+        
+        /* Button improvements */
+        .modal-actions {
+            flex-direction: column !important;
+            gap: 10px !important;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            width: 100% !important;
+            min-height: 44px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            touch-action: manipulation !important;
+        }
+        
+        /* Navigation buttons mobile */
+        .navigation-buttons {
+            display: none !important; /* Hide horizontal navigation on mobile */
+        }
+        
+        /* QR Scanner mobile */
+        .qr-container {
+            margin-bottom: 15px !important;
+        }
+        
+        .scan-button {
+            width: 100% !important;
+            max-width: 300px !important;
+            padding: 12px 20px !important;
+            font-size: 1rem !important;
+            min-height: 44px !important;
+            touch-action: manipulation !important;
+        }
+        
+        #qr-reader {
+            width: 100% !important;
+            max-width: 400px !important;
+            margin: 15px auto !important;
+        }
+        
+        /* Search field mobile */
+        .search-field input {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border-radius: 6px !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Form improvements */
+        .form-group {
+            margin-bottom: 15px !important;
+        }
+        
+        .form-group label {
+            display: block !important;
+            margin-bottom: 8px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100% !important;
+            padding: 12px 15px !important;
+            font-size: 16px !important;
+            border: 1px solid #ddd !important;
+            border-radius: 6px !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Image container mobile */
+        .item-card .image-container {
+            max-width: 100% !important;
+            height: 200px !important;
+            overflow: hidden !important;
+            border-radius: 8px !important;
+        }
+        
+        .item-card .item-image {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+        }
+        
+        /* Touch improvements */
+        * {
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1) !important;
+        }
+        
+        button, .btn, a, input[type="submit"], input[type="button"] {
+            touch-action: manipulation !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+        }
+        
+        /* Focus improvements for accessibility */
+        button:focus, .btn:focus, input:focus, select:focus, textarea:focus {
+            outline: 2px solid #007bff !important;
+            outline-offset: 2px !important;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25) !important;
+        }
+    }
+    
+    /* Tablet specific styles */
+    @media screen and (min-width: 769px) and (max-width: 1024px) {
+        .container {
+            width: 90% !important;
+        }
+        
+        .items-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
+        }
+        
+        .filter-container {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 20px !important;
         }
     }
 
-    /* Item card action buttons */
-    .actions {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-start;
-        margin-top: 15px;
-        padding-top: 10px;
-        border-top: 1px solid #dee2e6;
-        flex-wrap: wrap;
-    }
-
-    .actions form {
-        margin: 0;
-        flex: 1;
-        min-width: 80px;
-    }
-
-    .actions .ausleihen,
-    .actions .edit-button,
-    .actions .delete-button {
-        width: 100%;
-        font-size: 0.8rem;
-        padding: 8px 12px;
-        min-width: auto;
-    }
-
-    /* Borrower badge */
-    .borrower-badge {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 4px;
-        padding: 8px;
-        margin-top: 10px;
-        font-size: 0.85rem;
-        color: #856404;
-    }
-
-    .borrower-badge strong {
-        color: #533f03;
-    }
-
-    /* Appointment badge */
-    .appointment-badge {
-        background-color: #e1f5fe;
-        border: 1px solid #81d4fa;
-        border-radius: 4px;
-        padding: 8px;
-        margin-top: 10px;
-        font-size: 0.85rem;
-        color: #0277bd;
-    }
-
-    .appointment-badge strong {
-        color: #01579b;
-    }
-
-    .appointment-time {
-        font-size: 0.8rem;
-        color: #0288d1;
-        font-style: italic;
-        display: block;
-        margin-top: 3px;
-    }
-
-    .borrow-time {
-        font-size: 0.8rem;
-        opacity: 0.8;
-    }
-
-    /* Image navigation buttons in item cards */
-    .image-container {
-        position: relative;
-        margin: 10px 0;
-        text-align: center;
-    }
-
-    .prev-image-button,
-    .next-image-button {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 0, 0, 0.6);
-        color: white;
-        border: none;
-        padding: 8px 12px;
-        cursor: pointer;
-        font-size: 14px;
-        border-radius: 3px;
-        transition: background-color 0.3s ease;
-    }
-
-    .prev-image-button:hover,
-    .next-image-button:hover {
-        background-color: rgba(0, 0, 0, 0.8);
-    }
-
-    .prev-image-button {
-        left: 5px;
-    }
-
-    .next-image-button {
-        right: 5px;
-    }
-
-    .item-image {
-        max-width: 100%;
-        max-height: 200px;
-        object-fit: contain;
-        border-radius: 4px;
-    }
-
-
+    /* ...existing styles... */
 </style>
 
 <div class="container">
@@ -2120,16 +2148,35 @@
 
                         const imagesHtml = item.Images ? item.Images.map((image, index) => {
                             const isVideo = isVideoFile(image);
+                            // Use thumbnail info if available
+                            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                            
                             if (isVideo) {
-                                return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
-                                        <video src="{{ url_for('uploaded_file', filename='') }}${image}" class="item-image" data-index="${index}" preload="metadata" muted>
-                                        <source src="{{ url_for('uploaded_file', filename='') }}${image}" type="video/mp4">
-                                        Ihr Browser unterstützt keine Videos.
-                                        </video>
-                                        <div class="video-preview-overlay">▶</div>
-                                        </div>`;
+                                // For videos, use thumbnail if available, otherwise original video
+                                if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
+                                    // Show thumbnail image with video overlay for card view
+                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                            <img src="${thumbnailInfo.thumbnail_url}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${image}">
+                                            <div class="video-preview-overlay">▶</div>
+                                            </div>`;
+                                } else {
+                                    // Fallback to video element
+                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                            <video src="{{ url_for('uploaded_file', filename='') }}${image}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${image}">
+                                            <source src="{{ url_for('uploaded_file', filename='') }}${image}" type="video/mp4">
+                                            Ihr Browser unterstützt keine Videos.
+                                            </video>
+                                            <div class="video-preview-overlay">▶</div>
+                                            </div>`;
+                                }
                             } else {
-                                return `<img src="{{ url_for('uploaded_file', filename='') }}${image}" alt="${item.Name}" class="item-image" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                                // For images, use thumbnail if available
+                                const imageSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : `{{ url_for('uploaded_file', filename='') }}${image}`;
+                                    
+                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${image}" style="display: ${index === 0 ? 'block' : 'none'};">`;
                             }
                         }).join('') : '';
                         
