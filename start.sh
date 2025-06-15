@@ -360,6 +360,14 @@ echo "========================================================"
 echo "           CONFIGURING NGINX SERVER                     "
 echo "========================================================"
 
+# Fix directory permissions for Nginx to access static files
+echo "Setting proper permissions for static file access..."
+sudo chmod 755 /home/$(whoami)
+sudo chmod 755 $PROJECT_ROOT/Web/static || {
+    echo "ERROR: Failed to set permissions for static files. Exiting."
+    exit 1
+}
+
 # Create Nginx server configuration file
 sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
 server {

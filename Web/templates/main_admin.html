@@ -2147,26 +2147,25 @@
                         const filter3More = filter3Array.length > 1 ? ` (+${filter3Array.length - 1} mehr)` : '';
 
                         const imagesHtml = item.Images ? item.Images.map((image, index) => {
-                            const isVideo = isVideoFile(image);
-                            // Use thumbnail info if available
+                            // Check if the image already has a full URL path or just the filename
+                            const imageSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                            image : 
+                                            `{{ url_for('uploaded_file', filename='') }}${image}`;
+                            
+                            // Get thumbnail info for this image index
                             const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
                             
+                            const isVideo = isVideoFile(image);
                             if (isVideo) {
                                 // For videos, use thumbnail if available, otherwise original video
+                                const videoSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
+                                    ? thumbnailInfo.thumbnail_url 
+                                    : imageSrc;
+                                
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
                                     // Show thumbnail image with video overlay for card view
                                     return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
-                                            <img src="${thumbnailInfo.thumbnail_url}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${image}">
-                                            <div class="video-preview-overlay">▶</div>
-                                            </div>`;
-                                } else {
-                                    // Fallback to video element
-                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
-                                            <video src="{{ url_for('uploaded_file', filename='') }}${image}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${image}">
-                                            <source src="{{ url_for('uploaded_file', filename='') }}${image}" type="video/mp4">
-                                            Ihr Browser unterstützt keine Videos.
-                                            </video>
-                                            <div class="video-preview-overlay">▶</div>
+                                            <img
                                             </div>`;
                                 }
                             } else {

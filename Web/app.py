@@ -1853,6 +1853,7 @@ def logs():
             item_name = item.get('Name', 'Unknown Item') if item else 'Unknown Item'
             
             # Get user details - from sample data, User is a username string
+           
             username = ausleihung.get('User', 'Unknown User')
             
             # Format dates for display
@@ -2904,3 +2905,46 @@ def get_thumbnail_info(filename):
         'is_image': is_image_file(filename),
         'is_video': is_video_file(filename)
     }
+
+# Add explicit static file routes to handle CSS serving issues
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """
+    Explicitly serve static files to resolve 403 Forbidden errors.
+    This ensures CSS and JS files are properly accessible.
+    
+    Args:
+        filename (str): The static file path
+        
+    Returns:
+        flask.Response: The requested static file
+    """
+    return send_from_directory(app.static_folder, filename)
+
+@app.route('/static/css/<filename>')
+def serve_css(filename):
+    """
+    Explicitly serve CSS files from the static/css directory.
+    
+    Args:
+        filename (str): Name of the CSS file to serve
+        
+    Returns:
+        flask.Response: The requested CSS file
+    """
+    css_folder = os.path.join(app.static_folder, 'css')
+    return send_from_directory(css_folder, filename)
+
+@app.route('/static/js/<filename>')
+def serve_js(filename):
+    """
+    Explicitly serve JavaScript files from the static/js directory.
+    
+    Args:
+        filename (str): Name of the JS file to serve
+        
+    Returns:
+        flask.Response: The requested JS file
+    """
+    js_folder = os.path.join(app.static_folder, 'js')
+    return send_from_directory(js_folder, filename)
