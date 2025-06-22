@@ -502,30 +502,35 @@
     /* Action Button Styles */
     .modal-actions {
         display: flex;
-        gap: 10px;
+        gap: 8px;
         justify-content: flex-start;
         margin-top: 20px;
         padding-top: 15px;
         border-top: 1px solid #dee2e6;
         flex-wrap: wrap;
+        align-items: stretch;
     }
 
     .modal-actions form {
         margin: 0;
+        flex: 0 0 auto;
     }
 
     .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
-        padding: 10px 20px;
+        padding: 8px 16px;
         border: none;
         border-radius: 5px;
         cursor: pointer;
         font-weight: bold;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-decoration: none;
         display: inline-block;
         text-align: center;
         transition: all 0.3s ease;
-        min-width: 100px;
+        min-width: 90px;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        box-sizing: border-box;
     }
 
     /* Ausleihen/Zurückgeben Button */
@@ -855,11 +860,25 @@
             grid-template-columns: 1fr;
         }
         
+        /* Mobile viewport and scrolling improvements */
+        html, body {
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            touch-action: pan-y !important;
+            height: 100% !important;
+        }
+        
+        body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
         /* Mobile-responsive styles for admin interface */
         .container {
             width: 95% !important;
             margin: 10px auto !important;
             padding: 15px !important;
+            overflow-x: hidden !important;
         }
         
         h1, h2 {
@@ -1325,11 +1344,16 @@
             object-fit: cover !important;
         }
         
-        /* Touch improvements */
+        /* Touch improvements and scrolling */
+        .items-container, .item-card, .image-container, .item-image {
+            touch-action: pan-y !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        
         * {
             -webkit-tap-highlight-color: rgba(0,0,0,0.1) !important;
         }
-        
+
         button, .btn, a, input[type="submit"], input[type="button"] {
             touch-action: manipulation !important;
             -webkit-user-select: none !important;
@@ -1360,6 +1384,90 @@
             display: grid !important;
             grid-template-columns: repeat(2, 1fr) !important;
             gap: 20px !important;
+        }
+    }
+
+    /* Desktop media queries for better button layout */
+    @media (min-width: 768px) {
+        .modal-content {
+            max-width: 700px;
+            margin: 10% auto;
+        }
+        
+        .modal-actions {
+            gap: 12px;
+            justify-content: flex-start;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            min-width: 110px;
+            flex: 0 0 auto;
+        }
+        
+        /* Ensure buttons wrap properly on smaller desktop screens */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .modal-actions {
+                gap: 8px;
+            }
+            
+            .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+                min-width: 95px;
+            }
+        }
+    }
+
+    /* Large desktop optimization */
+    @media (min-width: 1200px) {
+        .modal-content {
+            max-width: 800px;
+        }
+        
+        .modal-actions {
+            gap: 15px;
+        }
+        
+        .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            min-width: 120px;
+        }
+    }
+
+    /* Improved mobile scrolling and touch optimization */
+    @media (max-width: 767px) {
+        body {
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+        
+        .container {
+            width: 95%;
+            margin: 10px auto;
+            padding: 15px;
+            overflow-x: hidden;
+        }
+        
+        /* Improve image touch handling on mobile */
+        .item-image, .modal-image {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Better modal sizing for mobile */
+        .modal-content {
+            width: 95% !important;
+            max-width: none !important;
+            margin: 10px auto !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
         }
     }
 
@@ -2165,7 +2273,11 @@
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
                                     // Show thumbnail image with video overlay for card view
                                     return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
-                                            <img
+                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                                data-original="${image}" style="width: 100%; height: auto;">
+                                            <div class="video-preview-overlay">
+                                                <div class="video-play-button">▶</div>
+                                            </div>
                                             </div>`;
                                 }
                             } else {
