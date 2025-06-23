@@ -283,7 +283,8 @@
                 currentUsername = data.username;
                 // Now load items with username information
                 loadItems();
-                // REMOVE the filter rebuilding code from here - it will happen after items load
+                // Setup card images display after a short delay to ensure items are loaded
+                setTimeout(setupCardImagesDisplay, 500);
             })
             .catch(error => {
                 console.error('Error fetching user status:', error);
@@ -417,14 +418,14 @@
                                     : `{{ url_for('uploaded_file', filename='') }}${file}`;
                                 
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
-                                    // Show thumbnail image with video overlay for card view
-                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                    // Show thumbnail image with video overlay for card view - using classes instead of inline styles
+                                    return `<div class="video-container" data-index="${index}">
                                             <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${file}">
                                             <div class="video-preview-overlay">▶</div>
                                             </div>`;
                                 } else {
-                                    // Fallback to video element
-                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                    // Fallback to video element - using classes instead of inline styles
+                                    return `<div class="video-container" data-index="${index}">
                                             <video src="${videoSrc}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${file}">
                                             <source src="${videoSrc}" type="video/mp4">
                                             Ihr Browser unterstützt keine Videos.
@@ -439,7 +440,7 @@
                                     : `{{ url_for('uploaded_file', filename='') }}${file}`;
                                     
                                 return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
-                                        data-original="${file}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                                        data-original="${file}">`;
                             }
                         }).join('') : '';
                         
@@ -545,6 +546,9 @@
                 
                 // Apply filters
                 applyFilters();
+                
+                // Setup proper image display for all cards
+                setupCardImagesDisplay();
 
                 // After the data is loaded, rebuild filters if needed
                 if (activeFilters.filter1.length > 0) {
@@ -966,27 +970,83 @@
 
     // Add functions for image navigation in item cards
     function prevImage(event) {
-        event.stopPropagation(); // Prevent card click event
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        event.stopPropagation();
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
         
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex > 0) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex - 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerPrev = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerPrev) containerPrev.classList.add('active-container');
+            }
+        }
     }
 
     function nextImage(event) {
-        event.stopPropagation(); // Prevent card click event
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        event.stopPropagation();
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
         
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex < images.length - 1) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex + 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerNext = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerNext) containerNext.classList.add('active-container');
+            }
+        }
     }
-    
+
+    // Add this function to ensure proper image display on mobile and desktop
+    function setupCardImagesDisplay() {
+        // Wait for DOM to be fully loaded
+        setTimeout(() => {
+            const cards = document.querySelectorAll('.item-card');
+            cards.forEach(card => {
+                const images = card.querySelectorAll('.item-image');
+                
+                // Add active class to first image
+                if (images.length > 0) {
+                    images[0].classList.add('active-image');
+                    
+                    // Also handle video containers if present
+                    const videoContainers = card.querySelectorAll('.video-container');
+                    if (videoContainers.length > 0) {
+                        videoContainers[0].classList.add('active-container');
+                    }
+                }
+            });
+        }, 200);
+    }
+
     function toggleFilterDropdown(dropdownId) {
         const dropdown = document.getElementById(dropdownId);
         

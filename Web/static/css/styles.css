@@ -1729,11 +1729,6 @@ h1, h2 {
     padding: 4px 8px;
 }
 
-.clear-filter:hover {
-    background: linear-gradient(135deg, #c82333, #a71e2a);
-    box-shadow: 0 3px 6px rgba(220, 53, 69, 0.3);
-}
-
 /* Filter Dropdown Styling */
 .filter-dropdown {
     display: none;
@@ -2512,4 +2507,63 @@ h1, h2 {
     }
 }
 
-/* ...existing code... */
+/* =================================
+   ITEM IMAGE DISPLAY FIXES FOR MOBILE
+   ================================= */
+
+/* Fix for images not displaying on mobile */
+@media screen and (max-width: 768px) {
+    /* Override any inline display:none styles */
+    .item-card .item-image[style*="display: none"] {
+        display: block !important;
+    }
+    
+    /* Make sure first image is visible */
+    .item-card .item-image[data-index="0"] {
+        display: block !important;
+    }
+    
+    /* Show all images in image container but only first one visible */
+    .item-card .image-container {
+        position: relative;
+        height: 200px;
+        margin-bottom: 15px;
+    }
+    
+    /* Fix video container display issues */
+    .video-container[style*="display: none"] {
+        display: block !important;
+    }
+    
+    /* Ensure only one image is visible at a time */
+    .item-card .item-image:not([data-index="0"]) {
+        opacity: 0;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
+    /* Make sure first image is properly positioned */
+    .item-card .item-image[data-index="0"] {
+        position: relative;
+    }
+}
+
+/* Active image display classes */
+.item-image.active-image {
+    display: block !important;
+    opacity: 1 !important;
+    z-index: 5;
+}
+
+.item-image:not(.active-image) {
+    display: none !important;
+}
+
+.video-container.active-container {
+    display: block !important;
+}
+
+.video-container:not(.active-container) {
+    display: none !important;
+}
