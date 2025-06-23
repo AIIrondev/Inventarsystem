@@ -2233,11 +2233,15 @@
                 currentUsername = data.username;
                 // Now load items with username information
                 loadItems();
-                this.searchTimeout = setTimeout(() => {
+                // Setup card images display after a short delay to ensure items are loaded
+                setTimeout(function() {
                     searchByCode();
                 }, 300);
+            })
+            .catch(error => {
+                console.error('Error fetching user status:', error);
+                loadItems(); // Load items anyway in case of error
             });
-        }
         
         // Close modals when clicking outside
         window.onclick = function(event) {
