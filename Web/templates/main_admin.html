@@ -2810,13 +2810,32 @@
         
         if (total <= 1) return;
         
-        document.getElementById(`modal-image-${currentIndex}`).style.display = 'none';
+        // Remove active class from current image
+        const currentImage = document.getElementById(`modal-image-${currentIndex}`);
+        if (currentImage) {
+            currentImage.classList.remove('active-image');
+            
+            // If it's a video, pause it when navigating away
+            if (currentImage.tagName === 'VIDEO' && !currentImage.paused) {
+                try {
+                    currentImage.pause();
+                } catch (e) {
+                    console.error("Could not pause video:", e);
+                }
+            }
+        }
         
+        // Calculate new index with wrapping
         let newIndex = (currentIndex + direction) % total;
         if (newIndex < 0) newIndex = total - 1;
         
-        document.getElementById(`modal-image-${newIndex}`).style.display = 'block';
+        // Add active class to new image
+        const newImage = document.getElementById(`modal-image-${newIndex}`);
+        if (newImage) {
+            newImage.classList.add('active-image');
+        }
         
+        // Update counter
         const counter = document.querySelector('.image-counter');
         if (counter) counter.textContent = `${newIndex + 1}/${total}`;
         

@@ -766,13 +766,11 @@
                             `{{ url_for('uploaded_file', filename='') }}${file}`;
             
             if (isVideoFile(file)) {
-                return `<video src="${imageSrc}" class="modal-image" id="modal-image-${index}" controls 
-                         style="display: ${index === 0 ? 'block' : 'none'};" preload="metadata">
+                return `<video src="${imageSrc}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata">
                          Your browser does not support the video tag.
                          </video>`;
             } else {
-                return `<img src="${imageSrc}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" 
-                         style="display: ${index === 0 ? 'block' : 'none'};">`;
+                return `<img src="${imageSrc}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}">`;
             }
         }).join('') : '';
         
@@ -925,15 +923,30 @@
         
         if (total <= 1) return;
         
-        // Hide current image
-        document.getElementById(`modal-image-${currentIndex}`).style.display = 'none';
+        // Remove active class from current image
+        const currentImage = document.getElementById(`modal-image-${currentIndex}`);
+        if (currentImage) {
+            currentImage.classList.remove('active-image');
+            
+            // If it's a video, pause it when navigating away
+            if (currentImage.tagName === 'VIDEO' && !currentImage.paused) {
+                try {
+                    currentImage.pause();
+                } catch (e) {
+                    console.error("Could not pause video:", e);
+                }
+            }
+        }
         
-        // Calculate new index
+        // Calculate new index with wrapping
         let newIndex = (currentIndex + direction) % total;
-        if (newIndex < 0) newIndex = total - 1;  // Fixed: Added missing opening parenthesis
+        if (newIndex < 0) newIndex = total - 1;
         
-        // Show new image
-        document.getElementById(`modal-image-${newIndex}`).style.display = 'block';
+        // Add active class to new image
+        const newImage = document.getElementById(`modal-image-${newIndex}`);
+        if (newImage) {
+            newImage.classList.add('active-image');
+        }
         
         // Update counter
         const counter = document.querySelector('.image-counter');
