@@ -1027,8 +1027,19 @@
 /* Desktop and larger screens (1025px and up) */
 @media screen and (min-width: 1025px) {
     .items-container {
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        display: flex;
+        flex-wrap: nowrap;
         gap: 25px;
+        overflow-x: auto;
+        padding: 20px 0;
+        scroll-behavior: smooth;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE and Edge */
+    }
+    
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .items-container::-webkit-scrollbar {
+        display: none;
     }
     
     .filter-container {
@@ -1056,6 +1067,30 @@
         justify-content: center;
         gap: 30px;
         margin-top: 30px;
+        margin-bottom: 20px;
+        position: relative;
+        z-index: 10;
+    }
+    
+    .prev-button, .next-button {
+        padding: 12px 25px;
+        font-size: 1.1rem;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    
+    .prev-button:hover, .next-button:hover {
+        background-color: #0056b3;
+    }
+    
+    .prev-button.active, .next-button.active {
+        transform: scale(0.95);
+        background-color: #0056b3;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
     
     .prev-button, .next-button {
@@ -2439,7 +2474,7 @@ h1, h2 {
     
     .ausleihen, .schedule-button {
         width: 100% !important;
-        min-height: 44px !important;
+               min-height: 44px !important;
         font-size: 1rem !important;
     }
     
@@ -2504,6 +2539,37 @@ h1, h2 {
     .item-card:hover {
         transform: translateY(-6px) !important;
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+    }
+}
+
+/* Fix für Desktop Button-Anordnung wie in Mobile */
+@media screen and (min-width: 769px) {
+    /* Action buttons Desktop optimization - mobile layout */
+    .actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .actions form {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .ausleihen, .schedule-button {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 1rem;
+        font-weight: 600;
+        min-height: 48px;
+    }
+    
+    /* Item card width fix for desktop */
+    .item-card {
+        flex: 0 0 calc(33.333% - 20px);
+        max-width: 350px;
     }
 }
 

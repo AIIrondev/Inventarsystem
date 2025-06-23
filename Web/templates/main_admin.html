@@ -2826,23 +2826,41 @@
     function scrollPrev() {
         const container = document.querySelector('#items-container');
         const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20;
+        const gap = 25; // Entspricht dem gap-Wert im CSS
+        const scrollAmount = cardWidth + gap;
         
+        // Verbesserte Scrollfunktion mit visueller Rückmeldung
         container.scrollBy({
-            left: -1 * (cardWidth + gap),
+            left: -scrollAmount,
             behavior: 'smooth'
         });
+        
+        // Visuelles Feedback für den Button
+        const button = document.querySelector('.prev-button');
+        if (button) {
+            button.classList.add('active');
+            setTimeout(() => button.classList.remove('active'), 300);
+        }
     }
 
     function scrollNext() {
         const container = document.querySelector('#items-container');
         const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20;
+        const gap = 25; // Entspricht dem gap-Wert im CSS
+        const scrollAmount = cardWidth + gap;
         
+        // Verbesserte Scrollfunktion mit visueller Rückmeldung
         container.scrollBy({
-            left: cardWidth + gap,
+            left: scrollAmount,
             behavior: 'smooth'
         });
+        
+        // Visuelles Feedback für den Button
+        const button = document.querySelector('.next-button');
+        if (button) {
+            button.classList.add('active');
+            setTimeout(() => button.classList.remove('active'), 300);
+        }
     }
 
     // Function to ensure proper image display on mobile and desktop
