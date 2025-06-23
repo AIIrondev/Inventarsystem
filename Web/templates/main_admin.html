@@ -283,6 +283,71 @@
         display: block;
     }
 
+    /* Active image display classes */
+    .item-image.active-image {
+        display: block !important;
+        opacity: 1 !important;
+        z-index: 5;
+    }
+
+    .item-image:not(.active-image) {
+        display: none !important;
+    }
+
+    .video-container.active-container {
+        display: block !important;
+    }
+
+    .video-container:not(.active-container) {
+        display: none !important;
+    }
+
+    /* Fix for images not displaying correctly */
+    @media screen and (max-width: 768px) {
+        /* Override any inline display:none styles */
+        .item-card .item-image[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Make sure first image is visible */
+        .item-card .item-image[data-index="0"] {
+            display: block !important;
+        }
+        
+        /* Show all images in image container but only first one visible */
+        .item-card .image-container {
+            position: relative;
+            height: 200px;
+            margin-bottom: 15px;
+        }
+        
+        /* Fix video container display issues */
+        .video-container[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Position images properly */
+        .item-card .item-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Ensure only one image is visible at a time */
+        .item-card .item-image:not([data-index="0"]) {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Make sure first image is properly positioned */
+        .item-card .item-image[data-index="0"] {
+            position: relative;
+        }
+    }
+
     /* Navigation buttons */
     .navigation-buttons {
         display: flex;
@@ -731,10 +796,14 @@
     }
 
     .modal-image {
+        display: none;
         max-width: 100%;
-        max-height: 400px;
-        object-fit: contain;
-        border-radius: 4px;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    
+    .modal-image.active-image {
+        display: block !important;
     }
 
     .modal-image-nav {
@@ -1471,7 +1540,43 @@
         }
     }
 
-    /* ...existing styles... */
+    /* Improved image handling for admin */
+    @media (max-width: 768px) {
+        .item-card .item-image {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 300px !important;
+            display: block !important;
+            object-fit: cover !important;
+        }
+        
+        .item-card .image-container {
+            height: 200px !important;
+            overflow: hidden !important;
+            position: relative !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .item-card video.item-image {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 300px !important;
+            display: block !important;
+            object-fit: cover !important;
+        }
+    }
+
+    /* Modal image display fixes */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    
+    .modal-image.active-image {
+        display: block !important;
+    }
 </style>
 
 <div class="container">
@@ -2128,18 +2233,6 @@
                 currentUsername = data.username;
                 // Now load items with username information
                 loadItems();
-            })
-            .catch(error => {
-                console.error('Error fetching user status:', error);
-                loadItems(); // Load items anyway in case of error
-            });
-
-        // Add event listener for code search input
-        const codeSearchInput = document.getElementById('code-search');
-        if (codeSearchInput) {
-            codeSearchInput.addEventListener('input', function() {
-                // Use a small delay to avoid excessive filtering while typing
-                clearTimeout(this.searchTimeout);
                 this.searchTimeout = setTimeout(() => {
                     searchByCode();
                 }, 300);
@@ -2272,9 +2365,9 @@
                                 
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
                                     // Show thumbnail image with video overlay for card view
-                                    return `<div class="video-container" style="position: relative; display: ${index === 0 ? 'block' : 'none'};">
+                                    return `<div class="video-container" data-index="${index}">
                                             <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
-                                                data-original="${image}" style="width: 100%; height: auto;">
+                                                data-original="${image}">
                                             <div class="video-preview-overlay">
                                                 <div class="video-play-button">▶</div>
                                             </div>
@@ -2287,7 +2380,7 @@
                                     : `{{ url_for('uploaded_file', filename='') }}${image}`;
                                     
                                 return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
-                                        data-original="${image}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                                        data-original="${image}">`;
                             }
                         }).join('') : '';
                         
@@ -2392,6 +2485,9 @@
                 
                 itemsContainer.scrollLeft = 0;
                 applyFilters();
+                
+                // Setup proper image display for all cards
+                setupCardImagesDisplay();
 
                 // Rebuild filters if needed
                 if (activeFilters.filter1.length > 0) {
@@ -2570,9 +2666,9 @@
         const imagesHtml = item.Images ? item.Images.map((image, index) => {
             const isVideo = isVideoFile(image);
             if (isVideo) {
-                return `<video src="${image}" class="modal-image" id="modal-image-${index}" style="display: ${index === 0 ? 'block' : 'none'};" controls preload="metadata"></video>`;
+                return `<video src="${image}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata"></video>`;
             } else {
-                return `<img src="${image}" alt="${item.Name}" class="modal-image" id="modal-image-${index}" style="display: ${index === 0 ? 'block' : 'none'};">`;
+                return `<img src="${image}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}">`;
             }
         }).join('') : '';
         
@@ -2745,26 +2841,85 @@
         });
     }
 
+    // Function to ensure proper image display on mobile and desktop
+    function setupCardImagesDisplay() {
+        // Wait for DOM to be fully loaded
+        setTimeout(() => {
+            console.log("Setting up card images display");
+            const cards = document.querySelectorAll('.item-card');
+            cards.forEach(card => {
+                const images = card.querySelectorAll('.item-image');
+                
+                // Add active class to first image
+                if (images.length > 0) {
+                    images[0].classList.add('active-image');
+                    console.log("Set active image on card");
+                    
+                    // Also handle video containers if present
+                    const videoContainers = card.querySelectorAll('.video-container');
+                    if (videoContainers.length > 0) {
+                        videoContainers[0].classList.add('active-container');
+                    }
+                }
+            });
+        }, 200);
+    }
+
+    // Update the image navigation functions to use classes instead of inline styles
     function prevImage(event) {
         event.stopPropagation();
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
         
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        images[currentIndex].style.display = 'block';
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex > 0) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex - 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerPrev = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerPrev) containerPrev.classList.add('active-container');
+            }
+        }
     }
 
     function nextImage(event) {
         event.stopPropagation();
-        const container = event.target.closest('.image-container');
-        const images = container.querySelectorAll('.item-image');
-        let currentIndex = Array.from(images).findIndex(img => img.style.display === 'block');
+        const card = event.target.closest('.item-card');
+        const images = card.querySelectorAll('.item-image');
+        const videoContainers = card.querySelectorAll('.video-container');
         
-        images[currentIndex].style.display = 'none';
-        currentIndex = (currentIndex + 1) % images.length;
-        images[currentIndex].style.display = 'block';
+        let currentIndex = -1;
+        images.forEach((img, idx) => {
+            if (img.classList.contains('active-image')) {
+                currentIndex = idx;
+            }
+        });
+        
+        if (currentIndex < images.length - 1) {
+            images[currentIndex].classList.remove('active-image');
+            images[currentIndex + 1].classList.add('active-image');
+            
+            // Handle video containers if present
+            if (videoContainers.length > 0) {
+                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                const containerNext = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
+                
+                if (containerCurrent) containerCurrent.classList.remove('active-container');
+                if (containerNext) containerNext.classList.add('active-container');
+            }
+        }
     }
     
     function toggleFilterDropdown(dropdownId) {
