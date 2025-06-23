@@ -2674,3 +2674,20 @@ h1, h2 {
 video.modal-image {
     background-color: #000;
 }
+
+/* Edit and generate buttons with black text for better visibility */
+.edit-button {
+    color: black !important; /* Override any existing color */
+}
+
+.duplicate-button {
+    color: black !important; /* Override any existing color */
+}
+
+.generate-qr-button {
+    color: black !important; /* Override any existing color */
+}
+
+.ausleihen {
+    color: black !important; /* Override any existing color */
+}
