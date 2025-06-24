@@ -160,7 +160,7 @@ fi
 # Fix PyMongo/Bson compatibility issue
 echo "Fixing PyMongo/Bson compatibility issue..."
 pip uninstall -y bson pymongo
-pip install pymongo==4.6.1 || {
+pip install --force-reinstall pymongo==4.6.1 || {
     echo "Failed to install pymongo. Exiting."
     exit 1
 }
@@ -214,11 +214,11 @@ fi
 
 # Verify PyMongo installation is correct
 echo "Verifying PyMongo installation..."
-python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration correct')" || {
+python -c "from pymongo import MongoClient; from bson import ObjectId; print('✓ PyMongo configuration correct')" || {
     echo "ERROR: PyMongo still not configured correctly."
-    echo "Trying to fix by uninstalling standalone bson..."
-    pip uninstall -y bson
-    python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration fixed')" || {
+    echo "Trying to fix by reinstalling pymongo..."
+    pip install --force-reinstall pymongo==4.6.1
+    python -c "from pymongo import MongoClient; from bson import ObjectId; print('✓ PyMongo configuration fixed')" || {
         echo "ERROR: PyMongo configuration still incorrect. Exiting."
         exit 1
     }

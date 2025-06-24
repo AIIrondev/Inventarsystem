@@ -40,10 +40,9 @@ import json
 import atexit
 import traceback
 import qrcode
-from qrcode.constants import ERROR_CORRECT_L
-from . import user as us  # Relative import for user module
-from . import items as it  # Relative import for items module
-from . import ausleihung as au  # Relative import for ausleihung module
+import user as us
+import items as it
+import ausleihung as au
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
@@ -408,67 +407,6 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
         return False
 
 # Call the initialization
-# Define utility functions for thumbnail DB updates
-def update_item_thumbnails_in_db(item_id, thumbnail_info_list):
-    """
-    Update an item in the database with thumbnail information.
-    """
-    from bson import ObjectId
-    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-    db = client[MONGODB_DB]
-    result = db['items'].update_one(
-        {'_id': ObjectId(item_id)},
-        {'$set': {'ThumbnailInfo': thumbnail_info_list}}
-    )
-    client.close()
-    return result.modified_count > 0
-
-def ensure_all_thumbnails_in_db():
-    """
-    Ensure all items in the database have thumbnail information.
-    """
-    from bson import ObjectId
-    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-    db = client[MONGODB_DB]
-    items = db['items']
-    cursor = items.find({
-        'Images': {'$exists': True, '$ne': []},
-        '$or': [{'ThumbnailInfo': {'$exists': False}}, {'ThumbnailInfo': []}]
-    })
-    for item in cursor:
-        infos = [get_thumbnail_info(img) for img in item.get('Images', [])]
-        if infos:
-            update_item_thumbnails_in_db(str(item['_id']), infos)
-    client.close()
-    
-# Define the QR code function
-def create_qr_code(item_id):
-    """
-    Generate a QR code for the given item ID and save it to the QR_CODE_FOLDER.
-    
-    Args:
-        item_id (str): ID of the item
-        
-    Returns:
-        str: Path to the generated QR code image or None on error
-    """
-    try:
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(item_id)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        qr_path = os.path.join(QR_CODE_FOLDER, f"{item_id}.png")
-        img.save(qr_path)  # PIL's save method works fine with string paths
-        return qr_path
-    except Exception as e:
-        print(f"Error generating QR code for {item_id}: {e}")
-        return None
-
 init_thumbnails()
 
 def is_image_file(filename):
@@ -1901,6 +1839,11 @@ def edit_item(id):
     if code_4 and not it.is_code_unique(code_4, exclude_id=id):
         flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
         return redirect(url_for('home_admin'))
+        )
+        
+        return jsonify({'success': True, 'booking_id': str(booking_id)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):

@@ -2691,3 +2691,101 @@ video.modal-image {
 .ausleihen {
     color: black !important; /* Override any existing color */
 }
+
+/* Image counter styling */
+.image-counter {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border-radius: 12px;
+    padding: 3px 8px;
+    font-size: 12px;
+    z-index: 5;
+}
+
+@media (max-width: 767px) {
+    .image-counter {
+        padding: 4px 10px;
+        font-size: 14px;
+        bottom: 10px;
+        right: 10px;
+    }
+}
+
+
+/* Mobile optimizations for image navigation */
+@media (max-width: 767px) {
+    .image-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 5px;
+    }
+    
+    .prev-image-button, .next-image-button {
+        width: 40px !important;
+        height: 40px !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+        opacity: 0.8 !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 15 !important;
+        font-size: 20px !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+    
+    .prev-image-button {
+        left: 10px !important;
+    }
+    
+    .next-image-button {
+        right: 10px !important;
+    }
+    
+    /* Make buttons always visible on mobile for better UX */
+    .prev-image-button, .next-image-button {
+        visibility: visible !important;
+        opacity: 0.8 !important;
+    }
+}
+
+
+/* Improved image navigation button styling */
+.image-container {
+    position: relative;
+}
+
+.prev-image-button, .next-image-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0.7;
+}
+
+.prev-image-button {
+    left: 8px;
+}
+
+.next-image-button {
+    right: 8px;
+}
+
+.prev-image-button:hover, .next-image-button:hover {
+    background: rgba(0,0,0,0.8);
+    opacity: 1;
+}
