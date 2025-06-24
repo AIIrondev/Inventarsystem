@@ -582,17 +582,20 @@
     }
 
     .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
-        padding: 8px 16px;
+        padding: 10px 18px;
         border: none;
         border-radius: 5px;
         cursor: pointer;
         font-weight: bold;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         text-decoration: none;
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         text-align: center;
         transition: all 0.3s ease;
-        min-width: 90px;
+        min-width: 120px;
+        height: 40px;
         white-space: nowrap;
         flex: 0 0 auto;
         box-sizing: border-box;
@@ -1577,6 +1580,64 @@
     .modal-image.active-image {
         display: block !important;
     }
+    
+    /* QR Reader styling */
+    #qr-reader {
+        width: 500px;
+        display: none;
+    }
+
+    /* Edit new location container */
+    .edit-new-location-container {
+        display: none;
+        margin-top: 10px;
+    }
+
+    /* Modal dialog styling */
+    .modal-dialog-white {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        text-align: center;
+    }
+
+    .modal-content-margin {
+        margin-top: 10px;
+    }
+
+    /* Element text colors for better visibility */
+    .edit-button, .duplicate-button, .generate-qr-button, .ausleihen {
+        color: black !important;
+    }
+    
+    /* Standardized button styles across the application */
+    .search-button, .scan-button, .filter-toggle, .clear-filter, 
+    .add-new-btn, .popup-close-button, .prev-image-button, .next-image-button,
+    .navigation-buttons .prev-button, .navigation-buttons .next-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-width: 80px;
+        height: 36px;
+        padding: 0 15px;
+        font-weight: 500;
+        box-sizing: border-box;
+    }
+    
+    /* Standardize form and document buttons */
+    .save-button, .cancel-button, .remove-book-cover-button, .remove-duplicate-image-button,
+    .import-book-button, .fetch-isbn-button, .nav-back-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 36px;
+        padding: 8px 15px;
+        font-weight: 500;
+        box-sizing: border-box;
+        white-space: nowrap;
+    }
 </style>
 
 <div class="container">
@@ -1640,7 +1701,7 @@
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button">Barcode scannen</button>
-            <div id="qr-reader" style="width: 500px; display: none;"></div>
+            <div id="qr-reader"></div>
         </div>
 
         <div id="items-container" class="items-container">
@@ -1681,7 +1742,7 @@
                         <button type="button" class="add-new-btn" id="edit-add-new-location-btn">
                             Neuen Ort hinzufügen
                         </button>
-                        <div id="edit-new-location-container" style="display: none; margin-top: 10px;">
+                        <div id="edit-new-location-container" class="edit-new-location-container">
                             <input type="text" id="edit-new-location-input" placeholder="Neuen Ort eingeben">
                             <button type="button" onclick="addNewLocation('edit')">Hinzufügen</button>
                             <button type="button" onclick="cancelAddLocation('edit')">Abbrechen</button>
@@ -1894,11 +1955,7 @@
 <script>
     // Create a global object to hold server-side template values
     window.serverVars = {};
-    {% if highlight_item is defined and highlight_item %}
-    window.serverVars.highlightItemId = "{{ highlight_item }}";
-    {% else %}
-    window.serverVars.highlightItemId = null;
-    {% endif %}
+    window.serverVars.highlightItemId = "{% if highlight_item is defined and highlight_item %}{{ highlight_item }}{% else %}null{% endif %}";
     
     window.isDebug = false; // Set to true only for development environment
 </script>
@@ -2428,8 +2485,6 @@
                                 <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <div class="image-container">
                                     ${imagesHtml}
-                                    <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
-                                    <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
                                 </div>
                                 ${borrowerBadge}
                                 ${appointmentBadge}
@@ -3273,9 +3328,9 @@
             <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
                         background: rgba(0,0,0,0.5); z-index: 10000; display: flex; 
                         align-items: center; justify-content: center;">
-                <div style="background: white; padding: 20px; border-radius: 5px; text-align: center;">
+                <div class="modal-dialog-white">
                     <div>Element wird dupliziert...</div>
-                    <div style="margin-top: 10px;">
+                    <div class="modal-content-margin">
                         <div class="spinner"></div>
                     </div>
                 </div>
