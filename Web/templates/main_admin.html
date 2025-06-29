@@ -772,14 +772,14 @@
     /* Simple Modal Styles */
     .item-modal {
         display: none;
-        position: fixed;
+        position: absolute; /* Changed from fixed to absolute to allow page scrolling */
         z-index: 1000;
         left: 0;
         top: 0;
         width: 100%;
         height: 100%;
         background-color: rgba(0, 0, 0, 0.75);
-        overflow: hidden; /* Changed from auto to hidden - we want scrolling in the modal-content, not the background */
+        overflow: auto; /* Changed back to auto to allow scrolling */
     }
     
     /* Class to make the modal visible when required */
@@ -829,10 +829,8 @@
         max-height: 80vh;
         overflow-y: auto; /* Ensures content is scrollable */
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        position: absolute;
-        top: 45%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        position: relative; /* Changed from absolute to relative */
+        margin: 100px auto; /* Use margin instead of positioning */
     }
 
     /* No animations for instant modal appearance */
@@ -2298,7 +2296,7 @@
             width: 95% !important;
             padding: 15px !important;
             max-height: 80vh !important;
-            top: 45% !important; /* Match the desktop version */
+            margin: 80px auto !important; /* Use margin for mobile too */
             overflow-y: auto !important; /* Ensure scrolling works on mobile */
         }
         
@@ -3457,8 +3455,8 @@
         // Store the current scroll position
         window.modalScrollPos = window.scrollY;
         
-        // Allow scrolling within the modal content, but prevent background scrolling
-        document.body.style.overflow = 'hidden';
+        // Allow scrolling for the whole page
+        document.body.style.overflow = 'auto';
         
         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
@@ -3607,13 +3605,10 @@
         // Hide modal
         modal.classList.remove('visible');
         
-        // Re-enable body scrolling
-        document.body.style.overflow = '';
+        // Make sure body scrolling stays enabled
+        document.body.style.overflow = 'auto';
         
-        // Restore scroll position to where user was before opening the modal
-        if (window.modalScrollPos !== undefined) {
-            window.scrollTo(0, window.modalScrollPos);
-        }
+        // No need to restore scroll position since we're allowing scrolling
     }
     
     // Function to open the edit modal with the visible class
