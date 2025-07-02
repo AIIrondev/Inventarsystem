@@ -34,20 +34,13 @@ Features:
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response
 from werkzeug.utils import secure_filename
-from typing import Optional, Dict, List, Union, Any, Tuple, cast
-import os
-import json
-import atexit
-import traceback
-import qrcode
-from qrcode.constants import ERROR_CORRECT_L
-import user as us  # Absolute import for user module
-import items as it  # Absolute import for items module
-import ausleihung as au  # Absolute import for ausleihung module
+import user as us
+import items as it
+import ausleihung as au
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
-from bson import ObjectId
+from bson.objectid import ObjectId
 from urllib.parse import urlparse, urlunparse
 import requests
 import os
@@ -215,275 +208,6 @@ if not os.path.exists(app.config['QR_CODE_FOLDER']):
 BACKUP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backups')
 if not os.path.exists(BACKUP_FOLDER):
     os.makedirs(BACKUP_FOLDER)
-
-# Initialize thumbnails on startup (after a small delay to ensure all modules are loaded)
-def init_thumbnails():
-    """Initialize thumbnail information for all items in the database."""
-    try:
-        from threading import Timer
-        # Use a timer to delay execution until after Flask is fully initialized
-        Timer(2.0, ensure_all_thumbnails_in_db).start()
-    except Exception as e:
-        print(f"Error initializing thumbnails: {e}")
-
-def get_thumbnail_info(filename):
-    """
-    Get thumbnail and preview information for a file.
-    Creates thumbnails if they don't exist.
-    
-    Args:
-        filename (str): Original filename
-        
-    Returns:
-        dict: Dictionary with thumbnail and preview information
-    """
-    if not filename:
-        return {'has_thumbnail': False, 'has_preview': False}
-    
-    name_part, ext_part = os.path.splitext(filename)
-    thumbnail_filename = f"{name_part}_thumb.jpg"
-    preview_filename = f"{name_part}_preview.jpg"
-    
-    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
-    
-    # Check if thumbnails exist, create if they don't
-    has_thumbnail = os.path.exists(thumbnail_path)
-    has_preview = os.path.exists(preview_path)
-    
-    if not has_thumbnail or not has_preview:
-        try:
-            result = generate_optimized_versions(filename)
-            has_thumbnail = result['thumbnail'] is not None
-            has_preview = result['preview'] is not None
-        except Exception as e:
-            print(f"Error generating thumbnails for {filename}: {str(e)}")
-    
-    return {
-        'has_thumbnail': has_thumbnail,
-        'has_preview': has_preview,
-        'thumbnail_url': f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None,
-        'preview_url': f"/previews/{preview_filename}" if has_preview else None,
-        'is_image': is_image_file(filename),
-        'is_video': is_video_file(filename)
-    }
-
-def generate_optimized_versions(filename):
-    """
-    Generate thumbnail and preview versions of uploaded files.
-    
-    Args:
-        filename (str): Name of the uploaded file
-        
-    Returns:
-        dict: Dictionary with paths to generated files
-    """
-    original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    # Generate file paths
-    name_part, ext_part = os.path.splitext(filename)
-    thumbnail_filename = f"{name_part}_thumb.jpg"
-    preview_filename = f"{name_part}_preview.jpg"
-    
-    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
-    
-    result = {
-        'original': filename,
-        'thumbnail': None,
-        'preview': None,
-        'is_image': False,
-        'is_video': False
-    }
-    
-    if is_image_file(filename):
-        result['is_image'] = True
-        # Create thumbnail
-        if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-            result['thumbnail'] = thumbnail_filename
-            
-        # Create preview
-        if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-            result['preview'] = preview_filename
-            
-    elif is_video_file(filename):
-        result['is_video'] = True
-        # Create video thumbnail
-        if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-            result['thumbnail'] = thumbnail_filename
-            
-        # Create video preview
-        if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-            result['preview'] = preview_filename
-    
-    return result
-
-def create_image_thumbnail(image_path, thumbnail_path, size):
-    """
-    Create a thumbnail for an image file.
-    
-    Args:
-        image_path (str): Path to the original image
-        thumbnail_path (str): Path where the thumbnail should be saved
-        size (tuple): Thumbnail size as (width, height)
-        
-    Returns:
-        bool: True if thumbnail was created successfully, False otherwise
-    """
-    try:
-        with Image.open(image_path) as img:
-            # Convert to RGB if necessary (for PNG with transparency)
-            if img.mode in ('RGBA', 'LA', 'P'):
-                # Create a white background
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
-            elif img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            # Create thumbnail with proper aspect ratio
-            img.thumbnail(size, Image.Resampling.LANCZOS)
-            
-            # Create a new image with the exact size (add padding if needed)
-            thumb = Image.new('RGB', size, (255, 255, 255))
-            
-            # Calculate position to center the image
-            x = (size[0] - img.size[0]) // 2
-            y = (size[1] - img.size[1]) // 2
-            
-            thumb.paste(img, (x, y))
-            
-            # Save with optimization
-            thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
-            return True
-            
-    except Exception as e:
-        print(f"Error creating image thumbnail for {image_path}: {str(e)}")
-        return False
-
-def create_video_thumbnail(video_path, thumbnail_path, size):
-    """
-    Create a thumbnail for a video file using ffmpeg.
-    
-    Args:
-        video_path (str): Path to the original video
-        thumbnail_path (str): Path where the thumbnail should be saved
-        size (tuple): Thumbnail size as (width, height)
-        
-    Returns:
-        bool: True if thumbnail was created successfully, False otherwise
-    """
-    try:
-        # Use ffmpeg to extract a frame from the video (at 1 second)
-        cmd = [
-            'ffmpeg', 
-            '-i', video_path,
-            '-ss', '00:00:01.000',  # Extract frame at 1 second
-            '-vframes', '1',
-            '-y',  # Overwrite output file
-            thumbnail_path + '.temp.jpg'
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0 and os.path.exists(thumbnail_path + '.temp.jpg'):
-            # Now resize the extracted frame using PIL
-            success = create_image_thumbnail(thumbnail_path + '.temp.jpg', thumbnail_path, size)
-            
-            # Clean up temporary file
-            try:
-                os.remove(thumbnail_path + '.temp.jpg')
-            except:
-                pass
-                
-            return success
-        else:
-            print(f"ffmpeg failed for {video_path}: {result.stderr}")
-            return False
-            
-    except Exception as e:
-        print(f"Error creating video thumbnail for {video_path}: {str(e)}")
-        return False
-
-# Call the initialization
-# Define utility functions for thumbnail DB updates
-def update_item_thumbnails_in_db(item_id, thumbnail_info_list):
-    """
-    Update an item in the database with thumbnail information.
-    """
-    from bson import ObjectId
-    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-    db = client[MONGODB_DB]
-    result = db['items'].update_one(
-        {'_id': ObjectId(item_id)},
-        {'$set': {'ThumbnailInfo': thumbnail_info_list}}
-    )
-    client.close()
-    return result.modified_count > 0
-
-def ensure_all_thumbnails_in_db():
-    """
-    Ensure all items in the database have thumbnail information.
-    """
-    from bson import ObjectId
-    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-    db = client[MONGODB_DB]
-    items = db['items']
-    cursor = items.find({
-        'Images': {'$exists': True, '$ne': []},
-        '$or': [{'ThumbnailInfo': {'$exists': False}}, {'ThumbnailInfo': []}]
-    })
-    for item in cursor:
-        infos = [get_thumbnail_info(img) for img in item.get('Images', [])]
-        if infos:
-            update_item_thumbnails_in_db(str(item['_id']), infos)
-    client.close()
-    
-# Define the QR code function
-def create_qr_code(item_id):
-    """
-    Generate a QR code for the given item ID and save it to the QR_CODE_FOLDER.
-    
-    Args:
-        item_id (str): ID of the item
-        
-    Returns:
-        str: Path to the generated QR code image or None on error
-    """
-    try:
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(item_id)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        qr_path = os.path.join(QR_CODE_FOLDER, f"{item_id}.png")
-        img.save(qr_path)  # PIL's save method works fine with string paths
-        return qr_path
-    except Exception as e:
-        print(f"Error generating QR code for {item_id}: {e}")
-        return None
-
-init_thumbnails()
-
-def is_image_file(filename):
-    """Check if a file is an image based on its extension."""
-    if not filename:
-        return False
-    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
-    return os.path.splitext(filename.lower())[1] in image_extensions
-
-def is_video_file(filename):
-    """Check if a file is a video based on its extension."""
-    if not filename:
-        return False
-    video_extensions = {'.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'}
-    return os.path.splitext(filename.lower())[1] in video_extensions
 
 def create_daily_backup():
     """
@@ -971,28 +695,10 @@ def get_items():
         
         # Add thumbnail information for images
         if 'Images' in item and item['Images']:
-            # Check if ThumbnailInfo already exists in the database
-            if 'ThumbnailInfo' not in item or not item['ThumbnailInfo']:
-                item['ThumbnailInfo'] = []
-                for image_filename in item['Images']:
-                    thumbnail_info = get_thumbnail_info(image_filename)
-                    item['ThumbnailInfo'].append(thumbnail_info)
-                
-                # Save thumbnail info to database for future use
-                update_item_thumbnails_in_db(item_id, item['ThumbnailInfo'])
-            else:
-                # Thumbnail info exists, but verify it's still valid
-                for i, image_filename in enumerate(item['Images']):
-                    if i < len(item['ThumbnailInfo']):
-                        # Verify thumbnail file still exists
-                        thumb_info = item['ThumbnailInfo'][i]
-                        if thumb_info.get('has_thumbnail') and thumb_info.get('thumbnail_url'):
-                            thumb_filename = thumb_info['thumbnail_url'].split('/')[-1]
-                            thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumb_filename)
-                            if not os.path.exists(thumb_path):
-                                # Regenerate thumbnail info if file is missing
-                                new_thumbnail_info = get_thumbnail_info(image_filename)
-                                item['ThumbnailInfo'][i] = new_thumbnail_info
+            item['ThumbnailInfo'] = []
+            for image_filename in item['Images']:
+                thumbnail_info = get_thumbnail_info(image_filename)
+                item['ThumbnailInfo'].append(thumbnail_info)
         
         # Add exemplar availability info
         if 'Exemplare' in item and item['Exemplare'] > 1:
@@ -1659,116 +1365,258 @@ def get_ausleihung_by_item_route(id):
         'status': 'not_found'
     }, 200  # Return 200 instead of 404 to allow processing of the error message
 
-# Note: Second duplicate of upload_item route removed from here
-# The actual implementation is at the first occurrence of this route
-    
-    # Strip whitespace from all text fields
-    name = strip_whitespace(request.form['name'])
-    ort = strip_whitespace(request.form['ort'])
-    beschreibung = strip_whitespace(request.form['beschreibung'])
-    
-    # Check both possible image field names
-    images = request.files.getlist('images') or request.files.getlist('new_images')
-    
-    filter_upload = strip_whitespace(request.form.getlist('filter'))
-    filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
-    filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
-    anschaffungs_jahr = strip_whitespace(request.form.getlist('anschaffungsjahr'))
-    anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
-    code_4 = strip_whitespace(request.form.getlist('code_4'))
-    
-    # Check if this is a duplication
-    is_duplicating = request.form.get('is_duplicating') == 'true'
-    
-    # Get duplicate_images if duplicating
-    duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
-    
-    # Get book cover image if downloaded
-    book_cover_image = request.form.get('book_cover_image')
-    
-    # Validation
-    if not name or not ort or not beschreibung:
-        flash('Bitte füllen Sie alle erforderlichen Felder aus', 'error')
-        return redirect(url_for('home_admin'))
 
-    # Only check for images if not duplicating and no duplicate images provided and no book cover
-    if not is_duplicating and not images and not duplicate_images and not book_cover_image:
-        flash('Bitte laden Sie mindestens ein Bild hoch', 'error')
-        return redirect(url_for('home_admin'))
-
-    # Check if code is unique
-    if code_4 and not it.is_code_unique(code_4[0]):
-        flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
-        return redirect(url_for('home_admin'))
-
-    # Process any new uploaded images
-    image_filenames = []
-    for image in images:
-        if image and image.filename:
-            is_allowed, error_message = allowed_file(image.filename)
-            if is_allowed:
-                filename = secure_filename(image.filename)
-                timestamp = time.strftime("%Y%m%d%H%M%S")
-                
-                # Split filename into name and extension to insert timestamp properly
-                name_part, ext_part = os.path.splitext(filename)
-                saved_filename = f"{name_part}_{timestamp}{ext_part}"
-                
-                image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-                
-                # Generate optimized versions (thumbnails and previews)
-                try:
-                    optimization_result = generate_optimized_versions(saved_filename)
-                    print(f"Generated optimized versions for {saved_filename}: {optimization_result}")
-                except Exception as e:
-                    print(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
-                
-                image_filenames.append(saved_filename)
-            else:
-                flash(error_message, 'error')
-                return redirect(url_for('home_admin'))
-
-    # Add the duplicate_images to the list
-    if is_duplicating and duplicate_images:
-        image_filenames.extend(duplicate_images)
+def create_qr_code(id):
+    """
+    Generate a QR code for an item.
+    The QR code contains a URL that points to the item details.
     
-    # Add book cover image if downloaded
-    if book_cover_image:
-        # Verify the book cover image file exists
-        book_cover_path = os.path.join(app.config['UPLOAD_FOLDER'], book_cover_image)
-        if os.path.exists(book_cover_path):
-            image_filenames.append(book_cover_image)
-        else:
-            print(f"Warning: Book cover image {book_cover_image} not found in uploads folder")
-
-    # If location is not in the predefined list, maybe add it (depending on policy)
-    # For now, we allow new locations to be created when items are added
-    predefined_locations = it.get_predefined_locations()
-    if ort and ort not in predefined_locations:
-        it.add_predefined_location(ort)
+    Args:
+        id (str): ID of the item to generate QR code for
         
-    # Continue with existing code to create the item
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
-                filter_upload2, filter_upload3, anschaffungs_jahr, 
-                anschaffungs_kosten, code_4)
-    flash('Objekt wurde erfolgreich hinzugefügt', 'success')
+    Returns:
+        str: Filename of the generated QR code, or None if item not found
+    """
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=ERROR_CORRECT_L,  # Use imported constant
+        box_size=10,
+        border=4,
+    )
     
-    # Get the item ID and create QR code
-    item = it.get_item_by_name(name)
-    if item:  # Check if item exists before trying to access its properties
-        item_id = str(item['_id'])
-        create_qr_code(item_id)
-        # Pass the item ID to download the QR code
-        return redirect(url_for('home_admin', new_item_id=item_id))
-    else:
-        # Handle case where item couldn't be retrieved
-        flash('QR-Code konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.', 'warning')
-        return redirect(url_for('home_admin'))
+    # Parse and reconstruct the URL properly
+    parsed_url = urlparse(request.url_root)
+    
+    # Force HTTPS if needed
+    scheme = 'https' if parsed_url.scheme == 'http' else parsed_url.scheme
+    
+    # Properly reconstruct the base URL
+    base_url = urlunparse((scheme, parsed_url.netloc, '', '', '', ''))
+    
+    # URL that will open this item directly
+    item_url = f"{base_url}:{Port}/item/{id}"
+    qr.add_data(item_url)
+    qr.make(fit=True)
 
+    item = it.get_item(id)
+    if not item:
+        return None
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    filename = f"{item['Name']}_{id}.png"
+    qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+    
+    # Fix the file handling - save to file object, not string
+    with open(qr_path, 'wb') as f:
+        img.save(f)
+    
+    return filename
 
-# Duplicate duplicate_item route removed
+# Fix fromisoformat None value checks
+@app.route('/plan_booking', methods=['POST'])
+def plan_booking():
+    """
+    Create a new planned booking or a range of bookings
+    """
+    if 'username' not in session:
+        return {"success": False, "error": "Not authenticated"}, 401
+        
+    try:
+        # Extract form data
+        item_id = request.form.get('item_id')
+        start_date_str = request.form.get('booking_date')  # Changed from start_date to booking_date
+        end_date_str = request.form.get('booking_end_date')  # Changed from end_date to booking_end_date
+        period_start = request.form.get('period_start')
+        period_end = request.form.get('period_end')
+        notes = request.form.get('notes', '')
+        booking_type = request.form.get('booking_type', 'single')
+        
+        # Validate inputs
+        if not all([item_id, start_date_str, end_date_str, period_start]):
+            return {"success": False, "error": "Missing required fields"}, 400
+            
+        # Parse dates
+        try:
+            if start_date_str:
+                start_date = datetime.datetime.fromisoformat(start_date_str)
+            else:
+                return {"success": False, "error": "Missing start date"}, 400
+            
+            if end_date_str:
+                end_date = datetime.datetime.fromisoformat(end_date_str)
+            else:
+                return {"success": False, "error": "Missing end date"}, 400
+            
+            # For single day bookings, use the start date as the end date
+            if booking_type == 'single':
+                end_date = start_date
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid date format: {e}"}, 400
+            
+        # Check if item exists
+        item = it.get_item(item_id)
+        if not item:
+            return {"success": False, "error": "Item not found"}, 404
+        
+        # Handle period range
+        periods = []
+        if period_start:
+            period_start_num = int(period_start)
+        else:
+            period_start_num = 1  # Default if None
+    
+        # If period_end is provided, it's a range of periods
+        if period_end:
+            period_end_num = int(period_end)
+            
+            # Validate period range
+            if period_end_num < period_start_num:
+                return {"success": False, "error": "End period cannot be before start period"}, 400
+                
+            # Create list of all periods in the range
+            periods = list(range(period_start_num, period_end_num + 1))
+        else:
+            # Single period booking
+            periods = [period_start_num]
+            
+        # For date range bookings, we'll process each date separately
+        booking_ids = []
+        errors = []
+        
+        # If it's a range of days
+        if booking_type == 'range' and start_date != end_date:
+            current_date = start_date
+            while current_date <= end_date:
+                # For each day in the range
+                day_booking_ids, day_errors = process_day_bookings(
+                    item_id, 
+                    current_date,
+                    periods,
+                    notes
+                )
+                booking_ids.extend(day_booking_ids)
+                errors.extend(day_errors)
+                
+                # Move to next day
+                current_date += datetime.timedelta(days=1)
+        else:
+            # Single day with multiple periods
+            booking_ids, errors = process_day_bookings(
+                item_id,
+                start_date,
+                periods,
+                notes
+            )
+            
+        # Return results
+        if errors:
+            if booking_ids:
+                # Some succeeded, some failed
+                return {
+                    "success": True, 
+                    "partial": True,
+                    "booking_ids": booking_ids,
+                    "errors": errors
+                }
+            else:
+                # All failed
+                return {"success": False, "errors": errors}, 400
+        else:
+            # All succeeded
+            return {"success": True, "booking_ids": booking_ids}
+            
+    except Exception as e:
+        import traceback
+        print(f"Error in plan_booking: {e}")
+        traceback.print_exc()
+        return {"success": False, "error": f"Server error: {str(e)}"}, 500
 
-# Duplicate route for /delete_item/<id> removed - original is earlier in the file
+def process_day_bookings(item_id, booking_date, periods, notes):
+    """
+    Helper function to process bookings for a single day across multiple periods
+    
+    Args:
+        item_id: The item to book
+        booking_date: The date for the booking
+        periods: List of period numbers to book
+        notes: Booking notes
+        
+    Returns:
+        tuple: (list of booking_ids, list of errors)
+    """
+    booking_ids = []
+    errors = []
+    
+    for period in periods:
+        # Get period times
+        period_times = get_period_times(booking_date, period)
+        if not period_times:
+            errors.append(f"Invalid period {period}")
+            continue
+            
+        # Create the start and end times for this period
+        start_time = period_times.get('start')
+        end_time = period_times.get('end')
+        
+        # Check for conflicts
+        if au.check_booking_conflict(item_id, start_time, end_time, period):
+            errors.append(f"Conflict for period {period} on {booking_date.strftime('%Y-%m-%d')}")
+            continue
+            
+        # Create the booking
+        booking_id = au.add_planned_booking(
+            item_id,
+            session['username'],
+            start_time,
+            end_time,
+            notes,
+            period=period
+        )
+        
+        if booking_id:
+            booking_ids.append(str(booking_id))
+        else:
+            errors.append(f"Failed to create booking for period {period}")
+            
+    return booking_ids, errors
+@app.route('/add_booking', methods=['POST'])
+def add_booking():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    item_id = request.form.get('item_id')
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
+    period = request.form.get('period')
+    notes = request.form.get('notes', '')
+    
+    # Parse dates as naive datetime objects
+    try:
+        # Simple datetime parsing without timezone
+        if start_date_str:
+            start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d %H:%M:%S')
+        else:
+            return jsonify({'success': False, 'error': 'Missing start date'})
+        
+        if end_date_str:
+            end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d %H:%M:%S')
+        else:
+            end_date = None
+        
+        # Continue with adding the booking
+        booking_id = au.add_planned_booking(
+            item_id=item_id,
+            user=session['username'],
+            start_date=start_date,
+            end_date=end_date,
+            notes=notes,
+            period=period
+        )
+        
+        return jsonify({'success': True, 'booking_id': str(booking_id)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):
     """
@@ -1971,7 +1819,7 @@ def admin_reset_user_password():
     # Reset the password
     try:
         us.update_password(username, new_password)
-        flash(f'Passwort für {username} wurde erfolgreich zurückgesetzt.', 'success')
+        flash(f'Passwort für {username} wurde erfolgreich zurückgesetzt auf: {new_password}', 'success')
     except Exception as e:
         flash(f'Fehler beim Zurücksetzen des Passworts: {str(e)}', 'error')
     
@@ -2005,6 +1853,7 @@ def logs():
             item_name = item.get('Name', 'Unknown Item') if item else 'Unknown Item'
             
             # Get user details - from sample data, User is a username string
+           
             username = ausleihung.get('User', 'Unknown User')
             
             # Format dates for display
@@ -2288,24 +2137,12 @@ def download_book_cover():
             
         filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}{extension}"
         
-        # Make sure the uploads folder exists
-        if not os.path.exists(app.config['UPLOAD_FOLDER']):
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            
         # Save the image to uploads folder
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
-        try:
-            with open(filepath, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    
-            # Verify the file was created and is readable
-            if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-                return jsonify({"error": "Failed to save image file"}), 500
-        except Exception as e:
-            app.logger.error(f"Error saving book cover: {str(e)}")
-            return jsonify({"error": f"Failed to save image: {str(e)}"}), 500
+        with open(filepath, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
         
         return jsonify({
             "success": True,
@@ -2532,8 +2369,7 @@ def favicon():
     Returns:
         flask.Response: The favicon.ico file
     """
-    static_folder = cast(str, app.static_folder)  # Cast to avoid None issue
-    return send_from_directory(static_folder, 'favicon.ico')
+    return send_from_directory(app.static_folder, 'favicon.ico')
 
 @app.route('/get_predefined_locations')
 def get_predefined_locations_route():
@@ -2660,8 +2496,6 @@ def schedule_appointment():
             
         # Parse the date
         try:
-            if schedule_date is None:
-                return jsonify({'success': False, 'message': 'Date is missing'}), 400
             appointment_date_obj = datetime.datetime.strptime(schedule_date, '%Y-%m-%d')
             appointment_date = appointment_date_obj.date()  # Get date part only
         except ValueError:
@@ -2669,8 +2503,6 @@ def schedule_appointment():
             
         # Validate periods
         try:
-            if start_period is None or end_period is None:
-                return jsonify({'success': False, 'message': 'Periods are missing'}), 400
             start_period_num = int(start_period)
             end_period_num = int(end_period)
             
@@ -2686,7 +2518,7 @@ def schedule_appointment():
         # Check if item exists
         item = it.get_item(item_id)
         if not item:
-            return jsonify({'success': False, 'error': 'Item not found'}), 404
+            return jsonify({'success': False, 'message': 'Item not found'}), 404
             
         # Calculate start and end times for the appointment
         # Make sure we're passing the correct datetime object
@@ -2860,67 +2692,259 @@ def reset_item(id):
             'error': f'Server error: {str(e)}'
         }), 500
 
-def update_item_thumbnails_in_db(item_id, thumbnail_info_list):
+# New image and video optimization functions
+def is_image_file(filename):
     """
-    Update an item in the database with thumbnail information.
+    Check if a file is an image based on its extension.
     
     Args:
-        item_id (str): The ObjectId of the item to update
-        thumbnail_info_list (list): List of thumbnail info dictionaries
+        filename (str): Name of the file to check
+        
+    Returns:
+        bool: True if the file is an image, False otherwise
+    """
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+    extension = filename.lower()[filename.rfind('.'):]
+    return extension in image_extensions
+
+
+def is_video_file(filename):
+    """
+    Check if a file is a video based on its extension.
+    
+    Args:
+        filename (str): Name of the file to check
+        
+    Returns:
+        bool: True if the file is a video, False otherwise
+    """
+    video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'}
+    extension = filename.lower()[filename.rfind('.'):]
+    return extension in video_extensions
+
+
+def create_image_thumbnail(image_path, thumbnail_path, size):
+    """
+    Create a thumbnail for an image file.
+    
+    Args:
+        image_path (str): Path to the original image
+        thumbnail_path (str): Path where the thumbnail should be saved
+        size (tuple): Thumbnail size as (width, height)
+        
+    Returns:
+        bool: True if thumbnail was created successfully, False otherwise
     """
     try:
-        from bson import ObjectId
-        client = MongoClient('mongodb://localhost:27017/')
-        db = client['Inventarsystem']
-        collection = db['items']
-        
-        # Update the item with thumbnail information
-        result = collection.update_one(
-            {'_id': ObjectId(item_id)},
-            {'$set': {'ThumbnailInfo': thumbnail_info_list}}
-        )
-        
-        if result.modified_count > 0:
-            print(f"Updated thumbnail info for item {item_id}")
-        return result.modified_count > 0
-        
+        with Image.open(image_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                # Create a white background
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Create thumbnail with proper aspect ratio
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+            
+            # Create a new image with the exact size (add padding if needed)
+            thumb = Image.new('RGB', size, (255, 255, 255))
+            
+            # Calculate position to center the image
+            x = (size[0] - img.size[0]) // 2
+            y = (size[1] - img.size[1]) // 2
+            
+            thumb.paste(img, (x, y))
+            
+            # Save with optimization
+            thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+            return True
+            
     except Exception as e:
-        print(f"Error updating thumbnail info for item {item_id}: {e}")
+        print(f"Error creating image thumbnail for {image_path}: {str(e)}")
         return False
 
-def ensure_all_thumbnails_in_db():
+
+def create_video_thumbnail(video_path, thumbnail_path, size):
     """
-    Ensure all items in the database have thumbnail information.
-    This function should be called periodically or on startup.
+    Create a thumbnail for a video file using ffmpeg.
+    
+    Args:
+        video_path (str): Path to the original video
+        thumbnail_path (str): Path where the thumbnail should be saved
+        size (tuple): Thumbnail size as (width, height)
+        
+    Returns:
+        bool: True if thumbnail was created successfully, False otherwise
     """
     try:
-        client = MongoClient('mongodb://localhost:27017/')
-        db = client['Inventarsystem']
-        collection = db['items']
+        # Use ffmpeg to extract a frame from the video (at 1 second)
+        cmd = [
+            'ffmpeg', 
+            '-i', video_path,
+            '-ss', '00:00:01.000',  # Extract frame at 1 second
+            '-vframes', '1',
+            '-y',  # Overwrite output file
+            thumbnail_path + '.temp.jpg'
+        ]
         
-        # Find items that have images but no thumbnail info
-        items_without_thumbnails = collection.find({
-            'Images': {'$exists': True, '$ne': []},
-            '$or': [
-                {'ThumbnailInfo': {'$exists': False}},
-                {'ThumbnailInfo': {'$eq': []}}
-            ]
-        })
+        result = subprocess.run(cmd, capture_output=True, text=True)
         
-        updated_count = 0
-        for item in items_without_thumbnails:
-            thumbnail_info_list = []
-            for image_filename in item.get('Images', []):
-                thumbnail_info = get_thumbnail_info(image_filename)
-                thumbnail_info_list.append(thumbnail_info)
+        if result.returncode == 0 and os.path.exists(thumbnail_path + '.temp.jpg'):
+            # Now resize the extracted frame using PIL
+            success = create_image_thumbnail(thumbnail_path + '.temp.jpg', thumbnail_path, size)
             
-            if thumbnail_info_list:
-                if update_item_thumbnails_in_db(str(item['_id']), thumbnail_info_list):
-                    updated_count += 1
-        
-        print(f"Updated thumbnail info for {updated_count} items in database")
-        return updated_count
-        
+            # Clean up temporary file
+            try:
+                os.remove(thumbnail_path + '.temp.jpg')
+            except:
+                pass
+                
+            return success
+        else:
+            print(f"ffmpeg failed for {video_path}: {result.stderr}")
+            return False
+            
     except Exception as e:
-        print(f"Error ensuring thumbnails in database: {e}")
-        return 0
+        print(f"Error creating video thumbnail for {video_path}: {str(e)}")
+        return False
+
+
+def generate_optimized_versions(filename):
+    """
+    Generate thumbnail and preview versions of uploaded files.
+    
+    Args:
+        filename (str): Name of the uploaded file
+        
+    Returns:
+        dict: Dictionary with paths to generated files
+    """
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    # Generate file paths
+    name_part, ext_part = os.path.splitext(filename)
+    thumbnail_filename = f"{name_part}_thumb.jpg"
+    preview_filename = f"{name_part}_preview.jpg"
+    
+    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    
+    result = {
+        'original': filename,
+        'thumbnail': None,
+        'preview': None,
+        'is_image': False,
+        'is_video': False
+    }
+    
+    if is_image_file(filename):
+        result['is_image'] = True
+        # Create thumbnail
+        if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+            result['thumbnail'] = thumbnail_filename
+            
+        # Create preview
+        if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+            result['preview'] = preview_filename
+            
+    elif is_video_file(filename):
+        result['is_video'] = True
+        # Create video thumbnail
+        if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+            result['thumbnail'] = thumbnail_filename
+            
+        # Create video preview
+        if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+            result['preview'] = preview_filename
+    
+    return result
+
+def get_thumbnail_info(filename):
+    """
+    Get thumbnail and preview information for a file.
+    Creates thumbnails if they don't exist.
+    
+    Args:
+        filename (str): Original filename
+        
+    Returns:
+        dict: Dictionary with thumbnail and preview information
+    """
+    if not filename:
+        return {'has_thumbnail': False, 'has_preview': False}
+    
+    name_part, ext_part = os.path.splitext(filename)
+    thumbnail_filename = f"{name_part}_thumb.jpg"
+    preview_filename = f"{name_part}_preview.jpg"
+    
+    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    
+    # Check if thumbnails exist, create if they don't
+    has_thumbnail = os.path.exists(thumbnail_path)
+    has_preview = os.path.exists(preview_path)
+    
+    if not has_thumbnail or not has_preview:
+        try:
+            result = generate_optimized_versions(filename)
+            has_thumbnail = result['thumbnail'] is not None
+            has_preview = result['preview'] is not None
+        except Exception as e:
+            print(f"Error generating thumbnails for {filename}: {str(e)}")
+    
+    return {
+        'has_thumbnail': has_thumbnail,
+        'has_preview': has_preview,
+        'thumbnail_url': f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None,
+        'preview_url': f"/previews/{preview_filename}" if has_preview else None,
+        'is_image': is_image_file(filename),
+        'is_video': is_video_file(filename)
+    }
+
+# Add explicit static file routes to handle CSS serving issues
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """
+    Explicitly serve static files to resolve 403 Forbidden errors.
+    This ensures CSS and JS files are properly accessible.
+    
+    Args:
+        filename (str): The static file path
+        
+    Returns:
+        flask.Response: The requested static file
+    """
+    return send_from_directory(app.static_folder, filename)
+
+@app.route('/static/css/<filename>')
+def serve_css(filename):
+    """
+    Explicitly serve CSS files from the static/css directory.
+    
+    Args:
+        filename (str): Name of the CSS file to serve
+        
+    Returns:
+        flask.Response: The requested CSS file
+    """
+    css_folder = os.path.join(app.static_folder, 'css')
+    return send_from_directory(css_folder, filename)
+
+@app.route('/static/js/<filename>')
+def serve_js(filename):
+    """
+    Explicitly serve JavaScript files from the static/js directory.
+    
+    Args:
+        filename (str): Name of the JS file to serve
+        
+    Returns:
+        flask.Response: The requested JS file
+    """
+    js_folder = os.path.join(app.static_folder, 'js')
+    return send_from_directory(js_folder, filename)

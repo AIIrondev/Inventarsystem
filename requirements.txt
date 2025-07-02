@@ -1,7 +1,8 @@
 flask
+bson
 werkzeug
 gunicorn
-pymongo==4.6.1
+pymongo
 pillow
 qrcode
 apscheduler
