@@ -2369,9 +2369,7 @@ def favicon():
     Returns:
         flask.Response: The favicon.ico file
     """
-    # Ensure static_folder is not None before using
-    static_folder = app.static_folder or 'static'
-    return send_from_directory(static_folder, 'favicon.ico')
+    return send_from_directory(app.static_folder, 'favicon.ico')
 
 @app.route('/get_predefined_locations')
 def get_predefined_locations_route():
@@ -2498,8 +2496,6 @@ def schedule_appointment():
             
         # Parse the date
         try:
-            if not schedule_date:
-                return jsonify({'success': False, 'message': 'Date is required'}), 400
             appointment_date_obj = datetime.datetime.strptime(schedule_date, '%Y-%m-%d')
             appointment_date = appointment_date_obj.date()  # Get date part only
         except ValueError:
@@ -2507,8 +2503,6 @@ def schedule_appointment():
             
         # Validate periods
         try:
-            if not start_period or not end_period:
-                return jsonify({'success': False, 'message': 'Period numbers are required'}), 400
             start_period_num = int(start_period)
             end_period_num = int(end_period)
             
@@ -2925,8 +2919,7 @@ def serve_static(filename):
     Returns:
         flask.Response: The requested static file
     """
-    static_folder = app.static_folder or 'static'
-    return send_from_directory(static_folder, filename)
+    return send_from_directory(app.static_folder, filename)
 
 @app.route('/static/css/<filename>')
 def serve_css(filename):
@@ -2939,8 +2932,7 @@ def serve_css(filename):
     Returns:
         flask.Response: The requested CSS file
     """
-    static_folder = app.static_folder or 'static'
-    css_folder = os.path.join(static_folder, 'css')
+    css_folder = os.path.join(app.static_folder, 'css')
     return send_from_directory(css_folder, filename)
 
 @app.route('/static/js/<filename>')
@@ -2954,6 +2946,5 @@ def serve_js(filename):
     Returns:
         flask.Response: The requested JS file
     """
-    static_folder = app.static_folder or 'static'
-    js_folder = os.path.join(static_folder, 'js')
+    js_folder = os.path.join(app.static_folder, 'js')
     return send_from_directory(js_folder, filename)

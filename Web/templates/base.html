@@ -23,540 +23,285 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}Inventarsystem{% endblock %}</title>
     {% block head %}
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/planned_appointments.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        /* CSS Custom Properties for Design System */
-        :root {
-            /* Color Palette */
-            --primary-color: #2563eb;
-            --primary-dark: #1d4ed8;
-            --primary-light: #3b82f6;
-            --secondary-color: #64748b;
-            --accent-color: #10b981;
-            --accent-dark: #059669;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --success-color: #22c55e;
-            
-            /* Neutral Colors */
-            --gray-50: #f8fafc;
-            --gray-100: #f1f5f9;
-            --gray-200: #e2e8f0;
-            --gray-300: #cbd5e1;
-            --gray-400: #94a3b8;
-            --gray-500: #64748b;
-            --gray-600: #475569;
-            --gray-700: #334155;
-            --gray-800: #1e293b;
-            --gray-900: #0f172a;
-            
-            /* Typography */
-            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            --font-size-xs: 0.75rem;
-            --font-size-sm: 0.875rem;
-            --font-size-base: 1rem;
-            --font-size-lg: 1.125rem;
-            --font-size-xl: 1.25rem;
-            --font-size-2xl: 1.5rem;
-            --font-size-3xl: 1.875rem;
-            
-            /* Spacing */
-            --spacing-xs: 0.25rem;
-            --spacing-sm: 0.5rem;
-            --spacing-md: 1rem;
-            --spacing-lg: 1.5rem;
-            --spacing-xl: 2rem;
-            --spacing-2xl: 3rem;
-            
-            /* Border Radius */
-            --radius-sm: 0.375rem;
-            --radius-md: 0.5rem;
-            --radius-lg: 0.75rem;
-            --radius-xl: 1rem;
-            
-            /* Shadows */
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-            
-            /* Transitions */
-            --transition-fast: 150ms ease-in-out;
-            --transition-normal: 250ms ease-in-out;
-            --transition-slow: 350ms ease-in-out;
-        }
-
-        /* Global Reset and Base Styles */
-        * {
-            box-sizing: border-box;
-        }
-        
+        /* Global styles */
         body {
-            font-family: var(--font-family);
-            font-size: var(--font-size-base);
-            line-height: 1.6;
-            color: var(--gray-700);
-            background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
-            min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            padding-bottom: 30px;
         }
         
-        /* Modern Container Styling */
         .container {
-            padding-top: var(--spacing-xl);
-            padding-bottom: var(--spacing-xl);
+            padding-top: 20px;
         }
         
-        /* Enhanced Navigation Styles */
+        /* Navigation styles */
         .navbar {
-            background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%) !important;
-            backdrop-filter: blur(10px);
-            box-shadow: var(--shadow-lg);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all var(--transition-normal);
-            position: sticky;
-            top: 0;
-            z-index: 1030;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
         .navbar-brand {
-            font-weight: 700;
-            font-size: var(--font-size-xl);
-            color: white !important;
-            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.4rem;
+        }
+        
+        .admin-nav-section {
+            margin-left: auto;
             display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-            transition: all var(--transition-fast);
+            gap: 15px;
         }
-        
-        .navbar-brand:hover {
-            color: var(--primary-light) !important;
+
+        .admin-nav-section .nav-item {
+            background-color: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .admin-nav-section .nav-item:hover {
+            background-color: #218838;
             transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        .navbar-brand::before {
-            content: "📦";
-            font-size: var(--font-size-lg);
-        }
-        
-        /* Modern Navigation Links */
-        .navbar-nav .nav-link {
-            color: rgba(255, 255, 255, 0.9) !important;
+        /* Admin dropdown styling */
+        .nav-item.dropdown .nav-link.dropdown-toggle {
+            color: #ffffff;
             font-weight: 500;
-            padding: var(--spacing-sm) var(--spacing-md) !important;
-            margin: 0 var(--spacing-xs);
-            border-radius: var(--radius-md);
-            transition: all var(--transition-fast);
             position: relative;
-            overflow: hidden;
         }
         
-        .navbar-nav .nav-link:hover,
-        .navbar-nav .nav-link:focus {
-            color: white !important;
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-1px);
+        .nav-item.dropdown .nav-link.dropdown-toggle:hover {
+            color: #ffffff;
         }
         
-        .navbar-nav .nav-link.active {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white !important;
+        /* Consistent spacing for admin nav items */
+        .navbar-nav .nav-item {
+            margin-right: 5px;
         }
         
-        /* Enhanced Dropdown Styling */
+        .navbar-nav .nav-item:last-child {
+            margin-right: 0;
+        }
+        
+        /* Flash messages */
+        .flashes {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .flash {
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .flash.success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        
+        .flash.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        
+        .flash.info {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border-left: 5px solid #6c757d;
+        }
+        
+        /* Dropdown menus - consistent with system design */
         .dropdown-menu {
-            background: white;
-            border: none;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-xl);
-            padding: var(--spacing-sm);
-            margin-top: var(--spacing-sm);
-            min-width: 220px;
-            backdrop-filter: blur(10px);
-            animation: dropdownFadeIn 0.2s ease-out;
-        }
-        
-        @keyframes dropdownFadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 8px 0;
+            min-width: 200px;
+            margin-top: 5px;
         }
         
         .dropdown-item {
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-radius: var(--radius-sm);
-            color: var(--gray-700);
-            font-weight: 500;
-            transition: all var(--transition-fast);
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            color: #495057;
+            transition: all 0.2s ease;
             border: none;
             background: none;
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
         }
         
         .dropdown-item:hover,
         .dropdown-item:focus {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white;
-            transform: translateX(4px);
+            background-color: #f8f9fa;
+            color: #007bff;
+            transform: translateX(2px);
         }
         
-        .dropdown-item:active {
-            background: var(--primary-dark);
+        /* Navigation dropdown specific styles */
+        .nav-item.dropdown .dropdown-toggle {
+            position: relative;
+            transition: all 0.2s ease;
         }
         
-        /* User Account Section */
-        .navbar-text {
-            color: rgba(255, 255, 255, 0.8) !important;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
+        .nav-item.dropdown .dropdown-toggle:hover {
+            background-color: rgba(255,255,255,0.1);
+            border-radius: 4px;
         }
         
-        .navbar-text::before {
-            content: "👤";
-            opacity: 0.7;
+        .nav-item.dropdown .dropdown-toggle::after {
+            transition: transform 0.2s ease;
         }
         
-        .btn-secondary {
-            background: linear-gradient(135deg, var(--gray-600), var(--gray-700));
-            border: none;
-            border-radius: var(--radius-md);
-            font-weight: 500;
-            padding: var(--spacing-sm) var(--spacing-md);
-            transition: all var(--transition-fast);
+        .nav-item.dropdown.show .dropdown-toggle::after {
+            transform: rotate(180deg);
         }
         
-        .btn-secondary:hover {
-            background: linear-gradient(135deg, var(--gray-500), var(--gray-600));
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
+        /* User account dropdown specific styles */
+        .dropdown-menu-end {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
-        /* Modern Flash Messages */
-        .flashes {
-            margin: var(--spacing-lg) 0;
+        .dropdown-divider {
+            margin: 6px 0;
+            border-color: #dee2e6;
         }
         
-        .flash {
-            padding: var(--spacing-md) var(--spacing-lg);
-            margin-bottom: var(--spacing-md);
-            border-radius: var(--radius-lg);
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-            animation: slideInFromTop 0.3s ease-out;
-            backdrop-filter: blur(10px);
-            border: 1px solid transparent;
-        }
-        
-        @keyframes slideInFromTop {
-            from { transform: translateY(-20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        
-        .flash.success {
-            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05));
-            color: var(--accent-dark);
-            border-color: rgba(34, 197, 94, 0.2);
-        }
-        
-        .flash.success::before {
-            content: "✅";
-        }
-        
-        .flash.error {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
-            color: #b91c1c;
-            border-color: rgba(239, 68, 68, 0.2);
-        }
-        
-        .flash.error::before {
-            content: "❌";
-        }
-        
-        .flash.info {
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.05));
-            color: var(--primary-dark);
-            border-color: rgba(37, 99, 235, 0.2);
-        }
-        
-        .flash.info::before {
-            content: "ℹ️";
-        }
-        
-        /* Version Display */
+        /* Version display */
         .text-info {
-            color: rgba(255, 255, 255, 0.6) !important;
-            font-size: var(--font-size-sm);
-            font-weight: 400;
+            opacity: 0.8;
         }
         
-        /* Mobile Responsive Design */
-        @media (max-width: 768px) {
-            .navbar-brand {
-                font-size: var(--font-size-lg);
+        /* Mobile responsive navigation styles */
+        @media screen and (max-width: 768px) {
+            .navbar-nav .dropdown-menu {
+                border: none;
+                box-shadow: none;
+                background-color: rgba(52, 58, 64, 0.95);
+                margin-left: 15px;
+                margin-top: 5px;
+                border-radius: 6px;
             }
             
-            .navbar-collapse {
-                background: rgba(15, 23, 42, 0.95);
-                backdrop-filter: blur(10px);
-                margin-top: var(--spacing-md);
-                border-radius: var(--radius-lg);
-                padding: var(--spacing-md);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+            .navbar-nav .dropdown-item {
+                color: #ffffff;
+                padding: 12px 20px;
+                font-size: 0.9rem;
             }
             
-            .navbar-nav .nav-link {
-                padding: var(--spacing-md) !important;
-                margin: var(--spacing-xs) 0;
-                border-radius: var(--radius-md);
-            }
-            
-            .dropdown-menu {
-                background: rgba(15, 23, 42, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                margin-left: var(--spacing-md);
-                margin-top: var(--spacing-sm);
-            }
-            
-            .dropdown-item {
-                color: rgba(255, 255, 255, 0.9);
-                padding: var(--spacing-md);
-            }
-            
-            .dropdown-item:hover {
-                background: rgba(255, 255, 255, 0.1);
-                color: white;
+            .navbar-nav .dropdown-item:hover,
+            .navbar-nav .dropdown-item:focus {
+                background-color: rgba(255,255,255,0.1);
+                color: #ffffff;
                 transform: none;
             }
             
-            /* Account dropdown stays light on mobile */
+            .nav-item.dropdown .dropdown-toggle {
+                padding: 8px 12px;
+            }
+            
+            /* Better touch targets for mobile */
+            .dropdown-toggle::after {
+                margin-left: 8px;
+            }
+            
+            /* Account dropdown stays light theme on mobile */
             .dropdown-menu-end {
-                background: white;
-                border: 1px solid var(--gray-200);
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
             }
             
             .dropdown-menu-end .dropdown-item {
-                color: var(--gray-700);
+                color: #495057;
             }
             
             .dropdown-menu-end .dropdown-item:hover {
-                background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-                color: white;
-            }
-            
-            .container {
-                padding-top: var(--spacing-lg);
-                padding-bottom: var(--spacing-lg);
-            }
-            
-            .navbar-text {
-                padding: var(--spacing-sm) 0;
-                justify-content: center;
-            }
-            
-            .d-flex {
-                flex-direction: column;
-                align-items: stretch;
-                gap: var(--spacing-sm);
-            }
-        }
-        
-        /* Tablet Responsive Design */
-        @media (min-width: 769px) and (max-width: 1024px) {
-            .navbar-nav .nav-link {
-                padding: var(--spacing-sm) var(--spacing-sm) !important;
-                margin: 0 2px;
-            }
-            
-            .container {
-                padding-left: var(--spacing-lg);
-                padding-right: var(--spacing-lg);
-            }
-        }
-        
-        /* Desktop Enhancements */
-        @media (min-width: 1025px) {
-            .navbar {
-                padding: var(--spacing-md) 0;
-            }
-            
-            .navbar-brand {
-                font-size: var(--font-size-2xl);
-            }
-            
-            .dropdown-menu {
-                animation: dropdownFadeIn 0.2s ease-out, dropdownSlideIn 0.2s ease-out;
-            }
-            
-            @keyframes dropdownSlideIn {
-                from { transform: translateY(-10px) scale(0.95); }
-                to { transform: translateY(0) scale(1); }
-            }
-        }
-        
-        /* Dark Mode Support (for future enhancement) */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --gray-50: #0f172a;
-                --gray-100: #1e293b;
-                --gray-200: #334155;
-            }
-        }
-        
-        /* Print Styles */
-        @media print {
-            .navbar {
-                display: none;
-            }
-            
-            .container {
-                padding-top: 0;
-            }
-            
-            body {
-                background: white;
-            }
-        }
-        
-        /* High contrast mode support */
-        @media (prefers-contrast: high) {
-            .navbar {
-                background: black !important;
-                border-bottom: 2px solid white;
-            }
-            
-            .navbar-nav .nav-link {
-                border: 1px solid transparent;
-            }
-            
-            .navbar-nav .nav-link:hover {
-                border-color: white;
-            }
-        }
-        
-        /* Reduced motion support */
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
+                background-color: #f8f9fa;
+                color: #007bff;
             }
         }
     </style>
     {% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home') }}">
-                <span>Inventarsystem</span>
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <a class="navbar-brand" href="{{ url_for('home') }}">Inventarsystem</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('home') }}">
-                            <i class="fas fa-home"></i> Home
-                        </a>
+                        <a class="nav-link" href="{{ url_for('home') }}">Home</a>
                     </li>
                     {% if 'username' in session %}
+                        <!--<li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('terminplan') }}">Terminplaner</a>
+                        </li> -->
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('my_borrowed_items') }}">
-                                <i class="fas fa-user-clock"></i> Meine Ausleihungen
-                            </a>
+                            <a class="nav-link" href="{{ url_for('my_borrowed_items') }}">Persönliche Aktuelle Ausleihungen</a>
                         </li>
                     {% endif %}
                     {% if 'username' in session and session.get('admin', False) %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('upload_admin') }}">
-                            <i class="fas fa-upload"></i> Artikel hochladen
-                        </a>
+                        <a class="nav-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-users"></i> Benutzer Management
+                            Benutzer Management
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="userManagementDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">
-                                <i class="fas fa-users-cog"></i> Benutzer verwalten
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('register') }}">
-                                <i class="fas fa-user-plus"></i> Neuer Benutzer
-                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="systemManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-cogs"></i> System Management
+                            System Management
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="systemManagementDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">
-                                <i class="fas fa-filter"></i> Filter verwalten
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">
-                                <i class="fas fa-map-marker-alt"></i> Orte verwalten
-                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logs') }}">
-                            <i class="fas fa-file-alt"></i> Logs
-                        </a>
+                        <a class="nav-link" href="{{ url_for('logs') }}">Logs</a>
                     </li>
                     {% endif %}
-                </ul>
-                <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('impressum') }}">
-                            <i class="fas fa-info-circle"></i> Impressum
-                        </a>
+                        <a class="nav-link" href="{{ url_for('impressum') }}">Impressum</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('license') }}">
-                            <i class="fas fa-balance-scale"></i> License
-                        </a>
+                        <a class="nav-link" href="{{ url_for('license') }}">License</a>
                     </li>
                     <li class="nav-item">
-                        <span class="nav-link text-info">
-                            <i class="fas fa-code-branch"></i> v{{ version }}
-                        </span>
+                        <span class="nav-link text-info">Version {{ version }}</span>
                     </li>
                 </ul>
                 <div class="d-flex">
                     {% if 'username' in session %}
-                        <span class="navbar-text me-3">
-                            Willkommen, <strong>{{ session['username'] }}</strong>
-                        </span>
-                        <div class="dropdown">
+                        <span class="navbar-text text-light me-3">Welcome, {{ session['username'] }}</span>
+                        <div class="dropdown me-2">
                             <button class="btn btn-secondary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle"></i> Account
+                                Account
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
-                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">
-                                    <i class="fas fa-key"></i> Passwort ändern
-                                </a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">
-                                    <i class="fas fa-sign-out-alt"></i> Logout
-                                </a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
                             </ul>
                         </div>
                     {% endif %}
