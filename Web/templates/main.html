@@ -282,9 +282,10 @@
             .then(data => {
                 currentUsername = data.username;
                 // Now load items with username information
-                loadItems();
-                // Setup card images display after a short delay to ensure items are loaded
-                setTimeout(setupCardImagesDisplay, 500);
+                loadItems().then(() => {
+                    // Setup card images display after items are loaded
+                    setupCardImagesDisplay();
+                });
             })
             .catch(error => {
                 console.error('Error fetching user status:', error);
@@ -323,9 +324,10 @@
     let allItems = [];
 
     function loadItems() {
-        fetch("{{ url_for('get_items') }}")
-            .then(response => response.json())
-            .then(data => {
+        return new Promise((resolve, reject) => {
+            fetch("{{ url_for('get_items') }}")
+                .then(response => response.json())
+                .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
                 // Creating a Set to store unique filter values
                 const filter1Values = new Set();
@@ -410,6 +412,16 @@
                         const imagesHtml = item.Images ? item.Images.map((file, index) => {
                             // Use thumbnail info if available
                             const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                            // Add active-image class to first image
+                            const activeClass = index === 0 ? 'active-image' : '';
+                            
+                            // Handle cases where the file might be missing
+                            if (!file) {
+                                // Return a placeholder image if file is missing
+                                return `<div class="missing-image-placeholder ${activeClass}" data-index="${index}">
+                                        <span>Bild nicht verfügbar</span>
+                                        </div>`;
+                            }
                             
                             if (isVideoFile(file)) {
                                 // For videos, use thumbnail if available, otherwise original video
@@ -420,13 +432,14 @@
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
                                     // Show thumbnail image with video overlay for card view - using classes instead of inline styles
                                     return `<div class="video-container" data-index="${index}">
-                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" data-original="${file}">
+                                            <img src="${videoSrc}" alt="${item.Name}" class="item-image ${activeClass}" data-index="${index}" data-original="${file}"
+                                                 onerror="this.onerror=null;this.src='{{ url_for('static', filename='favicon.ico') }}';this.classList.add('error-image');">
                                             <div class="video-preview-overlay">▶</div>
                                             </div>`;
                                 } else {
                                     // Fallback to video element - using classes instead of inline styles
                                     return `<div class="video-container" data-index="${index}">
-                                            <video src="${videoSrc}" class="item-image" data-index="${index}" preload="metadata" muted data-original="${file}">
+                                            <video src="${videoSrc}" class="item-image ${activeClass}" data-index="${index}" preload="metadata" muted data-original="${file}">
                                             <source src="${videoSrc}" type="video/mp4">
                                             Ihr Browser unterstützt keine Videos.
                                             </video>
@@ -439,8 +452,8 @@
                                     ? thumbnailInfo.thumbnail_url 
                                     : `{{ url_for('uploaded_file', filename='') }}${file}`;
                                     
-                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
-                                        data-original="${file}">`;
+                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image ${activeClass}" data-index="${index}" 
+                                        data-original="${file}" onerror="this.onerror=null;this.src='{{ url_for('static', filename='favicon.ico') }}';this.classList.add('error-image');">`;
                             }
                         }).join('') : '';
                         
@@ -563,7 +576,12 @@
                 const itemsContainer = document.querySelector('#items-container');
                 itemsContainer.innerHTML = 
                     '<div class="error-message">Fehler beim Laden der Objekte. Bitte versuchen Sie es später erneut.</div>';
+                reject(error);
+            })
+            .finally(() => {
+                resolve(); // Resolve the promise when done
             });
+        });
     }
 
     function searchByCode() {
@@ -988,23 +1006,33 @@
         const images = card.querySelectorAll('.item-image');
         const videoContainers = card.querySelectorAll('.video-container');
         
+        if (images.length <= 1) return; // No need to navigate if there's only one image
+        
         let currentIndex = -1;
         images.forEach((img, idx) => {
-            if (img.classList.contains('active-image')) {
+            if (img.style.display === 'block' || img.classList.contains('active-image')) {
                 currentIndex = idx;
             }
         });
         
+        // Default to first image if no active image found
+        if (currentIndex === -1) currentIndex = 0;
+        
         if (currentIndex > 0) {
-            images[currentIndex].classList.remove('active-image');
+            // Hide all images first
+            images.forEach(img => {
+                img.classList.remove('active-image');
+                img.style.display = 'none';
+            });
+            
+            // Show previous image
             images[currentIndex - 1].classList.add('active-image');
+            images[currentIndex - 1].style.display = 'block';
             
             // Handle video containers if present
             if (videoContainers.length > 0) {
-                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                videoContainers.forEach(container => container.classList.remove('active-container'));
                 const containerPrev = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
-                
-                if (containerCurrent) containerCurrent.classList.remove('active-container');
                 if (containerPrev) containerPrev.classList.add('active-container');
             }
         }
@@ -1016,23 +1044,33 @@
         const images = card.querySelectorAll('.item-image');
         const videoContainers = card.querySelectorAll('.video-container');
         
+        if (images.length <= 1) return; // No need to navigate if there's only one image
+        
         let currentIndex = -1;
         images.forEach((img, idx) => {
-            if (img.classList.contains('active-image')) {
+            if (img.style.display === 'block' || img.classList.contains('active-image')) {
                 currentIndex = idx;
             }
         });
         
+        // Default to first image if no active image found
+        if (currentIndex === -1) currentIndex = 0;
+        
         if (currentIndex < images.length - 1) {
-            images[currentIndex].classList.remove('active-image');
+            // Hide all images first
+            images.forEach(img => {
+                img.classList.remove('active-image');
+                img.style.display = 'none';
+            });
+            
+            // Show next image
             images[currentIndex + 1].classList.add('active-image');
+            images[currentIndex + 1].style.display = 'block';
             
             // Handle video containers if present
             if (videoContainers.length > 0) {
-                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
+                videoContainers.forEach(container => container.classList.remove('active-container'));
                 const containerNext = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
-                
-                if (containerCurrent) containerCurrent.classList.remove('active-container');
                 if (containerNext) containerNext.classList.add('active-container');
             }
         }
@@ -1045,6 +1083,19 @@
             const cards = document.querySelectorAll('.item-card');
             cards.forEach(card => {
                 const images = card.querySelectorAll('.item-image');
+                
+                // Ensure at least the first image is visible
+                if (images.length > 0) {
+                    images.forEach((img, idx) => {
+                        if (idx === 0) {
+                            img.classList.add('active-image');
+                            img.style.display = 'block';
+                        } else {
+                            img.classList.remove('active-image');
+                            img.style.display = 'none';
+                        }
+                    });
+                }
                 
                 // Add active class to first image
                 if (images.length > 0) {
@@ -1955,6 +2006,11 @@
         position: relative;
         max-width: 300px;
         margin: 10px 0;
+        min-height: 200px; /* Ensure there's space for images to display */
+        background-color: #f5f5f5; /* Light gray background for empty containers */
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 
     .item-card .item-image {
@@ -1965,8 +2021,30 @@
         object-fit: cover;
     }
 
-    .item-card .item-image:first-child {
-        display: block;
+    .item-card .item-image:first-child,
+    .item-card .item-image.active-image {
+        display: block !important;
+    }
+    
+    /* Styles for error images */
+    .missing-image-placeholder,
+    .item-card .error-image {
+        width: 100%;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #f0f0f0;
+        color: #888;
+        font-style: italic;
+        border: 1px dashed #ccc;
+    }
+    
+    .item-card .error-image {
+        max-width: 64px;
+        max-height: 64px;
+        margin: 0 auto;
+        object-fit: contain;
     }
 
     /* Image navigation buttons */

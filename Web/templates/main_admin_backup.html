@@ -229,240 +229,146 @@
 
     /* Item display styles */
     .items-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        display: flex;
+        overflow-x: auto;
         gap: 20px;
         padding: 20px 0;
-        width: 100%;
+        scroll-snap-type: x mandatory;
+        position: relative;
+        scroll-behavior: smooth;
     }
 
     .item-card {
         background-color: #fff;
         border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         padding: 20px;
+        max-width: 300px;
+        flex-shrink: 0;
+        scroll-snap-align: center;
         cursor: pointer;
-        transition: all 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        min-height: 400px;
+        transition: transform 0.2s;
     }
 
     .item-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     }
 
     .item-card h3 {
         margin-top: 0;
-        margin-bottom: 10px;
-        color: #333;
-        font-size: 1.1rem;
-        line-height: 1.3;
     }
 
     .item-card .description {
-        max-height: 80px;
+        max-height: 100px;
         overflow-y: auto;
-        margin-bottom: 15px;
-        color: #666;
-        font-size: 0.9rem;
-        line-height: 1.4;
-        flex-grow: 1;
     }
 
     .item-card .image-container {
         position: relative;
-        width: 100%;
-        height: 200px;
-        margin: 10px 0 15px 0;
-        border-radius: 6px;
-        overflow: hidden;
-        background-color: #f8f9fa;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .item-card .image-container:empty::before {
-        content: "📷 Kein Bild verfügbar";
-        color: #666;
-        font-size: 14px;
+        max-width: 300px;
+        margin: 10px 0;
     }
 
     .item-card .item-image {
         width: 100%;
-        height: 100%;
+        height: auto;
+        max-height: 300px;
+        display: none;
         object-fit: cover;
-        display: none;
     }
 
-    .item-card .item-image:first-child,
-    .item-card .item-image[data-index="0"] {
+    .item-card .item-image:first-child {
+        display: block;
+    }
+
+    /* Active image display classes */
+    .item-image.active-image {
         display: block !important;
+        opacity: 1 !important;
+        z-index: 5;
     }
 
-    .item-card .item-image.active-image {
-        display: block !important;
+    .item-image:not(.active-image) {
+        display: none !important;
     }
 
-    .item-card .item-image.active-image {
-        display: block !important;
-    }
-
-    .video-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: none;
-    }
-
-    .video-container:first-child,
-    .video-container[data-index="0"],
     .video-container.active-container {
         display: block !important;
     }
 
-    /* Responsive design for mobile devices */
-    @media screen and (max-width: 768px) {
-        .container {
-            width: 95%;
-            padding: 15px;
-            margin: 10px auto;
-        }
-
-        .items-container {
-            grid-template-columns: 1fr;
-            gap: 15px;
-            padding: 15px 0;
-        }
-
-        .item-card {
-            padding: 15px;
-            min-height: 350px;
-        }
-
-        .item-card .image-container {
-            height: 180px;
-        }
-
-        .filter-container {
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .filter-group {
-            min-width: 100%;
-        }
-
-        .modal-actions {
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .modal-actions .ausleihen, 
-        .modal-actions .edit-button, 
-        .modal-actions .delete-button, 
-        .modal-actions .details-button, 
-        .modal-actions .duplicate-button, 
-        .modal-actions .schedule-button {
-            width: 100%;
-            margin: 0;
-        }
+    .video-container:not(.active-container) {
+        display: none !important;
     }
 
-    @media screen and (max-width: 480px) {
-        .container {
-            width: 98%;
-            padding: 10px;
+    /* Fix for images not displaying correctly */
+    @media screen and (max-width: 768px) {
+        /* Override any inline display:none styles */
+        .item-card .item-image[style*="display: none"] {
+            display: block !important;
         }
-
-        .item-card h3 {
-            font-size: 1rem;
+        
+        /* Make sure first image is visible */
+        .item-card .item-image[data-index="0"] {
+            display: block !important;
         }
-
+        
+        /* Show all images in image container but only first one visible */
         .item-card .image-container {
-            height: 150px;
+            position: relative;
+            height: 200px;
+            margin-bottom: 15px;
         }
-
-        .modal-content {
-            width: 95%;
-            margin: 5% auto;
-            padding: 15px;
+        
+        /* Fix video container display issues */
+        .video-container[style*="display: none"] {
+            display: block !important;
+        }
+        
+        /* Position images properly */
+        .item-card .item-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.3s ease;
+        }
+        
+        /* Ensure only one image is visible at a time */
+        .item-card .item-image:not([data-index="0"]) {
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Make sure first image is properly positioned */
+        .item-card .item-image[data-index="0"] {
+            position: relative;
         }
     }
 
     /* Navigation buttons */
-    .image-navigation {
-        position: absolute;
-        bottom: 10px;
-        left: 50%;
-        transform: translateX(-50%);
+    .navigation-buttons {
         display: flex;
-        gap: 8px;
-        background-color: rgba(0, 0, 0, 0.7);
-        border-radius: 15px;
-        padding: 5px;
-        opacity: 0;
-        transition: opacity 0.3s ease;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
     }
 
-    .item-card .image-container:hover .image-navigation {
-        opacity: 1;
-    }
-
-    .image-nav-btn {
-        background-color: rgba(255, 255, 255, 0.8);
+    .navigation-buttons .prev-button,
+    .navigation-buttons .next-button {
+        background-color: #007bff;
+        color: #fff;
         border: none;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
         cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        transition: all 0.2s ease;
+        padding: 10px;
+        border-radius: 5px;
     }
 
-    .image-nav-btn:hover {
-        background-color: #fff;
-        transform: scale(1.1);
-    }
-
-    .image-nav-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
-
-    .image-counter {
-        color: white;
-        font-size: 12px;
-        padding: 0 8px;
-        align-self: center;
-    }
-
-    /* Video overlay styles */
-    .video-preview-overlay {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background-color: rgba(0, 0, 0, 0.7);
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 24px;
-        pointer-events: none;
-    }
-
-    .video-play-button {
-        margin-left: 3px; /* Center the play triangle */
+    .navigation-buttons .prev-button:hover,
+    .navigation-buttons .next-button:hover {
+        background-color: #0056b3;
     }
 
     /* Modal styles */
@@ -676,20 +582,17 @@
     }
 
     .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
-        padding: 10px 18px;
+        padding: 8px 16px;
         border: none;
         border-radius: 5px;
         cursor: pointer;
         font-weight: bold;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        display: inline-block;
         text-align: center;
         transition: all 0.3s ease;
-        min-width: 120px;
-        height: 40px;
+        min-width: 90px;
         white-space: nowrap;
         flex: 0 0 auto;
         box-sizing: border-box;
@@ -1813,7 +1716,7 @@
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button">Barcode scannen</button>
-            <div id="qr-reader"></div>
+            <div id="qr-reader" style="width: 500px; display: none;"></div>
         </div>
 
         <div id="items-container" class="items-container">
@@ -1854,7 +1757,7 @@
                         <button type="button" class="add-new-btn" id="edit-add-new-location-btn">
                             Neuen Ort hinzufügen
                         </button>
-                        <div id="edit-new-location-container" class="edit-new-location-container">
+                        <div id="edit-new-location-container" style="display: none; margin-top: 10px;">
                             <input type="text" id="edit-new-location-input" placeholder="Neuen Ort eingeben">
                             <button type="button" onclick="addNewLocation('edit')">Hinzufügen</button>
                             <button type="button" onclick="cancelAddLocation('edit')">Abbrechen</button>
@@ -1862,6 +1765,7 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label for="
                     <label for="edit-description">Beschreibung:</label>
                     <textarea id="edit-description" name="beschreibung" required></textarea>
                 </div>
@@ -2064,34 +1968,14 @@
 </div>
 
 <!-- Initialize template variables before any JavaScript code -->
-<!-- Store Jinja2 template variables -->
-<script type="text/template" id="server-variables">
-    {% if highlight_item is defined and highlight_item %}
-    {% set highlight_id = highlight_item %}
-    {% else %}
-    {% set highlight_id = "" %}
-    {% endif %}
-</script>
-
-<!-- Initialize JavaScript variables -->
 <script>
     // Create a global object to hold server-side template values
-    window.serverVars = {
-        // URLs for API endpoints and actions
-        urls: {
-            uploadedFile: "{{ url_for('uploaded_file', filename='') }}",
-            ausleihen: "{{ url_for('ausleihen', id='') }}",
-            zurueckgeben: "{{ url_for('zurueckgeben', id='') }}",
-            deleteItem: "{{ url_for('delete_item', id='') }}",
-            getPredefinedFilterValues: "/get_predefined_filter_values/",
-            scheduleUrl: "/schedule_appointment",
-            getItems: "/get_items"
-        },
-        highlightItemId: "{{ highlight_id }}" || null
-    };
-    
-    // Define the getItemsUrl for backward compatibility
-    const getItemsUrl = '/get_items';
+    window.serverVars = {};
+    {% if highlight_item is defined and highlight_item %}
+    window.serverVars.highlightItemId = "{{ highlight_item }}";
+    {% else %}
+    window.serverVars.highlightItemId = null;
+    {% endif %}
     
     window.isDebug = false; // Set to true only for development environment
 </script>
@@ -2348,7 +2232,7 @@
     
     // Load predefined filter values for dropdowns
     function loadPredefinedFilterValues(filterNumber) {
-        fetch(`${window.serverVars.urls.getPredefinedFilterValues}${filterNumber}`)
+        fetch(`/get_predefined_filter_values/${filterNumber}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -2360,16 +2244,8 @@
                 const editFilterSelects = [
                     document.getElementById(`edit-filter${filterNumber}-1`),
                     document.getElementById(`edit-filter${filterNumber}-2`),
-                    document.getElementById(`edit-filter${filterNumber}-3`)
-                ];
-                
-                // Process each edit filter select
-                editFilterSelects.forEach(select => {
-                    if (select) {
-                        // Clear existing options
-                        select.innerHTML = '<option value="">Bitte wählen</option>';
-                        
-                        // Add options from data
+                    document.getElementById(`edit-filter${filterNumber}-3`),
+                    document.getElementBy
                         data.values.forEach(filter => {
                             if (filter && filter.trim() !== '') {
                                 const option = document.createElement('option');
@@ -2385,8 +2261,6 @@
                 console.error(`Error loading predefined filter ${filterNumber} values:`, error);
             });
     }
-
-    // Functions moved to before the DOMContentLoaded event
 
     document.addEventListener('DOMContentLoaded', function() {
         // Load saved filters
@@ -2462,7 +2336,7 @@
 
     // Function to load items from server
     function loadItems() {
-        fetch(getItemsUrl)
+        fetch("{{ url_for('get_items') }}")
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
@@ -2546,9 +2420,10 @@
 
                         const imagesHtml = item.Images ? item.Images.map((image, index) => {
                             // Check if the image already has a full URL path or just the filename
+                            const uploadUrl = "{{ url_for('uploaded_file', filename='') }}";
                             const imageSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
                                             image : 
-                                            `${window.serverVars.urls.uploadedFile}${image}`;
+                                            uploadUrl + image;
                             
                             // Get thumbnail info for this image index
                             const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
@@ -2562,7 +2437,7 @@
                                 
                                 if (thumbnailInfo && thumbnailInfo.has_thumbnail) {
                                     // Show thumbnail image with video overlay for card view
-                                    return `<div class="video-container ${index === 0 ? 'active-container' : ''}" data-index="${index}">
+                                    return `<div class="video-container" data-index="${index}" style="display: ${index === 0 ? 'block' : 'none'};">
                                             <img src="${videoSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
                                                 data-original="${image}">
                                             <div class="video-preview-overlay">
@@ -2572,12 +2447,13 @@
                                 }
                             } else {
                                 // For images, use thumbnail if available
+                                const uploadUrl = "{{ url_for('uploaded_file', filename='') }}";
                                 const imageSrc = thumbnailInfo && thumbnailInfo.has_thumbnail 
                                     ? thumbnailInfo.thumbnail_url 
-                                    : `${window.serverVars.urls.uploadedFile}${image}`;
+                                    : uploadUrl + image;
                                     
-                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image ${index === 0 ? 'active-image' : ''}" data-index="${index}" 
-                                        data-original="${image}">`;
+                                return `<img src="${imageSrc}" alt="${item.Name}" class="item-image" data-index="${index}" 
+                                        data-original="${image}" style="display: ${index === 0 ? 'block' : 'none'};">`;
                             }
                         }).join('') : '';
                         
@@ -2621,29 +2497,33 @@
                                 <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <div class="image-container">
                                     ${imagesHtml}
+                                    <button class="prev-image-button" onclick="prevImage(event)" aria-label="Previous image">&#10094;</button>
+                                    <button class="next-image-button" onclick="nextImage(event)" aria-label="Next image">&#10095;</button>
                                     ${item.Images && item.Images.length > 1 ? 
-                                      `<div class="image-navigation">
-                                         <button class="image-nav-btn" onclick="prevImage(event)" aria-label="Previous image">‹</button>
-                                         <span class="image-counter">1/${item.Images.length}</span>
-                                         <button class="image-nav-btn" onclick="nextImage(event)" aria-label="Next image">›</button>
-                                       </div>` : ''}
+                                      `<div class="image-counter">1/${item.Images.length}</div>` : ``}
                                 </div>
                                 ${borrowerBadge}
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
+                                ${(() => {
+                                    const ausleihenUrl = "{{ url_for('ausleihen', id='') }}";
+                                    const zurueckgebenUrl = "{{ url_for('zurueckgeben', id='') }}";
+                                    const deleteItemUrl = "{{ url_for('delete_item', id='') }}";
+                                    return "";
+                                
                                 ${item.Verfuegbar ? 
-                                    `<form method="POST" action="${window.serverVars.urls.ausleihen}${item._id}">
+                                    `<form method="POST" action="${ausleihenUrl}${item._id}">
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
                                 : isBorrowedByMe ?
-                                    `<form method="POST" action="${window.serverVars.urls.zurueckgeben}${item._id}">
+                                    `<form method="POST" action="${zurueckgebenUrl}${item._id}">
                                         <button class="ausleihen" type="submit">Zurückgeben</button>
                                     </form>`
                                 :
                                     `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                                 }
-                                <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
+                                <a href="${deleteItemUrl}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
                                     <button class="delete-button">Löschen</button>
                                 </a>
                                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
@@ -2669,7 +2549,8 @@
                                 e.stopPropagation();
                                 
                                 const modalItemData = {...item};
-                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
+                                const uploadedFileUrl = "{{ url_for('uploaded_file', filename='') }}";
+                                modalItemData.Images = item.Images ? item.Images.map(img => uploadedFileUrl + img) : [];
                                 
                                 openItemModal(modalItemData);
                             });
@@ -2972,11 +2853,11 @@
             
             <div class="modal-actions">
                 ${item.Verfuegbar ? 
-                    `<form method="POST" action="${window.serverVars.urls.ausleihen}${item._id}">
+                    `<form method="POST" action="/ausleihen/${item._id}">
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
                     : (item.User === currentUsername) ?
-                    `<form method="POST" action="${window.serverVars.urls.zurueckgeben}${item._id}">
+                    `<form method="POST" action="/zurueckgeben/${item._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`
                     : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
@@ -3125,8 +3006,7 @@
         // Find current visible image
         let currentIndex = -1;
         for (let i = 0; i < images.length; i++) {
-            if (images[i].classList.contains('active-image') || 
-                (i === 0 && !card.querySelector('.active-image'))) {
+            if (getComputedStyle(images[i]).display !== 'none') {
                 currentIndex = i;
                 break;
             }
@@ -3134,17 +3014,18 @@
         
         // Go to previous image
         if (currentIndex > 0) {
-            // Remove active class from current image
-            images[currentIndex].classList.remove('active-image');
+            // Hide current image
+            images[currentIndex].style.display = 'none';
             
-            // Add active class to previous image
-            images[currentIndex - 1].classList.add('active-image');
+            // Show previous image
+            images[currentIndex - 1].style.display = 'block';
             
             // Handle video containers if present
             if (videoContainers.length > 0) {
-                videoContainers.forEach(container => container.classList.remove('active-container'));
+                const containers = card.querySelectorAll('.video-container');
+                containers.forEach(container => container.style.display = 'none');
                 const prevContainer = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
-                if (prevContainer) prevContainer.classList.add('active-container');
+                if (prevContainer) prevContainer.style.display = 'block';
             }
             
             // Update counter if present
@@ -3166,8 +3047,7 @@
         // Find current visible image
         let currentIndex = -1;
         for (let i = 0; i < images.length; i++) {
-            if (images[i].classList.contains('active-image') || 
-                (i === 0 && !card.querySelector('.active-image'))) {
+            if (getComputedStyle(images[i]).display !== 'none') {
                 currentIndex = i;
                 break;
             }
@@ -3175,17 +3055,18 @@
         
         // Go to next image
         if (currentIndex >= 0 && currentIndex < images.length - 1) {
-            // Remove active class from current image
-            images[currentIndex].classList.remove('active-image');
+            // Hide current image
+            images[currentIndex].style.display = 'none';
             
-            // Add active class to next image
-            images[currentIndex + 1].classList.add('active-image');
+            // Show next image
+            images[currentIndex + 1].style.display = 'block';
             
             // Handle video containers if present
             if (videoContainers.length > 0) {
-                videoContainers.forEach(container => container.classList.remove('active-container'));
+                const containers = card.querySelectorAll('.video-container');
+                containers.forEach(container => container.style.display = 'none');
                 const nextContainer = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
-                if (nextContainer) nextContainer.classList.add('active-container');
+                if (nextContainer) nextContainer.style.display = 'block';
             }
             
             // Update counter if present
@@ -3194,560 +3075,4 @@
             }
         }
     }
-
-    function setupEditFormSubmission() {
-        const editForm = document.getElementById('edit-item-form');
-        if (!editForm) return;
-
-        editForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-            
-            // Validate form data
-            const name = document.getElementById('edit-name').value.trim();
-            const ort = document.getElementById('edit-location').value.trim();
-            const beschreibung = document.getElementById('edit-description').value.trim();
-            
-            if (!name || !ort || !beschreibung) {
-                alert('Name, Ort und Beschreibung sind erforderlich.');
-                return;
-            }
-            
-            // Continue with form submission
-            this.submit();
-        });
-    }
-
-    function setupScheduleFormSubmission() {
-        const scheduleForm = document.getElementById('schedule-form');
-        if (!scheduleForm) return;
-
-        scheduleForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-            
-            // Get form data
-            const formData = new FormData(this);
-            const itemId = formData.get('item_id');
-            const scheduleDate = formData.get('schedule_date');
-            const startPeriod = formData.get('start_period');
-            const endPeriod = formData.get('end_period');
-            
-            // Validate data
-            if (!itemId || !scheduleDate || !startPeriod || !endPeriod) {
-                alert('Alle Felder sind erforderlich.');
-                return;
-            }
-            
-            // Submit via AJAX
-            fetch(window.serverVars.urls.scheduleUrl, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Server responded with an error');
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    alert('Termin erfolgreich geplant.');
-                    scheduleForm.reset();
-                    // Close modal if needed
-                    $('#schedule-modal').modal('hide');
-                } else {
-                    alert('Fehler: ' + (data.message || 'Unbekannter Fehler'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
-            });
-        });
-    }
-    
-    // Helper functions for appointment display
-    function formatAppointmentDate(dateString) {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            });
-        } catch (e) {
-            return dateString;
-        }
-    }
-
-    function formatAppointmentPeriod(period) {
-        if (!period) return '';
-        const periodMap = {
-            '1': '1. Stunde',
-            '2': '2. Stunde',
-            '3': '3. Stunde',
-            '4': '4. Stunde',
-            '5': '5. Stunde',
-            '6': '6. Stunde',
-            '7': '7. Stunde',
-            '8': '8. Stunde',
-            '9': '9. Stunde',
-            '10': '10. Stunde',
-            'pause1': '1. Pause',
-            'pause2': '2. Pause',
-            'mittagspause': 'Mittagspause'
-        };
-        return periodMap[period] || period;
-    }
-
-    function getUpcomingAppointment(appointments) {
-        if (!appointments || !Array.isArray(appointments) || appointments.length === 0) {
-            return null;
-        }
-        
-        const now = new Date();
-        const today = now.toDateString();
-        
-        // Filter appointments that are today or in the future
-        const futureAppointments = appointments.filter(apt => {
-            try {
-                const aptDate = new Date(apt.date);
-                return aptDate.toDateString() === today || aptDate >= now.setHours(0, 0, 0, 0);
-            } catch (e) {
-                return false;
-            }
-        });
-        
-        if (futureAppointments.length === 0) return null;
-        
-        // Sort by date and return the earliest
-        futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
-        return futureAppointments[0];
-    }
-    
-    // Function to toggle filter dropdown visibility
-    function toggleFilterDropdown(dropdownId) {
-        const dropdown = document.getElementById(dropdownId);
-        if (dropdown) {
-            const isVisible = dropdown.style.display === 'block';
-            dropdown.style.display = isVisible ? 'none' : 'block';
-        }
-    }
-    
-    // Function to clear a specific filter group
-    function clearFilter(filterNum) {
-        activeFilters[`filter${filterNum}`] = [];
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // Rebuild dependent filters
-        if (filterNum === 1) {
-            rebuildFilter2Options();
-            rebuildFilter3Options();
-        } else if (filterNum === 2) {
-            rebuildFilter3Options();
-        }
-        
-        applyFilters();
-        saveFilterState();
-    }
-    
-    // Function to update the selected filters display
-    function updateSelectedFiltersDisplay(filterNum) {
-        const container = document.getElementById(`selected-filter${filterNum}`);
-        if (!container) return;
-        
-        const activeFilterValues = activeFilters[`filter${filterNum}`];
-        container.innerHTML = ''; // Clear previous tags
-        
-        activeFilterValues.forEach(filterValue => {
-            // Check if value has group prefix
-            const hasGroup = filterValue.includes(':');
-            let group = '';
-            let value = filterValue;
-            
-            if (hasGroup) {
-                const parts = filterValue.split(':', 2);
-                group = parts[0];
-                value = parts[1];
-            }
-            
-            // Create filter tag
-            const tag = document.createElement('span');
-            tag.className = 'filter-tag';
-            
-            // Add group prefix if it exists
-            if (hasGroup) {
-                const groupSpan = document.createElement('span');
-                groupSpan.className = 'filter-tag-group';
-                groupSpan.textContent = group + ': ';
-                tag.appendChild(groupSpan);
-            }
-            
-            // Add value text
-            tag.appendChild(document.createTextNode(value));
-            
-            // Add remove button
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'filter-tag-remove';
-            removeBtn.textContent = '×';
-            removeBtn.onclick = () => {
-                updateFilter(filterNum, value, false, hasGroup ? group : '');
-            };
-            
-            tag.appendChild(removeBtn);
-            container.appendChild(tag);
-        });
-    }
-    
-    // Function to update a filter
-    function updateFilter(filterNum, value, isActive, group = '') {
-        const filterKey = `filter${filterNum}`;
-        const filterValue = group ? `${group}:${value}` : value;
-        
-        if (isActive) {
-            // Add to active filters if not already present
-            if (!activeFilters[filterKey].includes(filterValue)) {
-                activeFilters[filterKey].push(filterValue);
-            }
-        } else {
-            // Remove from active filters
-            activeFilters[filterKey] = activeFilters[filterKey].filter(f => f !== filterValue);
-        }
-        
-        // Update display
-        updateSelectedFiltersDisplay(filterNum);
-        
-        // Rebuild dependent filters
-        if (filterNum === 1) {
-            rebuildFilter2Options();
-            rebuildFilter3Options();
-        } else if (filterNum === 2) {
-            rebuildFilter3Options();
-        }
-        
-        // Apply filters and save state
-        applyFilters();
-        saveFilterState();
-        
-        // Hide dropdown after selection
-        document.getElementById(`filter${filterNum}-dropdown`).style.display = 'none';
-    }
-    
-    // Function to populate filter options
-    function populateFilterOptions(containerId, filterValues, filterNum) {
-        const container = document.getElementById(containerId);
-        if (!container) {
-            return;
-        }
-        
-        container.innerHTML = ''; // Clear previous options
-        
-        // First group values by category/prefix if they exist
-        const groupedValues = {};
-        
-        // Process filter values to identify groups
-        filterValues.forEach(value => {
-            if (!value) return; // Skip empty values
-            
-            let group = 'Default';
-            let displayValue = value;
-            
-            // Check if value contains grouping delimiter
-            if (typeof value === 'string' && value.includes(':')) {
-                [group, displayValue] = value.split(':', 2);
-            }
-            
-            // Initialize group array if needed
-            if (!groupedValues[group]) {
-                groupedValues[group] = [];
-            }
-            
-            // Add value to group
-            groupedValues[group].push(displayValue);
-        });
-        
-        // Now create DOM elements for each group
-        Object.keys(groupedValues).sort().forEach(group => {
-            // Skip empty groups
-            if (!groupedValues[group].length) return;
-            
-            // Create option group
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'filter-option-group';
-            
-            // Add group header if not default
-            if (group !== 'Default') {
-                const header = document.createElement('div');
-                header.className = 'filter-group-header';
-                header.textContent = group;
-                groupDiv.appendChild(header);
-            }
-            
-            // Add each filter option in this group
-            groupedValues[group].sort().forEach(value => {
-                // Create filter option
-                const optionDiv = document.createElement('div');
-                optionDiv.className = 'filter-option';
-                
-                // Create unique ID for checkbox
-                const safeValue = value.replace(/[^a-zA-Z0-9]/g, '_');
-                const safeGroup = group.replace(/[^a-zA-Z0-9]/g, '_');
-                const id = `filter${filterNum}-${safeGroup}-${safeValue}`;
-                
-                // Create checkbox
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.id = id;
-                checkbox.value = value;
-                
-                // Store group info for filtering
-                if (group !== 'Default') {
-                    checkbox.dataset.group = group;
-                }
-                
-                // Check if this value is already active
-                const filterValue = group !== 'Default' ? `${group}:${value}` : value;
-                checkbox.checked = activeFilters[`filter${filterNum}`].includes(filterValue);
-                
-                // Add change handler
-                checkbox.onchange = () => {
-                    updateFilter(filterNum, value, checkbox.checked, 
-                        group !== 'Default' ? group : '');
-                };
-                
-                // Create label
-                const label = document.createElement('label');
-                label.htmlFor = id;
-                label.textContent = value;
-                
-                // Add to DOM
-                optionDiv.appendChild(checkbox);
-                optionDiv.appendChild(label);
-                groupDiv.appendChild(optionDiv);
-            });
-            
-            // Add group to container
-            container.appendChild(groupDiv);
-        });
-    }
-    
-    // Modal functions
-    function openScheduleModal(itemId) {
-        const scheduleModal = document.getElementById('schedule-modal');
-        if (!scheduleModal) return; // Exit if modal doesn't exist
-        
-        const itemIdField = document.getElementById('schedule-item-id');
-        const dateField = document.getElementById('schedule-date');
-        const notesField = document.getElementById('schedule-notes');
-        const startPeriodField = document.getElementById('schedule-start-period');
-        const endPeriodField = document.getElementById('schedule-end-period');
-        
-        if (itemIdField) itemIdField.value = itemId;
-        
-        // Set default date to today
-        if (dateField) {
-            const today = new Date().toISOString().split('T')[0];
-            dateField.value = today;
-        }
-        
-        // Clear form
-        if (notesField) notesField.value = '';
-        if (startPeriodField) startPeriodField.value = '';
-        if (endPeriodField) endPeriodField.value = '';
-        
-        scheduleModal.style.display = 'block';
-    }
-
-    function closeScheduleModal() {
-        const scheduleModal = document.getElementById('schedule-modal');
-        if (scheduleModal) {
-            scheduleModal.style.display = 'none';
-        }
-    }
-    
-    function openEditModal(itemId) {
-        // Find the item data from allItems array
-        const item = allItems.find(i => i._id === itemId);
-        if (!item) {
-            console.error('Item not found:', itemId);
-            return;
-        }
-        
-        const editModal = document.getElementById('edit-modal');
-        if (!editModal) return; // Exit if modal doesn't exist
-
-        // Populate the edit form with current item data
-        document.getElementById('edit-item-id').value = item._id;
-        document.getElementById('edit-name').value = item.Name || '';
-        document.getElementById('edit-description').value = item.Beschreibung || '';
-        document.getElementById('edit-code4').value = item.Code_4 || '';
-        document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
-        document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
-
-        // Set the current location if available
-        const locationSelect = document.getElementById('edit-location');
-        if (locationSelect && item.Ort) {
-            // Try to select the current location
-            setTimeout(() => {
-                const options = locationSelect.options;
-                let found = false;
-                for (let i = 0; i < options.length; i++) {
-                    if (options[i].value === item.Ort) {
-                        locationSelect.selectedIndex = i;
-                        found = true;
-                        break;
-                    }
-                }
-                
-                // If location not found in options, add it
-                if (!found && item.Ort) {
-                    const newOption = document.createElement('option');
-                    newOption.value = item.Ort;
-                    newOption.textContent = item.Ort;
-                    locationSelect.appendChild(newOption);
-                    locationSelect.value = item.Ort;
-                }
-            }, 100);
-        }
-        
-        // Display the modal
-        editModal.style.display = 'block';
-    }
-    
-    function closeEditModal() {
-        const editModal = document.getElementById('edit-modal');
-        if (editModal) {
-            editModal.style.display = 'none';
-        }
-    }
-    
-    // Load location options for edit modal
-    function loadLocationOptions() {
-        fetch('/get_predefined_locations')
-            .then(response => response.json())
-            .then(data => {
-                const ortSelect = document.getElementById('edit-location');
-                if (ortSelect) {
-                    // Clear existing options except the first one
-                    while (ortSelect.children.length > 1) {
-                        ortSelect.removeChild(ortSelect.lastChild);
-                    }
-                    
-                    // Add new options - data.locations contains the array
-                    data.locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location;
-                        option.textContent = location;
-                        ortSelect.appendChild(option);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading location options:', error);
-            });
-    }
-    
-    // Function to duplicate an item
-    function duplicateItem(itemId) {
-        // Find the item data from allItems array
-        const item = allItems.find(i => i._id === itemId);
-        if (!item) {
-            console.error('Item not found:', itemId);
-            return;
-        }
-        
-        // Store item data in session storage
-        const duplicateData = {
-            Name: item.Name + ' (Kopie)',
-            Beschreibung: item.Beschreibung,
-            Ort: item.Ort,
-            Filter: item.Filter, 
-            Filter2: item.Filter2,
-            Filter3: item.Filter3,
-            Anschaffungsjahr: item.Anschaffungsjahr,
-            Anschaffungskosten: item.Anschaffungskosten,
-            Images: item.Images
-        };
-        
-        sessionStorage.setItem('duplicateItemData', JSON.stringify(duplicateData));
-        
-        // Redirect to upload page
-        window.location.href = '/upload_admin';
-    }
-    
-    // Function to validate code field
-    function validateCodeField(field, excludeId = null) {
-        const code = field.value.trim();
-        if (!code) return; // Empty is fine
-        
-        // Check if code is unique
-        fetch(`/check_code_unique?code=${encodeURIComponent(code)}&exclude=${excludeId || ''}`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.unique) {
-                    alert('Dieser Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.');
-                    field.value = '';
-                    field.focus();
-                }
-            })
-            .catch(error => {
-                console.error('Error checking code uniqueness:', error);
-            });
-    }
-    
-    // Function to add new location (for edit modal)
-    function addNewLocation(prefix) {
-        // Use different input IDs based on whether we're in edit mode
-        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
-        const selectId = prefix === 'edit' ? 'edit-location' : 'ort';
-        
-        const newLocationInput = document.getElementById(inputId);
-        const newLocation = newLocationInput.value.trim();
-        
-        if (!newLocation) {
-            alert('Bitte geben Sie einen Ort ein.');
-            return;
-        }
-        
-        // Add to dropdown
-        const ortSelect = document.getElementById(selectId);
-        const option = document.createElement('option');
-        option.value = newLocation;
-        option.textContent = newLocation;
-        ortSelect.appendChild(option);
-        ortSelect.value = newLocation;
-        
-        // Hide the input field
-        document.getElementById(prefix + '-new-location-container').style.display = 'none';
-        newLocationInput.value = '';
-        
-        // Save to server
-        fetch('/add_location_value', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'value=' + encodeURIComponent(newLocation)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                console.warn('Failed to save location to server:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error saving location:', error);
-        });
-    }
-    
-    // Function to cancel adding a new location
-    function cancelAddLocation(prefix) {
-        const containerId = prefix === 'edit' ? 'edit-new-location-container' : 'new-location-container';
-        const inputId = prefix === 'edit' ? 'edit-new-location-input' : 'new-location-input';
-        document.getElementById(containerId).style.display = 'none';
-        document.getElementById(inputId).value = '';
-    }
-</script>
 {% endblock %}
