@@ -41,9 +41,9 @@ import atexit
 import traceback
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
-from . import user as us  # Relative import for user module
-from . import items as it  # Relative import for items module
-from . import ausleihung as au  # Relative import for ausleihung module
+import user as us  # Absolute import for user module
+import items as it  # Absolute import for items module
+import ausleihung as au  # Absolute import for ausleihung module
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
@@ -1659,17 +1659,8 @@ def get_ausleihung_by_item_route(id):
         'status': 'not_found'
     }, 200  # Return 200 instead of 404 to allow processing of the error message
 
-
-@app.route('/upload_item', methods=['POST'])
-def upload_item():
-    """
-    Route for adding new items to the inventory.
-    Handles file uploads and creates QR codes.
-    
-    Returns:
-        flask.Response: Redirect to admin homepage
-    """
-    # Authentication checks remain unchanged
+# Note: Second duplicate of upload_item route removed from here
+# The actual implementation is at the first occurrence of this route
     
     # Strip whitespace from all text fields
     name = strip_whitespace(request.form['name'])
@@ -1775,133 +1766,9 @@ def upload_item():
         return redirect(url_for('home_admin'))
 
 
-@app.route('/duplicate_item', methods=['POST'])
-def duplicate_item():
-    """
-    Route for duplicating an existing item.
-    Returns JSON response with success status.
-    
-    Returns:
-        flask.Response: JSON response with success status and data
-    """
-    try:
-        # Check authentication
-        if 'username' not in session:
-            return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
-        
-        # Check if user is admin
-        username = session['username']
-        if not us.check_admin(username):
-            return jsonify({'success': False, 'message': 'Keine Administratorrechte'}), 403
-        
-        # Get original item ID
-        original_item_id = request.form.get('original_item_id')
-        if not original_item_id:
-            return jsonify({'success': False, 'message': 'Ursprungs-Element-ID fehlt'}), 400
-        
-        # Fetch original item data
-        original_item = it.get_item(original_item_id)
-        if not original_item:
-            return jsonify({'success': False, 'message': 'Ursprungs-Element nicht gefunden'}), 404
-        
-        # Process filters as arrays (same as stored in database)
-        filter1_array = original_item.get('Filter', [])
-        filter2_array = original_item.get('Filter2', [])
-        filter3_array = original_item.get('Filter3', [])
-        
-        # Ensure filters are arrays
-        if not isinstance(filter1_array, list):
-            filter1_array = [filter1_array] if filter1_array else []
-        if not isinstance(filter2_array, list):
-            filter2_array = [filter2_array] if filter2_array else []
-        if not isinstance(filter3_array, list):
-            filter3_array = [filter3_array] if filter3_array else []
+# Duplicate duplicate_item route removed
 
-        return jsonify({
-            'success': True, 
-            'message': 'Duplication data prepared successfully',
-            'item_data': {
-                'name': original_item.get('Name', ''),
-                'description': original_item.get('Beschreibung', ''),
-                'location': original_item.get('Ort', ''),
-                'room': original_item.get('Raum', ''),
-                'category': original_item.get('Kategorie', ''),
-                'year': original_item.get('Anschaffungsjahr', ''),
-                'cost': original_item.get('Anschaffungsosten', ''),
-                'filter1': filter1_array,
-                'filter2': filter2_array,
-                'filter3': filter3_array,
-                'images': original_item.get('Images', [])
-            }
-        })
-        
-    except Exception as e:
-        print(f"Error in duplicate_item: {e}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': 'Serverfehler beim Duplizieren'}), 500
-
-
-@app.route('/delete_item/<id>', methods=['POST', 'GET'])
-def delete_item(id):
-    """
-    Route for deleting inventory items.
-    
-    Args:
-        id (str): ID of the item to delete
-        
-    Returns:
-        flask.Response: Redirect to admin homepage
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    
-    
-    it.remove_item(id)
-    flash('Item deleted successfully', 'success')
-    return redirect(url_for('home_admin'))
-
-
-@app.route('/edit_item/<id>', methods=['POST'])
-def edit_item(id):
-    """
-    Route for editing an existing inventory item.
-    
-    Args:
-        id (str): ID of the item to edit
-        
-    Returns:
-        flask.Response: Redirect to admin homepage with status message
-    """
-    if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    if not us.check_admin(session['username']):
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
-        return redirect(url_for('login'))
-    
-    # Strip whitespace from all text fields
-    name = strip_whitespace(request.form.get('name'))
-    ort = strip_whitespace(request.form.get('ort'))
-    beschreibung = strip_whitespace(request.form.get('beschreibung'))
-    
-    # Strip whitespace from all filter values
-    filter1 = strip_whitespace(request.form.getlist('filter'))
-    filter2 = strip_whitespace(request.form.getlist('filter2'))
-    filter3 = strip_whitespace(request.form.getlist('filter3'))
-    
-    anschaffungs_jahr = strip_whitespace(request.form.get('anschaffungsjahr'))
-    anschaffungs_kosten = strip_whitespace(request.form.get('anschaffungskosten'))
-    code_4 = strip_whitespace(request.form.get('code_4'))
-    
-    # Check if code is unique (excluding the current item)
-    if code_4 and not it.is_code_unique(code_4, exclude_id=id):
-        flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
-        return redirect(url_for('home_admin'))
-
+# Duplicate route for /delete_item/<id> removed - original is earlier in the file
 @app.route('/cancel_booking/<id>', methods=['POST'])
 def cancel_booking(id):
     """
@@ -2421,12 +2288,24 @@ def download_book_cover():
             
         filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}{extension}"
         
+        # Make sure the uploads folder exists
+        if not os.path.exists(app.config['UPLOAD_FOLDER']):
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            
         # Save the image to uploads folder
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
-        with open(filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        try:
+            with open(filepath, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    
+            # Verify the file was created and is readable
+            if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                return jsonify({"error": "Failed to save image file"}), 500
+        except Exception as e:
+            app.logger.error(f"Error saving book cover: {str(e)}")
+            return jsonify({"error": f"Failed to save image: {str(e)}"}), 500
         
         return jsonify({
             "success": True,
