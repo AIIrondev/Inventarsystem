@@ -321,5 +321,8 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+    <!-- Mobile compatibility scripts -->
+    <script src="{{ url_for('static', filename='js/mobile_compatibility.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ios_fixes.js') }}"></script>
 </body>
 </html>

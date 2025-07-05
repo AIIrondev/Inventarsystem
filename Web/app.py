@@ -826,114 +826,223 @@ def upload_item():
     """
     Route for adding new items to the inventory.
     Handles file uploads and creates QR codes.
+    Enhanced for mobile browser compatibility.
     
     Returns:
-        flask.Response: Redirect to admin homepage
+        flask.Response: Redirect to admin homepage or JSON response
     """
-    # Authentication checks remain unchanged
+    # Check if the user is authenticated
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        
+    # Check if user is an admin
+    username = session['username']
+    if not us.check_admin(username):
+        return jsonify({'success': False, 'message': 'Admin rights required'}), 403
+        
+    # Detect if request is from mobile device
+    is_mobile = 'Mobile' in request.headers.get('User-Agent', '')
+    is_ios = 'iPhone' in request.headers.get('User-Agent', '') or 'iPad' in request.headers.get('User-Agent', '')
     
-    # Strip whitespace from all text fields
-    name = strip_whitespace(request.form['name'])
-    ort = strip_whitespace(request.form['ort'])
-    beschreibung = strip_whitespace(request.form['beschreibung'])
+    # Log mobile request for debugging
+    if is_mobile:
+        app.logger.info(f"Mobile upload from {request.headers.get('User-Agent', 'unknown')} by {username}")
     
-    # Check both possible image field names
-    images = request.files.getlist('images') or request.files.getlist('new_images')
-    
-    filter_upload = strip_whitespace(request.form.getlist('filter'))
-    filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
-    filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
-    anschaffungs_jahr = strip_whitespace(request.form.getlist('anschaffungsjahr'))
-    anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
-    code_4 = strip_whitespace(request.form.getlist('code_4'))
-    
-    # Check if this is a duplication
-    is_duplicating = request.form.get('is_duplicating') == 'true'
-    
-    # Get duplicate_images if duplicating
-    duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
-    
-    # Get book cover image if downloaded
-    book_cover_image = request.form.get('book_cover_image')
-    
+    try:
+        # Strip whitespace from all text fields
+        name = strip_whitespace(request.form['name'])
+        ort = strip_whitespace(request.form['ort'])
+        beschreibung = strip_whitespace(request.form['beschreibung'])
+        
+        # Check both possible image field names
+        images = request.files.getlist('images') or request.files.getlist('new_images')
+        
+        filter_upload = strip_whitespace(request.form.getlist('filter'))
+        filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
+        filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
+        anschaffungs_jahr = strip_whitespace(request.form.getlist('anschaffungsjahr'))
+        anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
+        code_4 = strip_whitespace(request.form.getlist('code_4'))
+        
+        # Check if this is a duplication
+        is_duplicating = request.form.get('is_duplicating') == 'true'
+        
+        # Get duplicate_images if duplicating
+        duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
+        
+        # Get book cover image if downloaded
+        book_cover_image = request.form.get('book_cover_image')
+        
+        # Special handling for mobile browsers that might send data differently
+        if is_mobile and 'mobile_data' in request.form:
+            try:
+                mobile_data = json.loads(request.form['mobile_data'])
+                # Override values with mobile data if available
+                if 'filters' in mobile_data:
+                    filter_upload = mobile_data.get('filters', [])
+                if 'filters2' in mobile_data:
+                    filter_upload2 = mobile_data.get('filters2', [])
+                if 'filters3' in mobile_data:
+                    filter_upload3 = mobile_data.get('filters3', [])
+                if 'duplicate_images' in mobile_data and mobile_data['duplicate_images']:
+                    duplicate_images = mobile_data.get('duplicate_images', [])
+            except json.JSONDecodeError as e:
+                app.logger.error(f"Error parsing mobile data: {str(e)}")
+    except Exception as e:
+        error_msg = f"Error processing form data: {str(e)}"
+        app.logger.error(error_msg)
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 400
+        else:
+            flash('Fehler beim Verarbeiten der Formulardaten. Bitte versuchen Sie es erneut.', 'error')
+            return redirect(url_for('home_admin'))
+
     # Validation
     if not name or not ort or not beschreibung:
-        flash('Bitte füllen Sie alle erforderlichen Felder aus', 'error')
-        return redirect(url_for('home_admin'))
+        error_msg = 'Bitte füllen Sie alle erforderlichen Felder aus'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 400
+        else:
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
 
     # Only check for images if not duplicating and no duplicate images provided and no book cover
     if not is_duplicating and not images and not duplicate_images and not book_cover_image:
-        flash('Bitte laden Sie mindestens ein Bild hoch', 'error')
-        return redirect(url_for('home_admin'))
+        error_msg = 'Bitte laden Sie mindestens ein Bild hoch'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 400
+        else:
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
 
     # Check if code is unique
     if code_4 and not it.is_code_unique(code_4[0]):
-        flash('Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.', 'error')
-        return redirect(url_for('home_admin'))
+        error_msg = 'Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 400
+        else:
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
 
-    # Process any new uploaded images
+    # Process any new uploaded images with better mobile handling
     image_filenames = []
+    processed_count = 0
+    error_count = 0
+    skipped_count = 0
+    
     for image in images:
         if image and image.filename:
             is_allowed, error_message = allowed_file(image.filename)
             if is_allowed:
-                filename = secure_filename(image.filename)
-                timestamp = time.strftime("%Y%m%d%H%M%S")
-                
-                # Split filename into name and extension to insert timestamp properly
-                name_part, ext_part = os.path.splitext(filename)
-                saved_filename = f"{name_part}_{timestamp}{ext_part}"
-                
-                image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-                
-                # Generate optimized versions (thumbnails and previews)
                 try:
-                    optimization_result = generate_optimized_versions(saved_filename)
-                    print(f"Generated optimized versions for {saved_filename}: {optimization_result}")
+                    filename = secure_filename(image.filename)
+                    timestamp = time.strftime("%Y%m%d%H%M%S")
+                    
+                    # Split filename into name and extension to insert timestamp properly
+                    name_part, ext_part = os.path.splitext(filename)
+                    saved_filename = f"{name_part}_{timestamp}{ext_part}"
+                    
+                    # For iOS devices, we need special handling for the file save
+                    if is_ios:
+                        # Save to a temporary file first to avoid iOS stream issues
+                        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{saved_filename}")
+                        image.save(temp_path)
+                        
+                        # Validate the saved file
+                        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                            # Rename to the final filename
+                            final_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+                            os.rename(temp_path, final_path)
+                        else:
+                            raise Exception("Failed to save image file (zero size or missing)")
+                    else:
+                        # Regular file save for non-iOS devices
+                        image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                    
+                    # Generate optimized versions (thumbnails and previews)
+                    try:
+                        generate_optimized_versions(saved_filename)
+                    except Exception as e:
+                        app.logger.warning(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
+                    
+                    image_filenames.append(saved_filename)
+                    processed_count += 1
                 except Exception as e:
-                    print(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
-                
-                image_filenames.append(saved_filename)
+                    app.logger.error(f"Error saving image {image.filename}: {str(e)}")
+                    error_count += 1
             else:
-                flash(error_message, 'error')
-                return redirect(url_for('home_admin'))
+                app.logger.warning(f"Skipped file with disallowed type: {image.filename}")
+                skipped_count += 1
+                if not is_mobile:
+                    flash(error_message, 'error')
 
-    # Add the duplicate_images to the list
-    if is_duplicating and duplicate_images:
-        image_filenames.extend(duplicate_images)
-    
-    # Add book cover image if downloaded
+    # Handle duplicate images if duplicating
+    if duplicate_images:
+        # For mobile browsers, we need to verify the duplicate images exist
+        if is_mobile:
+            verified_duplicates = []
+            for dup_img in duplicate_images:
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
+                if os.path.exists(full_path) and os.path.isfile(full_path):
+                    verified_duplicates.append(dup_img)
+                else:
+                    app.logger.warning(f"Duplicate image not found: {dup_img}")
+            image_filenames.extend(verified_duplicates)
+        else:
+            image_filenames.extend(duplicate_images)
+
+    # Handle book cover image if provided
     if book_cover_image:
-        # Verify the book cover image file exists
-        book_cover_path = os.path.join(app.config['UPLOAD_FOLDER'], book_cover_image)
-        if os.path.exists(book_cover_path):
+        # Verify the book cover image exists
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], book_cover_image)
+        if os.path.exists(full_path) and os.path.isfile(full_path):
             image_filenames.append(book_cover_image)
         else:
-            print(f"Warning: Book cover image {book_cover_image} not found in uploads folder")
-
-    # If location is not in the predefined list, maybe add it (depending on policy)
-    # For now, we allow new locations to be created when items are added
+            app.logger.warning(f"Book cover image not found: {book_cover_image}")
+    
+    # Log image processing stats
+    app.logger.info(f"Upload stats: processed={processed_count}, errors={error_count}, skipped={skipped_count}, duplicates={len(duplicate_images) if duplicate_images else 0}")
+    
+    # If location is not in the predefined list, add it
     predefined_locations = it.get_predefined_locations()
     if ort and ort not in predefined_locations:
         it.add_predefined_location(ort)
-        
-    # Continue with existing code to create the item
-    it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
-                filter_upload2, filter_upload3, anschaffungs_jahr, 
-                anschaffungs_kosten, code_4)
-    flash('Objekt wurde erfolgreich hinzugefügt', 'success')
     
-    # Get the item ID and create QR code
-    item = it.get_item_by_name(name)
-    if item:  # Check if item exists before trying to access its properties
-        item_id = str(item['_id'])
-        create_qr_code(item_id)
-        # Pass the item ID to download the QR code
-        return redirect(url_for('home_admin', new_item_id=item_id))
+    # Add the item to the database
+    item_id = it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
+                        filter_upload2, filter_upload3, 
+                        anschaffungs_jahr[0] if anschaffungs_jahr else None, 
+                        anschaffungs_kosten[0] if anschaffungs_kosten else None,
+                        code_4[0] if code_4 else None)
+    
+    if item_id:
+        # Create QR code for the item
+        create_qr_code(str(item_id))
+        success_msg = 'Element wurde erfolgreich hinzugefügt'
+        
+        if is_mobile:
+            return jsonify({
+                'success': True, 
+                'message': success_msg,
+                'itemId': str(item_id),
+                'stats': {
+                    'processed': processed_count,
+                    'errors': error_count,
+                    'skipped': skipped_count,
+                    'duplicates': len(duplicate_images) if duplicate_images else 0,
+                    'totalImages': len(image_filenames)
+                }
+            })
+        else:
+            flash(success_msg, 'success')
+            return redirect(url_for('home_admin', highlight_item=str(item_id)))
     else:
-        # Handle case where item couldn't be retrieved
-        flash('QR-Code konnte nicht erstellt werden. Bitte versuchen Sie es später erneut.', 'warning')
-        return redirect(url_for('home_admin'))
+        error_msg = 'Fehler beim Hinzufügen des Elements'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 500
+        else:
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
 
 
 @app.route('/duplicate_item', methods=['POST'])
@@ -941,6 +1050,7 @@ def duplicate_item():
     """
     Route for duplicating an existing item.
     Returns JSON response with success status.
+    Enhanced for mobile browser compatibility.
     
     Returns:
         flask.Response: JSON response with success status and data
@@ -954,6 +1064,14 @@ def duplicate_item():
         username = session['username']
         if not us.check_admin(username):
             return jsonify({'success': False, 'message': 'Keine Administratorrechte'}), 403
+        
+        # Detect if request is from mobile device
+        is_mobile = 'Mobile' in request.headers.get('User-Agent', '')
+        is_ios = 'iPhone' in request.headers.get('User-Agent', '') or 'iPad' in request.headers.get('User-Agent', '')
+        
+        # Log mobile duplication for debugging
+        if is_mobile:
+            app.logger.info(f"Mobile duplication from {request.headers.get('User-Agent', 'unknown')} by {username}")
         
         # Get original item ID
         original_item_id = request.form.get('original_item_id')
@@ -977,7 +1095,41 @@ def duplicate_item():
             filter2_array = [filter2_array] if filter2_array else []
         if not isinstance(filter3_array, list):
             filter3_array = [filter3_array] if filter3_array else []
+            
+        # Verify image paths for mobile devices to avoid issues with non-existent images
+        images = original_item.get('Images', [])
+        verified_images = []
+        
+        if is_mobile:
+            for img in images:
+                img_path = os.path.join(app.config['UPLOAD_FOLDER'], img)
+                if os.path.exists(img_path) and os.path.isfile(img_path):
+                    verified_images.append(img)
+                else:
+                    app.logger.warning(f"Image not found for duplication: {img}")
+            
+            # If we lost images in verification, log it
+            if len(verified_images) < len(images):
+                app.logger.warning(f"Only {len(verified_images)} of {len(images)} images verified for mobile duplication")
+        else:
+            verified_images = images
 
+        # For iOS devices, add more diagnostics and reduce data size if needed
+        if is_ios:
+            # Check if images have thumbnail versions to use for preview instead of full images
+            thumbnails_exist = []
+            for img in verified_images[:5]:  # Only check first 5 to save time
+                thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], img.replace('_thumb', '') + '_thumb')
+                if os.path.exists(thumb_path):
+                    thumbnails_exist.append(True)
+                else:
+                    thumbnails_exist.append(False)
+            
+            # Log detailed diagnostics
+            app.logger.info(f"iOS duplication details: {len(verified_images)} images, "
+                           f"thumbnails available: {all(thumbnails_exist)}, "
+                           f"filter sizes: {len(filter1_array)}, {len(filter2_array)}, {len(filter3_array)}")
+                           
         return jsonify({
             'success': True, 
             'message': 'Duplication data prepared successfully',
@@ -992,7 +1144,9 @@ def duplicate_item():
                 'filter1': filter1_array,
                 'filter2': filter2_array,
                 'filter3': filter3_array,
-                'images': original_item.get('Images', [])
+                'images': verified_images,  # Using verified images instead of original
+                'isMobile': is_mobile,
+                'isIOS': is_ios
             }
         })
         
@@ -1698,6 +1852,7 @@ def register():
                 flash('Password is too weak', 'error')
                 return redirect(url_for('register'))
             us.add_user(username, password)
+
             return redirect(url_for('home'))
         return render_template('register.html')
     flash('You are not authorized to view this page', 'error')
@@ -1833,7 +1988,7 @@ def logs():
     Displays a history of all item borrowings with detailed information.
     
     Returns:
-        flask.Response: Rendered template with logs or redirect
+        flask.Response: Rendered template with logs or redirect if not authenticated
     """
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
@@ -1854,6 +2009,7 @@ def logs():
             
             # Get user details - from sample data, User is a username string
            
+
             username = ausleihung.get('User', 'Unknown User')
             
             # Format dates for display
@@ -2906,6 +3062,31 @@ def get_thumbnail_info(filename):
         'is_video': is_video_file(filename)
     }
 
+# Mobile device detection utilities
+def is_mobile_device(request):
+    """Determine if the request is coming from a mobile device"""
+    user_agent = request.headers.get('User-Agent', '').lower()
+    mobile_identifiers = ['iphone', 'ipad', 'android', 'mobile', 'tablet']
+    return any(identifier in user_agent for identifier in mobile_identifiers)
+
+def is_ios_device(request):
+    """Determine if the request is coming from an iOS device"""
+    user_agent = request.headers.get('User-Agent', '').lower()
+    return 'iphone' in user_agent or 'ipad' in user_agent or 'ipod' in user_agent
+
+def log_mobile_action(action, request, success=True, details=None):
+    """Log mobile-specific actions for debugging"""
+    device_info = request.headers.get('User-Agent', 'Unknown device')
+    status = "SUCCESS" if success else "FAILED"
+    message = f"MOBILE {action} {status} - Device: {device_info}"
+    if details:
+        message += f" - Details: {details}"
+    
+    if success:
+        app.logger.info(message)
+    else:
+        app.logger.error(message)
+        
 # Add explicit static file routes to handle CSS serving issues
 @app.route('/static/<path:filename>')
 def serve_static(filename):
@@ -2948,3 +3129,47 @@ def serve_js(filename):
     """
     js_folder = os.path.join(app.static_folder, 'js')
     return send_from_directory(js_folder, filename)
+
+@app.route('/log_mobile_issue', methods=['POST'])
+def log_mobile_issue():
+    """
+    Route for logging mobile-specific issues.
+    Used for tracking and debugging mobile browser problems.
+    
+    Returns:
+        flask.Response: JSON response with success status
+    """
+    try:
+        # Get issue data from request
+        issue_data = request.json
+        
+        # Add timestamp if not present
+        if 'timestamp' not in issue_data:
+            issue_data['timestamp'] = datetime.now().isoformat()
+            
+        # Format the log message
+        log_message = f"MOBILE ISSUE: {issue_data.get('action', 'unknown')} - "
+        log_message += f"Error: {issue_data.get('error', 'none')} - "
+        log_message += f"Browser: {issue_data.get('browser', 'unknown')}"
+        
+        # Create a structured log entry
+        log_entry = {
+            'type': 'mobile_issue',
+            'timestamp': issue_data.get('timestamp'),
+            'data': issue_data
+        }
+        
+        # Log to application log file
+        app.logger.warning(log_message)
+        
+        # Store in database for analytics
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client['Inventarsystem']
+        logs_collection = db['system_logs']
+        logs_collection.insert_one(log_entry)
+        client.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"Error logging mobile issue: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
