@@ -2724,10 +2724,25 @@
         
         const imagesHtml = item.Images ? item.Images.map((image, index) => {
             const isVideo = isVideoFile(image);
+            // Get thumbnail info for this image index
+            const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+            
             if (isVideo) {
-                return `<video src="${image}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata"></video>`;
+                // Use the original file path for videos with proper URL construction
+                const videoSrc = image.startsWith('/uploads/') || image.startsWith('http') ? 
+                    image : 
+                    `{{ url_for('uploaded_file', filename='') }}${image}`;
+                
+                return `<video src="${videoSrc}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}" controls preload="metadata"></video>`;
             } else {
-                return `<img src="${image}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}">`;
+                // For images, use preview URL if available, otherwise construct a proper URL to the image
+                const imageSrc = thumbnailInfo && thumbnailInfo.has_preview ? 
+                    thumbnailInfo.preview_url : 
+                    (image.startsWith('/uploads/') || image.startsWith('http') ? 
+                        image : 
+                        `{{ url_for('uploaded_file', filename='') }}${image}`);
+                
+                return `<img src="${imageSrc}" alt="${item.Name}" class="modal-image ${index === 0 ? 'active-image' : ''}" id="modal-image-${index}">`;
             }
         }).join('') : '';
         

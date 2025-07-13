@@ -67,7 +67,7 @@ app.debug = False  # Debug disabled in production
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['THUMBNAIL_FOLDER'] = os.path.join(BASE_DIR, 'thumbnails')
 app.config['PREVIEW_FOLDER'] = os.path.join(BASE_DIR, 'previews')
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', '3gp'}
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', '3gp'}
 QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
 app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
 
@@ -400,6 +400,50 @@ def preview_file(filename):
         flask.Response: The requested preview file
     """
     return send_from_directory(app.config['PREVIEW_FOLDER'], filename)
+
+
+@app.route('/QRCodes/<filename>')
+def qrcode_file(filename):
+    """
+    Serve QR code files from the QRCodes directory.
+    
+    Args:
+        filename (str): Name of the QR code file to serve
+        
+    Returns:
+        flask.Response: The requested QR code file
+    """
+    return send_from_directory(app.config['QR_CODE_FOLDER'], filename)
+
+
+@app.route('/<path:filename>')
+def catch_all_files(filename):
+    """
+    Fallback route to serve files from various directories.
+    Tries to find the requested file in known directories.
+    
+    Args:
+        filename (str): Name of the file to serve
+        
+    Returns:
+        flask.Response: The requested file or 404 if not found
+    """
+    # Check if the file exists in any of our directories
+    possible_dirs = [
+        app.config['UPLOAD_FOLDER'],
+        app.config['THUMBNAIL_FOLDER'],
+        app.config['PREVIEW_FOLDER'],
+        app.config['QR_CODE_FOLDER'],
+        os.path.join(BASE_DIR, 'static')
+    ]
+    
+    for directory in possible_dirs:
+        file_path = os.path.join(directory, filename)
+        if os.path.isfile(file_path):
+            return send_from_directory(directory, os.path.basename(filename))
+    
+    # If we get here, the file wasn't found
+    return Response(f"File {filename} not found", status=404)
 
 
 @app.route('/test_connection', methods=['GET'])
@@ -769,6 +813,13 @@ def get_item_json(id):
     item = it.get_item(id)
     if item:
         item['_id'] = str(item['_id'])  # Convert ObjectId to string
+        
+        # Add thumbnail information for images
+        if 'Images' in item and item['Images']:
+            item['ThumbnailInfo'] = []
+            for image_filename in item['Images']:
+                thumbnail_info = get_thumbnail_info(image_filename)
+                item['ThumbnailInfo'].append(thumbnail_info)
         
         # Fetch all appointments for this item and perform client-side status verification
         try:
@@ -1853,6 +1904,12 @@ def register():
                 return redirect(url_for('register'))
             us.add_user(username, password)
 
+
+
+
+
+
+
             return redirect(url_for('home'))
         return render_template('register.html')
     flash('You are not authorized to view this page', 'error')
@@ -2859,7 +2916,7 @@ def is_image_file(filename):
     Returns:
         bool: True if the file is an image, False otherwise
     """
-    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
     extension = filename.lower()[filename.rfind('.'):]
     return extension in image_extensions
 
@@ -2881,7 +2938,7 @@ def is_video_file(filename):
 
 def create_image_thumbnail(image_path, thumbnail_path, size):
     """
-    Create a thumbnail for an image file.
+    Create a thumbnail for an image file, always converting to JPG format.
     
     Args:
         image_path (str): Path to the original image
@@ -2893,7 +2950,7 @@ def create_image_thumbnail(image_path, thumbnail_path, size):
     """
     try:
         with Image.open(image_path) as img:
-            # Convert to RGB if necessary (for PNG with transparency)
+            # Always convert to RGB for JPG output
             if img.mode in ('RGBA', 'LA', 'P'):
                 # Create a white background
                 background = Image.new('RGB', img.size, (255, 255, 255))
@@ -2916,6 +2973,10 @@ def create_image_thumbnail(image_path, thumbnail_path, size):
             
             thumb.paste(img, (x, y))
             
+            # Ensure the thumbnail path ends with .jpg
+            if not thumbnail_path.lower().endswith('.jpg'):
+                thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
+                
             # Save with optimization
             thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
             return True
@@ -2973,6 +3034,7 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
 def generate_optimized_versions(filename):
     """
     Generate thumbnail and preview versions of uploaded files.
+    Convert all image files to JPG format.
     
     Args:
         filename (str): Name of the uploaded file
@@ -2983,7 +3045,9 @@ def generate_optimized_versions(filename):
     original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
     # Generate file paths
-    name_part, ext_part = os.path.splitext(filename)
+    name_part = os.path.splitext(filename)[0]
+    converted_filename = f"{name_part}.jpg"
+    converted_path = os.path.join(app.config['UPLOAD_FOLDER'], converted_filename)
     thumbnail_filename = f"{name_part}_thumb.jpg"
     preview_filename = f"{name_part}_preview.jpg"
     
@@ -2991,7 +3055,7 @@ def generate_optimized_versions(filename):
     preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
     
     result = {
-        'original': filename,
+        'original': converted_filename,  # Use the JPG version as the original
         'thumbnail': None,
         'preview': None,
         'is_image': False,
@@ -3000,20 +3064,46 @@ def generate_optimized_versions(filename):
     
     if is_image_file(filename):
         result['is_image'] = True
-        # Create thumbnail
-        if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-            result['thumbnail'] = thumbnail_filename
+        try:
+            # Convert original to JPG if it's not already
+            if not filename.lower().endswith('.jpg'):
+                with Image.open(original_path) as img:
+                    if img.mode in ('RGBA', 'LA', 'P'):
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        if img.mode == 'P':
+                            img = img.convert('RGBA')
+                        background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                        img = background
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    
+                    # Save as JPG with optimization
+                    img.save(converted_path, 'JPEG', quality=95, optimize=True)
+                    # Remove the original non-JPG file
+                    try:
+                        os.remove(original_path)
+                    except Exception as e:
+                        print(f"Error removing original file: {str(e)}")
+                original_path = converted_path  # Use the converted file for thumbnails
             
-        # Create preview
-        if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-            result['preview'] = preview_filename
+            # Create thumbnail
+            if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+                result['thumbnail'] = thumbnail_filename
+            
+            # Create preview
+            if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+                result['preview'] = preview_filename
+                
+        except Exception as e:
+            print(f"Error converting image to JPG: {str(e)}")
+            return result
             
     elif is_video_file(filename):
         result['is_video'] = True
         # Create video thumbnail
         if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
             result['thumbnail'] = thumbnail_filename
-            
+        
         # Create video preview
         if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
             result['preview'] = preview_filename
@@ -3041,7 +3131,7 @@ def get_thumbnail_info(filename):
     thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
     preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
     
-    # Check if thumbnails exist, create if they don't
+    # Check if thumbnails exist, create if needed
     has_thumbnail = os.path.exists(thumbnail_path)
     has_preview = os.path.exists(preview_path)
     
@@ -3053,11 +3143,16 @@ def get_thumbnail_info(filename):
         except Exception as e:
             print(f"Error generating thumbnails for {filename}: {str(e)}")
     
+    # Make sure we're using the actual filename as it exists on disk
+    actual_thumbnail_url = f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None
+    actual_preview_url = f"/previews/{preview_filename}" if has_preview else None
+    
     return {
         'has_thumbnail': has_thumbnail,
         'has_preview': has_preview,
-        'thumbnail_url': f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None,
-        'preview_url': f"/previews/{preview_filename}" if has_preview else None,
+        'thumbnail_url': actual_thumbnail_url,
+        'preview_url': actual_preview_url,
+        'original_ext': ext_part.lower(),
         'is_image': is_image_file(filename),
         'is_video': is_video_file(filename)
     }
