@@ -1226,8 +1226,29 @@ def delete_item(id):
         return redirect(url_for('login'))
     
     
-    it.remove_item(id)
-    flash('Item deleted successfully', 'success')
+    # Delete associated images first
+    item_to_delete = it.get_item(id)
+    if not item_to_delete:
+        flash('Item not found.', 'error')
+        return redirect(url_for('home_admin'))
+    
+    image_filenames = item_to_delete.get('Images', [])
+    
+    # Attempt to delete image files
+    try:
+        stats = delete_item_images(image_filenames)
+        app.logger.info(f"Item {id} deletion - Images removed: " +
+                      f"originals={stats['originals']}, thumbnails={stats['thumbnails']}, " +
+                      f"previews={stats['previews']}, errors={stats['errors']}")
+    except Exception as e:
+        app.logger.error(f"Error deleting images for item {id}: {str(e)}")
+    
+    # Delete the item from the database
+    if it.remove_item(id):
+        flash(f'Item deleted successfully. Removed {stats["originals"]} images.', 'success')
+    else:
+        flash('Error deleting item from database.', 'error')
+        
     return redirect(url_for('home_admin'))
 
 
@@ -3268,3 +3289,68 @@ def log_mobile_issue():
     except Exception as e:
         app.logger.error(f"Error logging mobile issue: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
+
+def delete_item_images(filenames):
+    """
+    Delete all images associated with an item (original, thumbnail, preview).
+    
+    Args:
+        filenames (list): List of image filenames to delete
+        
+    Returns:
+        dict: Statistics of deleted files (counts of originals, thumbnails, previews, errors)
+    """
+    stats = {
+        'originals': 0,
+        'thumbnails': 0,
+        'previews': 0,
+        'errors': 0
+    }
+    
+    if not filenames:
+        return stats
+        
+    for filename in filenames:
+        if not filename:
+            continue
+            
+        try:
+            # Generate paths based on filename pattern
+            name_part = os.path.splitext(filename)[0]
+            
+            # Original file (may be JPG converted)
+            original_jpg = f"{name_part}.jpg"
+            original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_jpg)
+            
+            # Also try with original extension in case conversion didn't happen
+            original_orig_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Thumbnail and preview
+            thumbnail_filename = f"{name_part}_thumb.jpg"
+            preview_filename = f"{name_part}_preview.jpg"
+            thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
+            preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+            
+            # Delete original file(s)
+            if os.path.exists(original_path):
+                os.remove(original_path)
+                stats['originals'] += 1
+            elif os.path.exists(original_orig_path):
+                os.remove(original_orig_path)
+                stats['originals'] += 1
+                
+            # Delete thumbnail
+            if os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
+                stats['thumbnails'] += 1
+                
+            # Delete preview
+            if os.path.exists(preview_path):
+                os.remove(preview_path)
+                stats['previews'] += 1
+                
+        except Exception as e:
+            app.logger.error(f"Error deleting image files for {filename}: {str(e)}")
+            stats['errors'] += 1
+    
+    return stats
