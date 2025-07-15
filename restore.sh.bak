@@ -1,27 +1,50 @@
 #!/bin/bash
-# filepath: /home/max/Dokumente/repos/Inventarsystem/restore.sh.fixed
+# filepath: /home/max/Dokumente/repos/Inventarsystem/restore.sh
 
 # Configuration
 PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
 BACKUP_BASE_DIR="/var/backups"
 LOG_FILE="$PROJECT_DIR/logs/restore.log"
 
-# Create logs directory if it doesn't exist
-mkdir -p "$PROJECT_DIR/logs"
-# Ensure proper permissions for logs directory
-if [ -d "$PROJECT_DIR/logs" ]; then
-    chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
-fi
-
-# Function to log messages
-log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-}
-
-# Parse command line arguments
+#    # Try to locate the MongoDB backup directory if it wasn't found
+    if [ -z "$db_backup_location" ] || [ ! -d "$db_backup_location" ]; then
+        log_message "Searching for MongoDB backup directory..."
+        
+        # Search recursively for CSV files that could be part of the backup
+        possible_locations=$(find "$BACKUP_BASE_DIR" -name "*.csv" -type f -print 2>/dev/null | xargs -r dirname 2>/dev/null | sort -u)
+        
+        if [ -n "$possible_locations" ]; then
+            # Use the first location found (most likely location)
+            db_backup_location=$(echo "$possible_locations" | head -1)
+            log_message "Found potential MongoDB backup at: $db_backup_location"
+        else
+            # If no backup directory was found and user did not request to skip DB restore
+            log_message "ERROR: Database backup directory not found in the backup"
+            # Continue without error to allow file restoration to succeed
+            [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
+            return 0
+        fi
+    fi
+    
+    # Count CSV files in the backup directory
+    csv_count=$(find "$db_backup_location" -name "*.csv" 2>/dev/null | wc -l)
+    if [ "$csv_count" -eq 0 ]; then
+        log_message "ERROR: No database backup files (CSV) found in $db_backup_location"
+        # Continue without error to allow file restoration to succeed
+        [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
+        return 0
+    }d line arguments
 BACKUP_DATE=""
 RESTART_SERVICES=false
 RESTORE_DB=true
+
+# Function to log messages
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Create logs directory if it doesn't exist
+mkdir -p "$PROJECT_DIR/logs"
 
 # Display help
 show_help() {
@@ -172,9 +195,6 @@ restore_db() {
     local backup_date=$1
     local temp_dir="/tmp/inventarsystem_restore_$$"
     
-    # Ensure temporary directory exists
-    mkdir -p "$temp_dir"
-    
     log_message "Restoring database from backup dated $backup_date..."
     
     # Determine the location of database backup files
@@ -219,33 +239,18 @@ restore_db() {
         return 1
     fi
     
-    # Try to locate the MongoDB backup directory if it wasn't found
-    if [ -z "$db_backup_location" ] || [ ! -d "$db_backup_location" ]; then
-        log_message "Searching for MongoDB backup directory..."
-        
-        # Search recursively for CSV files that could be part of the backup
-        possible_locations=$(find "$BACKUP_BASE_DIR" -name "*.csv" -type f -print 2>/dev/null | xargs -r dirname 2>/dev/null | sort -u)
-        
-        if [ -n "$possible_locations" ]; then
-            # Use the first location found (most likely location)
-            db_backup_location=$(echo "$possible_locations" | head -1)
-            log_message "Found potential MongoDB backup at: $db_backup_location"
-        else
-            # If no backup directory was found and user did not request to skip DB restore
-            log_message "ERROR: Database backup directory not found in the backup"
-            # Continue without error to allow file restoration to succeed
-            [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-            return 0
-        fi
+    if [ ! -d "$db_backup_location" ]; then
+        log_message "ERROR: Database backup directory not found in the backup"
+        [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
+        return 1
     fi
     
     # Count CSV files in the backup directory
-    csv_count=$(find "$db_backup_location" -name "*.csv" 2>/dev/null | wc -l)
+    csv_count=$(find "$db_backup_location" -name "*.csv" | wc -l)
     if [ "$csv_count" -eq 0 ]; then
         log_message "ERROR: No database backup files (CSV) found in $db_backup_location"
-        # Continue without error to allow file restoration to succeed
         [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-        return 0
+        return 1
     fi
     
     log_message "Found $csv_count collection backup files"
@@ -347,25 +352,11 @@ PYTHON_SCRIPT
     
     # Execute the restoration script
     log_message "Restoring database from CSV files..."
-    # Try to use virtualenv Python if available
-    if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
-        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
-            log_message "ERROR: Failed to restore database with virtualenv Python"
-            # Try with system Python as fallback
-            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
-                log_message "ERROR: Failed to restore database"
-                [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-                return 1
-            fi
-        fi
-    else
-        # Use system Python
-        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
-            log_message "ERROR: Failed to restore database"
-            [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-            return 1
-        fi
-    fi
+    python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" || {
+        log_message "ERROR: Failed to restore database"
+        [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
+        return 1
+    }
     
     # Clean up
     [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
@@ -497,3 +488,6 @@ else
     echo "Restoration completed with errors. Check the log file at $LOG_FILE for details."
     exit 1
 fi
+
+# Make this script executable
+chmod +x "$0"

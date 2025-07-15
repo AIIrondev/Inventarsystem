@@ -9,8 +9,6 @@ LOG_FILE="$PROJECT_DIR/logs/daily_update.log"
 RESTART_SERVER=false
 COMPRESSION_LEVEL=9  # Default to maximum compression
 
-
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --restart-server)
@@ -44,10 +42,14 @@ done
 
 # Create logs directory if it doesn't exist
 mkdir -p "$PROJECT_DIR/logs"
+# Ensure proper permissions for logs directory
+if [ -d "$PROJECT_DIR/logs" ]; then
+    chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+fi
 
 # Function to log messages
 log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
 # Function to create backup
@@ -88,21 +90,69 @@ create_backup() {
     sudo mkdir -p "$BACKUP_DIR/mongodb_backup"
     sudo chmod 777 "$BACKUP_DIR/mongodb_backup"  # Temporarily give write permissions
     
-    python3 "$PROJECT_DIR/Backup-DB.py" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-        log_message "ERROR: Failed to backup database"
-        # Continue with the backup process even if DB backup fails
+    # Install pymongo if not already installed
+    log_message "Checking pymongo installation..."
+    if ! python3 -c "import pymongo" &>/dev/null; then
+        log_message "Installing pymongo..."
+        # Try multiple installation methods
+        if [ -f "$PROJECT_DIR/.venv/bin/pip" ]; then
+            "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
+                pip install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                    log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
+                    pip3 install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                        log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
+                    }
+                }
+            }
+        else
+            pip install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
+                pip3 install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                    log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
+                }
+            }
+        fi
+    fi
+    
+    # Run database backup with our helper script
+    log_message "Executing database backup script..."
+    sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+        log_message "ERROR: Failed to backup database with original path"
+        
+        # Try an alternative approach - use a temporary directory
+        log_message "Attempting backup via temporary directory..."
+        tmp_backup_dir="/tmp/mongodb_backup_$$"
+        mkdir -p "$tmp_backup_dir"
+        
+        "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 && {
+            log_message "Backup created in temporary directory, moving to backup location..."
+            sudo cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/" 
+            rm -rf "$tmp_backup_dir"
+        } || {
+            log_message "ERROR: All attempts to backup database failed"
+            # Continue with the backup process even if DB backup fails
+        }
     }
     
     # Reset to more restrictive permissions after backup completes
     sudo chmod -R 755 "$BACKUP_DIR/mongodb_backup"
+    
+    # Verify that backup files were created
+    csv_count=$(find "$BACKUP_DIR/mongodb_backup" -name "*.csv" 2>/dev/null | wc -l)
+    if [ "$csv_count" -gt 0 ]; then
+        log_message "Database backup successful: $csv_count collection(s) backed up"
+    else
+        log_message "WARNING: No CSV files found in backup directory, database backup may have failed"
+    fi
     
     # Compress the backup
     if [ "$COMPRESSION_LEVEL" -gt 0 ]; then
         log_message "Compressing backup with level $COMPRESSION_LEVEL..."
         
         # Create compressed archive
-        sudo tar -czf "$BACKUP_ARCHIVE" -C "$BACKUP_BASE_DIR" "$BACKUP_NAME" \
-            --options="compression-level=$COMPRESSION_LEVEL" || {
+        # Using standard tar without compression level option (not all tar versions support it)
+        sudo tar -czf "$BACKUP_ARCHIVE" -C "$BACKUP_BASE_DIR" "$BACKUP_NAME" || {
             log_message "ERROR: Failed to compress backup"
             return 1
         }
@@ -255,6 +305,3 @@ if [ "$RESTART_SERVER" = true ]; then
 else
     log_message "====== Daily update process completed ======"
 fi
-
-# Make this script executable
-chmod +x "$0"

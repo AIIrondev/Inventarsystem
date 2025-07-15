@@ -9,6 +9,7 @@ Usage:
 """
 import os
 import csv
+import sys
 import argparse
 from datetime import datetime
 from pymongo import MongoClient
@@ -83,19 +84,43 @@ def main():
     args = parse_args()
 
     # Create output directory
-    os.makedirs(args.out, exist_ok=True)
-    print(f"Backing up database '{args.db}' → '{args.out}'")
+    try:
+        os.makedirs(args.out, exist_ok=True)
+        print(f"Backing up database '{args.db}' → '{args.out}'")
+    except PermissionError:
+        print(f"Error: Permission denied when creating directory {args.out}")
+        print("Try running with sudo or to a different output directory")
+        return 1
 
-    # Connect to MongoDB
-    client = MongoClient(args.uri)
-    db = client[args.db]
+    # Verify write permissions
+    test_file = os.path.join(args.out, ".write_test")
+    try:
+        with open(test_file, 'w') as f:
+            f.write("test")
+        os.remove(test_file)
+    except (IOError, PermissionError) as e:
+        print(f"Error: Cannot write to output directory {args.out}")
+        print(f"Reason: {str(e)}")
+        print("Try running with sudo or to a different output directory")
+        return 1
 
-    # Export each collection
-    for coll_name in db.list_collection_names():
-        export_collection(db, coll_name, args.out)
+    try:
+        # Connect to MongoDB
+        client = MongoClient(args.uri)
+        # Test connection
+        client.server_info()
+        db = client[args.db]
 
-    print("Backup complete.")
+        # Export each collection
+        for coll_name in db.list_collection_names():
+            export_collection(db, coll_name, args.out)
+
+        print("Backup complete.")
+        return 0
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

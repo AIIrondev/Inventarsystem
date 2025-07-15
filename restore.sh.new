@@ -1,5 +1,5 @@
 #!/bin/bash
-# filepath: /home/max/Dokumente/repos/Inventarsystem/restore.sh.fixed
+# filepath: /home/max/Dokumente/repos/Inventarsystem/restore.sh
 
 # Configuration
 PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -171,9 +171,6 @@ restore_files() {
 restore_db() {
     local backup_date=$1
     local temp_dir="/tmp/inventarsystem_restore_$$"
-    
-    # Ensure temporary directory exists
-    mkdir -p "$temp_dir"
     
     log_message "Restoring database from backup dated $backup_date..."
     
@@ -349,22 +346,22 @@ PYTHON_SCRIPT
     log_message "Restoring database from CSV files..."
     # Try to use virtualenv Python if available
     if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
-        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" || {
             log_message "ERROR: Failed to restore database with virtualenv Python"
             # Try with system Python as fallback
-            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+            python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" || {
                 log_message "ERROR: Failed to restore database"
                 [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
                 return 1
-            fi
-        fi
+            }
+        }
     else
         # Use system Python
-        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" || {
             log_message "ERROR: Failed to restore database"
             [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
             return 1
-        fi
+        }
     fi
     
     # Clean up
