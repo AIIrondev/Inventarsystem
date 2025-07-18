@@ -96,19 +96,19 @@ create_backup() {
         log_message "Installing pymongo..."
         # Try multiple installation methods
         if [ -f "$PROJECT_DIR/.venv/bin/pip" ]; then
-            "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+            "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                 log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
-                pip install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                     log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                    pip3 install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                    pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                         log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
                     }
                 }
             }
         else
-            pip install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+            pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                 log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                pip3 install pymongo==4.6.1 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                     log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
                 }
             }

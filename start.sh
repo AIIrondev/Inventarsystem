@@ -164,7 +164,7 @@ fi
 # Fix PyMongo/Bson compatibility issue
 echo "Fixing PyMongo/Bson compatibility issue..."
 pip uninstall -y bson pymongo
-if ! pip install pymongo==4.6.1; then
+if ! pip install pymongo==4.6.3; then
     echo "Failed to install pymongo. This is likely due to permission issues."
     echo "To fix permission issues, run: sudo ./fix-permissions.sh"
     echo "Then try running restart.sh again."

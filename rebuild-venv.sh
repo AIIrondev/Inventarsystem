@@ -65,7 +65,7 @@ if [ -d "$VENV_DIR/lib/python3.12/site-packages/bson" ]; then
     rm -rf "$VENV_DIR/lib/python3.12/site-packages/bson"
 fi
 # Now install pymongo
-pip install pymongo==4.6.1 || log_message "WARNING: Failed to install pymongo"
+pip install pymongo==4.6.3 || log_message "WARNING: Failed to install pymongo"
 # Verify pymongo installation
 python -c "import pymongo; print(f'PyMongo version: {pymongo.__version__}')" && log_message "✓ PyMongo installed correctly" || log_message "WARNING: PyMongo verification failed"
 
@@ -85,7 +85,7 @@ if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
         log_message "Found standalone bson package, removing it..."
         rm -rf "$VENV_DIR/lib/python3.12/site-packages/bson"
         # Reinstall pymongo to ensure it's correctly configured
-        pip install --force-reinstall pymongo==4.6.1
+        pip install --force-reinstall pymongo==4.6.3
     fi
 else
     log_message "No requirements.txt found, installing essential packages manually"

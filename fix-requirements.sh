@@ -25,13 +25,13 @@ grep -v "^bson" "$REQUIREMENTS_FILE" > "$REQUIREMENTS_FILE.tmp"
 mv "$REQUIREMENTS_FILE.tmp" "$REQUIREMENTS_FILE"
 
 # Ensure pymongo is set to the correct version
-log_message "Setting pymongo version to 4.6.1"
+log_message "Setting pymongo version to 4.6.3"
 if grep -q "^pymongo" "$REQUIREMENTS_FILE"; then
     # Replace existing pymongo line
-    sed -i 's/^pymongo.*/pymongo==4.6.1/' "$REQUIREMENTS_FILE"
+    sed -i 's/^pymongo.*/pymongo==4.6.3/' "$REQUIREMENTS_FILE"
 else
     # Add pymongo if not already in the file
-    echo "pymongo==4.6.1" >> "$REQUIREMENTS_FILE"
+    echo "pymongo==4.6.3" >> "$REQUIREMENTS_FILE"
 fi
 
 # Add comment to explain the removal

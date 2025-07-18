@@ -89,9 +89,9 @@ fi
 
 # Install pymongo specifically
 log_message "Installing pymongo..."
-pip install pymongo==4.6.1 || {
+pip install pymongo==4.6.3 || {
     log_message "WARNING: Failed to install pymongo with pip. Trying with pip directly..."
-    python -m pip install pymongo==4.6.1 || log_message "WARNING: All attempts to install pymongo failed"
+    python -m pip install pymongo==4.6.3 || log_message "WARNING: All attempts to install pymongo failed"
 }
 
 # Check if pymongo was installed correctly

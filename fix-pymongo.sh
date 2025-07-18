@@ -45,10 +45,10 @@ if [ -d "$BSON_DIR" ]; then
 fi
 
 # Install pymongo
-log_message "Installing pymongo version 4.6.1"
-pip install pymongo==4.6.1 || {
+log_message "Installing pymongo version 4.6.3"
+pip install pymongo==4.6.3 || {
     log_message "WARNING: Failed to install pymongo with pip. Trying alternative method..."
-    python -m pip install pymongo==4.6.1
+    python -m pip install pymongo==4.6.3
 }
 
 # Verify installation
@@ -63,7 +63,7 @@ else
     deactivate
     
     # Install pymongo system-wide as fallback
-    sudo pip install pymongo==4.6.1 || log_message "ERROR: Failed to install pymongo system-wide"
+    sudo pip install pymongo==4.6.3 || log_message "ERROR: Failed to install pymongo system-wide"
 fi
 
 # Deactivate virtual environment
