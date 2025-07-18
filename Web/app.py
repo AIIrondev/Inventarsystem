@@ -986,12 +986,16 @@ def upload_item():
             is_allowed, error_message = allowed_file(image.filename)
             if is_allowed:
                 try:
-                    filename = secure_filename(image.filename)
+                    # Get the file extension for content type determination
+                    _, ext_part = os.path.splitext(secure_filename(image.filename))
+                    
+                    # Generate a completely unique filename using UUID
+                    import uuid
+                    unique_id = str(uuid.uuid4())
                     timestamp = time.strftime("%Y%m%d%H%M%S")
                     
-                    # Split filename into name and extension to insert timestamp properly
-                    name_part, ext_part = os.path.splitext(filename)
-                    saved_filename = f"{name_part}_{timestamp}{ext_part}"
+                    # New filename format with UUID to ensure uniqueness
+                    saved_filename = f"{unique_id}_{timestamp}{ext_part}"
                     
                     # For iOS devices, we need special handling for the file save
                     if is_ios:
@@ -1629,7 +1633,10 @@ def create_qr_code(id):
         return None
     
     img = qr.make_image(fill_color="black", back_color="white")
-    filename = f"{item['Name']}_{id}.png"
+    
+    # Create a safe filename using a combination of item name and id
+    safe_name = secure_filename(item['Name'])
+    filename = f"{safe_name}_{id}.png"
     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
     
     # Fix the file handling - save to file object, not string
@@ -2356,11 +2363,12 @@ def download_book_cover():
                 "error": f"Nicht unterstütztes Bildformat: {content_type}. Erlaubte Formate: JPG, JPEG, PNG, GIF"
             }), 400
         
-        # Generate a unique filename
-        import hashlib
+        # Generate a fully unique filename using UUID
         import uuid
-        hash_object = hashlib.md5(image_url.encode())
-        unique_id = str(uuid.uuid4())[:8]
+        import time
+        
+        unique_id = str(uuid.uuid4())
+        timestamp = time.strftime("%Y%m%d%H%M%S")
         
         # Use appropriate extension based on content type
         extension = '.jpg'  # default
@@ -2369,7 +2377,7 @@ def download_book_cover():
         elif 'image/gif' in content_type.lower():
             extension = '.gif'
             
-        filename = f"book_cover_{hash_object.hexdigest()[:8]}_{unique_id}{extension}"
+        filename = f"book_cover_{unique_id}_{timestamp}{extension}"
         
         # Save the image to uploads folder
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
