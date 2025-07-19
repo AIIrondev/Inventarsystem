@@ -268,23 +268,6 @@ sudo ./start.sh
 4. Klicken Sie auf "Buchung erstellen"
 5. Der Termin erscheint farblich markiert im Kalender
 
-### QR-Code-System
-
-#### QR-Codes drucken
-1. Loggen Sie sich als Administrator ein
-2. Navigieren Sie zu einem Artikel
-3. Klicken Sie auf "QR-Code anzeigen"
-4. Verwenden Sie die Druckfunktion Ihres Browsers (Ctrl+P)
-5. Drucken Sie den QR-Code und befestigen Sie ihn am Artikel
-
-#### QR-Codes scannen
-1. Loggen Sie sich im System ein
-2. Klicken Sie auf "QR-Code scannen"
-3. Erlauben Sie den Kamerazugriff
-4. Richten Sie die Kamera auf den QR-Code
-5. Das System öffnet automatisch die Artikeldetails
-6. Sie können dann den Artikel ausleihen oder zurückgeben
-
 ### Berichterstellung und Protokollierung
 
 #### Ausleihhistorie anzeigen
@@ -796,35 +779,6 @@ Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
    ```
    
    Testen Sie dann den Bild-Upload und die QR-Code Generierung erneut.
-
-## Änderungsprotokoll
-
-### Version 2.5.20
-- Erweiterung von `fix-all.sh` um vollautomatische Problemerkennung und -behebung
-- Neue Funktionen für automatische Systemüberwachung und -reparatur:
-  - `--auto` für automatische Problemerkennung und -behebung ohne Benutzerinteraktion
-  - `--setup-cron` zur Einrichtung einer täglichen automatischen Systemprüfung
-  - `--email=ADRESSE` für E-Mail-Benachrichtigungen nach automatischen Reparaturen
-- Detaillierte Berichterstellung in `logs/auto_fix_report.log`
-- Intelligenter automatischer Neustart der Dienste nach Reparaturen
-
-### Version 2.5.19
-- Hinzufügung des neuen `fix-all.sh` All-in-One Reparaturskripts für umfassende Systemwartung
-- Verbesserte README-Dokumentation mit empfohlenem Workflow für Systemprobleme
-- Detaillierte Fehlerbehebungsanleitungen für häufige Probleme
-- Umfassende Log-Protokollierung in allen Reparaturskripten
-- Automatisierte Dienststatus-Überprüfung im Reparaturprozess
-
-### Version 2.5.18
-- Hinzufügung des neuen `fix-all.sh` All-in-One Reparaturskripts für umfassende Systemwartung
-- Konsolidierung aller Reparaturskripte (`fix-permissions.sh`, `fix-update.sh`, `fix-pymongo.sh`) in ein einziges Skript
-- Erweiterte Backup- und Wiederherstellungsfunktionen in `update.sh`
-- Unterstützung für anpassbare Kompressionslevel bei Backups (`--compression-level`)
-- Robustere Fehlerbehebung bei pymongo/bson-Konflikten
-- Automatische Korrektur von Gitrepository-Berechtigungen
-- Verbesserte Logik bei Fehlern in der virtuellen Umgebung
-- Vereinfachte Wartung durch Konsolidierung redundanter Skripte
-- Intelligente Diagnose zur gezielten Behebung nur der tatsächlich vorhandenen Probleme
 
 ## Schlussfolgerung
 
