@@ -2,7 +2,7 @@
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
-**Aktuelle Version: 2.5.18**
+**Aktuelle Version: 2.5.20**
 
 Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen, zu reservieren und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung, Buchungskalender und eine filterbasierte Artikelsuche.
 
@@ -10,9 +10,7 @@ Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegens
 
 Das Inventarsystem bietet folgende Wartungsskripte:
 - `update.sh` - Aktualisiert das System, erstellt ein Backup und installiert Abhängigkeiten
-- `fix-permissions.sh` - Behebt Berechtigungsprobleme der virtuellen Umgebung
-- `fix-all-permissions.sh` - Umfassende Korrektur aller Berechtigungen im System
-- `fix-pymongo.sh` - Behebt Konflikte zwischen pymongo und bson
+- `fix-all.sh` - All-in-One Reparaturskript mit intelligenter Diagnose und automatischer Überwachung
 - `rebuild-venv.sh` - Baut die virtuelle Python-Umgebung neu auf
 - `start.sh`, `stop.sh`, `restart.sh` - Dienste steuern
 - `Backup-DB.py` - Manuelles Backup der Datenbank erstellen
@@ -119,9 +117,9 @@ sudo ./start.sh
    - Sie sollten die Login-Seite sehen
    
 5. Bei Installations- oder Berechtigungsproblemen:
-   - Führen Sie `sudo ./fix-all-permissions.sh` aus, um umfassend alle Berechtigungen zu korrigieren
-   - Oder führen Sie `sudo ./fix-permissions.sh` für eine gezielte Korrektur der Python-Umgebung aus
-   - Falls pymongo/bson-Fehler auftreten, führen Sie `sudo ./fix-pymongo.sh` aus
+   - Führen Sie `sudo ./fix-all.sh` aus, um alle Probleme umfassend zu beheben
+   - Zur reinen Diagnose ohne Änderungen: `sudo ./fix-all.sh --check-only`
+   - Für gezielte Reparaturen nutzen Sie die Optionen `--fix-permissions`, `--fix-venv` oder `--fix-pymongo`
    - Bei anhaltenden Problemen führen Sie `sudo ./rebuild-venv.sh` aus, um die Python-Umgebung komplett neu zu erstellen
 
 #### Konfiguration der Datenbank
@@ -393,24 +391,20 @@ Falls Probleme mit Python-Abhängigkeiten auftreten:
 #### Berechtigungen korrigieren
 Bei Zugriffsfehlern:
 
-1. Führen Sie das Berechtigungskorrekturs-Skript aus für grundlegende Berechtigungen:
+1. Führen Sie das umfassende Reparatur-Skript aus:
    ```bash
-   sudo ./fix-permissions.sh
-   ```
-   
-2. Für eine umfassende Korrektur aller Berechtigungsprobleme nutzen Sie:
-   ```bash
-   sudo ./fix-all-permissions.sh
+   sudo ./fix-all.sh
    ```
    Dieses Skript behebt alle bekannten Berechtigungsprobleme im gesamten System, einschließlich:
    - Logs-Verzeichnisse und Dateien
-   - Skript-Ausführungsrechte
+   - Skript- und Programmdateien
    - Git Repository-Berechtigungen
    - Web-Upload-Verzeichnisse
    - QR-Code-Verzeichnisse
    - Thumbnails und Vorschaubilder
    - Python virtuelle Umgebung
    - MongoDB-Zugriffsrechte
+   - PyMongo/BSON-Konflikte
 
 3. Stellen Sie sicher, dass das Logs-Verzeichnis korrekte Berechtigungen hat:
    ```bash
@@ -563,7 +557,7 @@ Wenn der Webserver nach einem Neustart oder Update nicht startet:
 
 4. **Berechtigungen korrigieren**:
    ```bash
-   sudo ./fix-permissions.sh
+   sudo ./fix-all.sh --fix-permissions
    ```
 
 #### Datenbank-Verbindungsprobleme
@@ -635,11 +629,11 @@ Dieser Konflikt tritt auf, wenn das separate `bson`-Paket zusammen mit `pymongo`
 
 ##### Schritte zur Fehlerbehebung:
 
-1. **Fix-PyMongo-Skript ausführen**:
+1. **All-in-One Reparatur-Skript ausführen**:
    ```bash
-   sudo ./fix-pymongo.sh
+   sudo ./fix-all.sh
    ```
-   Dieses Skript entfernt das konfliktierende `bson`-Paket und installiert `pymongo` neu.
+   Dieses Skript erkennt und behebt automatisch den PyMongo/BSON-Konflikt.
 
 2. **Falls der erste Schritt nicht hilft, die virtuelle Umgebung neu erstellen**:
    ```bash
@@ -656,31 +650,42 @@ Dieser Konflikt tritt auf, wenn das separate `bson`-Paket zusammen mit `pymongo`
 
 Wenn Sie Berechtigungsfehler wie `Keine Berechtigung` oder `Permission denied` sehen:
 
-1. **Umfassende Berechtigung-Reparatur durchführen**:
+1. **All-in-One Reparatur durchführen** (empfohlen):
    ```bash
-   sudo ./fix-all-permissions.sh
+   sudo ./fix-all.sh
    ```
-   Dieses Skript behebt systematisch alle bekannten Berechtigungsprobleme im gesamten System und loggt alle Aktionen in `logs/permission_fixes.log`.
+   Dieses umfassende Skript behebt alle bekannten Probleme in einem einzigen Durchlauf:
+   - Berechtigungen und Eigentümerrechte für das gesamte Projekt
+   - Virtual Environment und Python-Pakete
+   - Konfliktlösung zwischen pymongo und bson
+   - Log-Verzeichnisse und Dateien
+   - Web-Verzeichnisberechtigungen
+   - Git Repository-Berechtigungen
+   - Systemdienste-Prüfung
+   
+   Das Skript gibt detaillierte Informationen zu jedem Schritt aus und protokolliert alles in `logs/fix_all.log`.
 
-2. **Alternativ: Gezielte Berechtigungskorrektur**:
+2. **Gezielte Reparatur bestimmter Probleme**:
    ```bash
-   sudo ./fix-permissions.sh
+   sudo ./fix-all.sh --fix-permissions  # Nur Berechtigungsprobleme beheben
+   sudo ./fix-all.sh --fix-venv         # Nur virtuelle Umgebung reparieren
+   sudo ./fix-all.sh --fix-pymongo      # Nur pymongo/bson-Konflikte beheben
    ```
-   Dieses Skript korrigiert die Berechtigungen primär für die virtuelle Umgebung und kritische Verzeichnisse.
+   Diese Optionen ermöglichen die gezielte Behebung spezifischer Probleme ohne die Ausführung des gesamten Reparaturprozesses.
 
-3. **Logs-Verzeichnis manuell korrigieren**:
+4. **Logs-Verzeichnis manuell korrigieren**:
    ```bash
    sudo mkdir -p logs
    sudo chmod 777 logs
    ```
 
-4. **Falls Python-Skripte nicht ausgeführt werden können**:
+5. **Falls Python-Skripte nicht ausgeführt werden können**:
    ```bash
    sudo chmod +x *.py
    sudo chmod +x *.sh
    ```
 
-5. **Git Repository-Probleme beheben**:
+6. **Git Repository-Probleme beheben**:
    ```bash
    git config --global --add safe.directory "$(pwd)"
    ```
@@ -780,7 +785,7 @@ Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
    
 3. **Berechtigungen umfassend korrigieren**:
    ```bash
-   sudo ./fix-all-permissions.sh
+   sudo ./fix-all.sh
    ```
    
 4. **Oder gezielte Korrektur für Bildverzeichnisse**:
@@ -798,13 +803,32 @@ Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
 
 ## Änderungsprotokoll
 
+### Version 2.5.20
+- Erweiterung von `fix-all.sh` um vollautomatische Problemerkennung und -behebung
+- Neue Funktionen für automatische Systemüberwachung und -reparatur:
+  - `--auto` für automatische Problemerkennung und -behebung ohne Benutzerinteraktion
+  - `--setup-cron` zur Einrichtung einer täglichen automatischen Systemprüfung
+  - `--email=ADRESSE` für E-Mail-Benachrichtigungen nach automatischen Reparaturen
+- Detaillierte Berichterstellung in `logs/auto_fix_report.log`
+- Intelligenter automatischer Neustart der Dienste nach Reparaturen
+
+### Version 2.5.19
+- Hinzufügung des neuen `fix-all.sh` All-in-One Reparaturskripts für umfassende Systemwartung
+- Verbesserte README-Dokumentation mit empfohlenem Workflow für Systemprobleme
+- Detaillierte Fehlerbehebungsanleitungen für häufige Probleme
+- Umfassende Log-Protokollierung in allen Reparaturskripten
+- Automatisierte Dienststatus-Überprüfung im Reparaturprozess
+
 ### Version 2.5.18
-- Verbesserte Berechtigungsverwaltung mit dem neuen `fix-all-permissions.sh` Skript
+- Hinzufügung des neuen `fix-all.sh` All-in-One Reparaturskripts für umfassende Systemwartung
+- Konsolidierung aller Reparaturskripte (`fix-permissions.sh`, `fix-update.sh`, `fix-pymongo.sh`) in ein einziges Skript
 - Erweiterte Backup- und Wiederherstellungsfunktionen in `update.sh`
 - Unterstützung für anpassbare Kompressionslevel bei Backups (`--compression-level`)
 - Robustere Fehlerbehebung bei pymongo/bson-Konflikten
 - Automatische Korrektur von Gitrepository-Berechtigungen
 - Verbesserte Logik bei Fehlern in der virtuellen Umgebung
+- Vereinfachte Wartung durch Konsolidierung redundanter Skripte
+- Intelligente Diagnose zur gezielten Behebung nur der tatsächlich vorhandenen Probleme
 
 ## Schlussfolgerung
 
@@ -813,3 +837,112 @@ Das Inventarsystem ist eine komplette Lösung für die Verwaltung von Inventar, 
 Mit den verbesserten Wartungsskripten ist das System jetzt noch zuverlässiger und einfacher zu warten, selbst bei komplexen Installationen. Die automatischen Berechtigungskorrekturen und Backup-Funktionen sorgen für eine reibungslose Benutzererfahrung und Datensicherheit.
 
 Für weitere Unterstützung oder Feature-Anfragen öffnen Sie bitte ein Issue im GitHub-Repository.
+
+### Empfohlener Workflow bei Systemproblemen
+
+Wenn Sie auf Probleme mit dem Inventarsystem stoßen, folgen Sie diesem Workflow für eine systematische Fehlersuche:
+
+1. **Systemstatus überprüfen**:
+   ```bash
+   sudo systemctl status inventarsystem-gunicorn
+   sudo systemctl status inventarsystem-nginx
+   sudo systemctl status mongodb
+   ```
+
+2. **Log-Dateien auf Fehler prüfen**:
+   ```bash
+   tail -n 50 logs/error.log
+   tail -n 50 logs/access.log
+   ```
+
+3. **All-in-One Reparatur durchführen**:
+   ```bash
+   sudo ./fix-all.sh
+   ```
+   Dieses Skript behebt die häufigsten Probleme in einer Operation und ist in den meisten Fällen die schnellste Lösung.
+
+4. **System neu starten**:
+   ```bash
+   sudo ./restart.sh
+   ```
+
+5. **Automatische Überwachung einrichten** (empfohlen für Produktivsysteme):
+   ```bash
+   sudo ./fix-all.sh --setup-cron
+   ```
+   Dies richtet einen täglichen Cron-Job ein, der das System automatisch überwacht und repariert.
+
+6. **Falls Probleme bestehen bleiben**:
+   - Bei Problemen mit der virtuellen Umgebung: `sudo ./rebuild-venv.sh`
+   - Bei Problemen mit der Datenbank: Versuchen Sie eine Wiederherstellung `sudo ./restore.sh --date=latest`
+   - Bei spezifischen Berechtigungsproblemen: `sudo chmod -R 755 Web` oder `sudo chown -R $(whoami):$(whoami) .`
+
+Die meisten Probleme können mit dem `fix-all.sh`-Skript behoben werden, das speziell entwickelt wurde, um alle bekannten Probleme systematisch zu beheben, und auch automatisch ausgeführt werden kann, um proaktiv Probleme zu verhindern.
+
+#### Erweiterte Optionen für fix-all.sh
+
+Das `fix-all.sh` Skript bietet verschiedene Befehlszeilenoptionen für gezielte Reparaturen:
+
+```bash
+sudo ./fix-all.sh [OPTIONEN]
+```
+
+Verfügbare Optionen:
+- `--check-only`: Nur Prüfung durchführen, ohne Änderungen vorzunehmen
+- `--verbose`: Ausführlichere Ausgabe für detaillierte Diagnose
+- `--fix-permissions`: Nur Berechtigungsprobleme beheben
+- `--fix-venv`: Nur die virtuelle Umgebung reparieren
+- `--fix-pymongo`: Nur pymongo/bson-Konflikte beheben
+- `--auto`: Automatischer Modus - erkennt und behebt Probleme ohne Benutzerinteraktion
+- `--setup-cron`: Richtet einen Cron-Job für tägliche automatische Prüfung und Reparatur ein
+- `--email=ADRESSE`: Sendet einen Bericht per E-Mail an die angegebene Adresse
+- `--help`: Hilfe anzeigen
+
+**Beispiel für eine reine Diagnose ohne Änderungen:**
+```bash
+sudo ./fix-all.sh --check-only
+```
+
+**Automatische Überwachung und Reparatur einrichten:**
+```bash
+sudo ./fix-all.sh --setup-cron
+```
+
+**Automatische Diagnose und Reparatur mit E-Mail-Benachrichtigung:**
+```bash
+sudo ./fix-all.sh --auto --email=admin@example.com
+```
+
+Das Skript führt automatisch eine intelligente Diagnose des Systems durch und behebt gezielt nur die gefundenen Probleme. Es überprüft:
+1. Berechtigungen für kritische Verzeichnisse
+2. Zustand der virtuellen Python-Umgebung
+3. PyMongo/BSON-Konflikte
+4. Status der Systemdienste
+
+Nach der Reparatur wird eine zweite Diagnose durchgeführt, um zu bestätigen, dass alle Probleme behoben wurden.
+
+#### Automatische Überwachung einrichten
+
+Das System kann so konfiguriert werden, dass es täglich automatisch nach Problemen sucht und diese behebt:
+
+1. **Automatische Überwachung einrichten**:
+   ```bash
+   sudo ./fix-all.sh --setup-cron
+   ```
+   
+   Dies richtet einen Cron-Job ein, der jeden Tag um 1:00 Uhr morgens ausgeführt wird und:
+   - Probleme mit Berechtigungen, der virtuellen Umgebung und Diensten erkennt
+   - Gefundene Probleme automatisch behebt
+   - Einen detaillierten Bericht in `logs/auto_fix_report.log` speichert
+   
+2. **E-Mail-Benachrichtigungen aktivieren**:
+   ```bash
+   sudo ./fix-all.sh --auto --email=ihre@email.com
+   ```
+   
+   Nach jeder automatischen Reparatur wird ein Bericht an die angegebene E-Mail-Adresse gesendet.
+
+3. **Status der automatischen Überwachung prüfen**:
+   ```bash
+   sudo crontab -l | grep fix-all
+   ```

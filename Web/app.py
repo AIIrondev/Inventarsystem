@@ -48,6 +48,7 @@ import json
 import datetime
 import time
 import traceback
+import io
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
 import threading
@@ -1016,7 +1017,42 @@ def upload_item():
                     
                     # Generate optimized versions (thumbnails and previews)
                     try:
-                        generate_optimized_versions(saved_filename)
+                        # Log original file size before optimization
+                        original_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+                        original_size = os.path.getsize(original_path)
+                        
+                        # Get original image dimensions
+                        original_dimensions = ""
+                        try:
+                            with Image.open(original_path) as img:
+                                original_dimensions = f"{img.width}x{img.height}"
+                        except:
+                            pass
+                        
+                        # Generate optimized versions (this will also resize and compress the original)
+                        # Target 80KB for a good balance between quality and size
+                        generate_optimized_versions(saved_filename, max_original_width=500, target_size_kb=80)
+                        
+                        # Log file size after optimization
+                        optimized_name = os.path.splitext(saved_filename)[0] + '.jpg'
+                        optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
+                        if os.path.exists(optimized_path):
+                            optimized_size = os.path.getsize(optimized_path)
+                            reduction = (1 - (optimized_size / original_size)) * 100 if original_size > 0 else 0
+                            
+                            # Get optimized dimensions
+                            optimized_dimensions = ""
+                            try:
+                                with Image.open(optimized_path) as img:
+                                    optimized_dimensions = f"{img.width}x{img.height}"
+                            except:
+                                pass
+                                
+                            app.logger.info(
+                                f"Image optimization: {saved_filename} → {optimized_name}\n"
+                                f"  Size: {original_size/1024:.1f}KB → {optimized_size/1024:.1f}KB ({reduction:.1f}% reduction)\n"
+                                f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
+                            )
                     except Exception as e:
                         app.logger.warning(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
                     
@@ -1866,7 +1902,7 @@ def cancel_booking(id):
         
     # Check if user owns this booking
     if booking.get('User') != session['username'] and not us.check_admin(session['username']):
-        return {"success": False, "error": "Not authorized to cancel this booking"}, 403
+               return {"success": False, "error": "Not authorized to cancel this booking"}, 403
     
     # Cancel the booking
     result = au.cancel_booking(id)
@@ -3060,13 +3096,16 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
         return False
 
 
-def generate_optimized_versions(filename):
+def generate_optimized_versions(filename, max_original_width=500, target_size_kb=80):
     """
     Generate thumbnail and preview versions of uploaded files.
     Convert all image files to JPG format.
+    Also resizes and compresses the original image to save storage space.
     
     Args:
         filename (str): Name of the uploaded file
+        max_original_width (int): Maximum width for the original image (default: 500px)
+        target_size_kb (int): Target file size in kilobytes (default: 80KB)
         
     Returns:
         dict: Dictionary with paths to generated files
@@ -3094,25 +3133,39 @@ def generate_optimized_versions(filename):
     if is_image_file(filename):
         result['is_image'] = True
         try:
-            # Convert original to JPG if it's not already
-            if not filename.lower().endswith('.jpg'):
-                with Image.open(original_path) as img:
-                    if img.mode in ('RGBA', 'LA', 'P'):
-                        background = Image.new('RGB', img.size, (255, 255, 255))
-                        if img.mode == 'P':
-                            img = img.convert('RGBA')
-                        background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                        img = background
-                    elif img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    
-                    # Save as JPG with optimization
-                    img.save(converted_path, 'JPEG', quality=95, optimize=True)
-                    # Remove the original non-JPG file
+            # Convert original to JPG if it's not already and resize/compress it
+            with Image.open(original_path) as img:
+                # Calculate new dimensions to maintain aspect ratio with max width of max_original_width
+                original_width, original_height = img.size
+                if original_width > max_original_width:
+                    scaling_factor = max_original_width / original_width
+                    new_width = max_original_width
+                    new_height = int(original_height * scaling_factor)
+                    # Resize with high quality resampling
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                
+                # Convert to RGB for JPG output
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Save as JPG with compression to target file size
+                # Get optimal quality setting to reach target size
+                quality = get_optimal_image_quality(img, target_size_kb=target_size_kb)
+                img.save(converted_path, 'JPEG', quality=quality, optimize=True)
+                
+                # Remove the original non-JPG file or if it's been resized
+                if not filename.lower().endswith('.jpg') or original_width > max_original_width:
                     try:
                         os.remove(original_path)
                     except Exception as e:
                         print(f"Error removing original file: {str(e)}")
+                        
                 original_path = converted_path  # Use the converted file for thumbnails
             
             # Create thumbnail
@@ -3166,7 +3219,7 @@ def get_thumbnail_info(filename):
     
     if not has_thumbnail or not has_preview:
         try:
-            result = generate_optimized_versions(filename)
+            result = generate_optimized_versions(filename, max_original_width=500, target_size_kb=80)
             has_thumbnail = result['thumbnail'] is not None
             has_preview = result['preview'] is not None
         except Exception as e:
@@ -3362,3 +3415,49 @@ def delete_item_images(filenames):
             stats['errors'] += 1
     
     return stats
+
+def get_optimal_image_quality(img, target_size_kb=80):
+    """
+    Find the optimal JPEG quality setting to achieve a target file size.
+    Uses a binary search approach to efficiently find the best quality.
+    
+    Args:
+        img (PIL.Image): The PIL Image object
+        target_size_kb (int): Target file size in kilobytes
+        
+    Returns:
+        int: Quality setting (1-95)
+    """
+    import io
+    
+    # Initialize search range
+    min_quality = 30  # We don't want to go lower than this
+    max_quality = 95  # No need to go higher than this
+    best_quality = 80  # Default quality
+    best_diff = float('inf')
+    target_size_bytes = target_size_kb * 1024
+    
+    # Binary search for optimal quality
+    for _ in range(5):  # 5 iterations is usually enough
+        quality = (min_quality + max_quality) // 2
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=quality, optimize=True)
+        size = buffer.tell()
+        
+        # Check how close we are to target size
+        diff = abs(size - target_size_bytes)
+        if diff < best_diff:
+            best_diff = diff
+            best_quality = quality
+        
+        # Adjust search range
+        if size > target_size_bytes:
+            max_quality = quality - 1
+        else:
+            min_quality = quality + 1
+            
+        # If we're within 10% of target, that's good enough
+        if abs(size - target_size_bytes) < (target_size_bytes * 0.1):
+            return quality
+    
+    return best_quality

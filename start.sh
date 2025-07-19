@@ -60,7 +60,7 @@ source "$VENV_DIR/bin/activate" || {
 echo "Upgrading pip in virtual environment..."
 if ! pip install --upgrade pip; then
     echo "Warning: Failed to upgrade pip. This might be due to permission issues."
-    echo "To fix permission issues, run: sudo ./fix-permissions.sh"
+    echo "To fix permission issues, run: sudo ./fix-all.sh --fix-permissions"
     echo "Then try running restart.sh again."
 fi
 
@@ -166,7 +166,7 @@ echo "Fixing PyMongo/Bson compatibility issue..."
 pip uninstall -y bson pymongo
 if ! pip install pymongo==4.6.3; then
     echo "Failed to install pymongo. This is likely due to permission issues."
-    echo "To fix permission issues, run: sudo ./fix-permissions.sh"
+    echo "To fix permission issues, run: sudo ./fix-all.sh --fix-permissions"
     echo "Then try running restart.sh again."
     exit 1
 fi
