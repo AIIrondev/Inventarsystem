@@ -10,6 +10,7 @@
 # - Web-Verzeichnisberechtigungen korrigieren
 # - MongoDB-Backup-Verzeichnisse einrichten
 # - Bekannte Konflikte zwischen pymongo und bson beheben
+# - Uploads-Verzeichnisse sowohl in Entwicklungs- als auch in Produktionsumgebungen verwalten
 #
 # Verwendung: sudo ./fix-all.sh [--check-only] [--verbose] [--fix-permissions] [--fix-venv] [--fix-pymongo] [--auto] [--setup-cron]
 
@@ -77,6 +78,13 @@ for arg in "$@"; do
             echo "  --setup-cron      Richtet einen Cron-Job für regelmäßige Prüfungen ein"
             echo "  --email=ADRESSE   Sendet einen Bericht per E-Mail an die angegebene Adresse"
             echo "  --help            Diese Hilfe anzeigen"
+            echo ""
+            echo "Features:"
+            echo "  - Intelligente Diagnose und zielgerichtete Reparatur"
+            echo "  - Automatisches Erstellen und Verknüpfen von Upload-Verzeichnissen"
+            echo "  - Erkennung und Korrektur von Entwicklungs- und Produktionsumgebungen"
+            echo "  - Korrektur von Berechtigungsproblemen und fehlenden Verzeichnissen"
+            echo "  - Behebt Probleme mit fehlenden Buch-Cover-Bildern in der Produktionsumgebung"
             exit 0
             ;;
         *)
@@ -380,6 +388,37 @@ check_services() {
     return $services_status
 }
 
+# Function to check if we are in production environment
+check_production_environment() {
+    local prod_path="/var/Inventarsystem"
+    local in_prod=false
+    
+    if [ -d "$prod_path" ] || [ -L "$prod_path" ]; then
+        in_prod=true
+        log_message "Produktionsumgebung erkannt: $prod_path"
+        
+        # Verify directory structure
+        if [ ! -d "$prod_path/Web" ]; then
+            log_warning "Produktionsumgebung unvollständig: Web-Verzeichnis fehlt"
+            mkdir -p "$prod_path/Web" 2>/dev/null || log_error "Konnte Web-Verzeichnis nicht erstellen"
+        fi
+    else
+        log_verbose "Keine Produktionsumgebung unter $prod_path gefunden"
+    fi
+    
+    # Check if we're installed to /var/www
+    if [ -d "/var/www/Inventarsystem" ] || [ -L "/var/www/Inventarsystem" ]; then
+        in_prod=true
+        log_message "Alternative Produktionsumgebung erkannt: /var/www/Inventarsystem"
+    fi
+    
+    if [ "$in_prod" = true ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
     log_error "Dieses Skript muss als root oder mit sudo ausgeführt werden"
@@ -530,25 +569,32 @@ if [ $PERM_STATUS -ne 0 ] && [ "$FIX_PERMISSIONS" = true ]; then
     touch "$SCRIPT_DIR/logs/Backup_db.log" "$SCRIPT_DIR/logs/daily_update.log" "$SCRIPT_DIR/logs/error.log" "$SCRIPT_DIR/logs/access.log" "$SCRIPT_DIR/logs/permission_fixes.log" "$SCRIPT_DIR/logs/fix_all.log" "$SCRIPT_DIR/logs/scheduler.log" "$SCRIPT_DIR/logs/restore.log" 2>/dev/null
     chmod 666 "$SCRIPT_DIR/logs"/*.log 2>/dev/null
     chown "$ACTUAL_USER:$ACTUAL_GROUP" "$SCRIPT_DIR/logs"/*.log 2>/dev/null
+    
+    # Fix all upload directories in both development and production environments
+    fix_uploads_directories
 
-    # Create and set permissions for Web directories
+    # Fix Web directory permissions and structure
     if [ -d "$SCRIPT_DIR/Web" ]; then
-        log_message "Berechtigungen für Web-Verzeichnisse korrigieren..."
+        log_message "Berechtigungen für Web-Verzeichnis korrigieren..."
         
-        # Create important directories if they don't exist
-        mkdir -p "$SCRIPT_DIR/Web/uploads" "$SCRIPT_DIR/Web/thumbnails" "$SCRIPT_DIR/Web/previews" "$SCRIPT_DIR/Web/QRCodes" 2>/dev/null
-        
-        # Set proper permissions for Web directory
+        # Set base permissions for Web directory
         chmod -R 755 "$SCRIPT_DIR/Web" 2>/dev/null || log_error "Fehler beim Setzen von Berechtigungen für Web-Verzeichnis"
-        
-        # Make upload directories writable
-        chmod -R 777 "$SCRIPT_DIR/Web/uploads" "$SCRIPT_DIR/Web/thumbnails" "$SCRIPT_DIR/Web/previews" "$SCRIPT_DIR/Web/QRCodes" 2>/dev/null || log_error "Fehler beim Setzen von Berechtigungen für Upload-Verzeichnisse"
         
         # Set ownership
         chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$SCRIPT_DIR/Web" 2>/dev/null || log_error "Fehler beim Setzen von Eigentümerrechten für Web-Verzeichnis"
+        
+        # Create and fix all uploads directories both in development and production
+        fix_uploads_directories
+        
         log_success "Web-Verzeichnisberechtigungen korrigiert"
     else
         log_error "Web-Verzeichnis nicht gefunden: $SCRIPT_DIR/Web"
+        mkdir -p "$SCRIPT_DIR/Web" 2>/dev/null && {
+            log_message "Web-Verzeichnis wurde erstellt"
+            chmod 755 "$SCRIPT_DIR/Web" 2>/dev/null
+            chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$SCRIPT_DIR/Web" 2>/dev/null
+            fix_uploads_directories
+        }
     fi
 
     # Create and set permissions for SSL certificates directory

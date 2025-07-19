@@ -370,9 +370,28 @@ def uploaded_file(filename):
         filename (str): Name of the file to serve
         
     Returns:
-        flask.Response: The requested file
+        flask.Response: The requested file or placeholder image if not found
     """
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    try:
+        # Check if file exists
+        if os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        else:
+            # Check production path if development path doesn't exist
+            prod_path = "/var/Inventarsystem/Web/uploads"
+            if os.path.exists(os.path.join(prod_path, filename)):
+                return send_from_directory(prod_path, filename)
+            
+            # Use a placeholder image if file not found
+            placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            if os.path.exists(placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.png')
+            
+            # Default placeholder from static folder
+            return send_from_directory(app.static_folder, 'favicon.ico')
+    except Exception as e:
+        print(f"Error serving file {filename}: {str(e)}")
+        return Response("Image not found", status=404)
 
 
 @app.route('/thumbnails/<filename>')
@@ -384,9 +403,23 @@ def thumbnail_file(filename):
         filename (str): Name of the thumbnail file to serve
         
     Returns:
-        flask.Response: The requested thumbnail file
+        flask.Response: The requested thumbnail file or placeholder image if not found
     """
-    return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
+    try:
+        # Check if file exists
+        if os.path.exists(os.path.join(app.config['THUMBNAIL_FOLDER'], filename)):
+            return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
+        else:
+            # Check production path if development path doesn't exist
+            prod_path = "/var/Inventarsystem/Web/thumbnails"
+            if os.path.exists(os.path.join(prod_path, filename)):
+                return send_from_directory(prod_path, filename)
+            
+            # Use a placeholder image if file not found
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+    except Exception as e:
+        print(f"Error serving thumbnail {filename}: {str(e)}")
+        return Response("Thumbnail not found", status=404)
 
 
 @app.route('/previews/<filename>')
@@ -398,9 +431,23 @@ def preview_file(filename):
         filename (str): Name of the preview file to serve
         
     Returns:
-        flask.Response: The requested preview file
+        flask.Response: The requested preview file or placeholder image if not found
     """
-    return send_from_directory(app.config['PREVIEW_FOLDER'], filename)
+    try:
+        # Check if file exists
+        if os.path.exists(os.path.join(app.config['PREVIEW_FOLDER'], filename)):
+            return send_from_directory(app.config['PREVIEW_FOLDER'], filename)
+        else:
+            # Check production path if development path doesn't exist
+            prod_path = "/var/Inventarsystem/Web/previews"
+            if os.path.exists(os.path.join(prod_path, filename)):
+                return send_from_directory(prod_path, filename)
+            
+            # Use a placeholder image if file not found
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+    except Exception as e:
+        print(f"Error serving preview {filename}: {str(e)}")
+        return Response("Preview not found", status=404)
 
 
 @app.route('/QRCodes/<filename>')
@@ -412,9 +459,23 @@ def qrcode_file(filename):
         filename (str): Name of the QR code file to serve
         
     Returns:
-        flask.Response: The requested QR code file
+        flask.Response: The requested QR code file or placeholder image if not found
     """
-    return send_from_directory(app.config['QR_CODE_FOLDER'], filename)
+    try:
+        # Check if file exists
+        if os.path.exists(os.path.join(app.config['QR_CODE_FOLDER'], filename)):
+            return send_from_directory(app.config['QR_CODE_FOLDER'], filename)
+        else:
+            # Check production path if development path doesn't exist
+            prod_path = "/var/Inventarsystem/Web/QRCodes"
+            if os.path.exists(os.path.join(prod_path, filename)):
+                return send_from_directory(prod_path, filename)
+            
+            # Use a placeholder image if file not found
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+    except Exception as e:
+        print(f"Error serving QR code {filename}: {str(e)}")
+        return Response("QR code not found", status=404)
 
 
 @app.route('/<path:filename>')
@@ -427,24 +488,49 @@ def catch_all_files(filename):
         filename (str): Name of the file to serve
         
     Returns:
-        flask.Response: The requested file or 404 if not found
+        flask.Response: The requested file or placeholder image if not found
     """
-    # Check if the file exists in any of our directories
-    possible_dirs = [
-        app.config['UPLOAD_FOLDER'],
-        app.config['THUMBNAIL_FOLDER'],
-        app.config['PREVIEW_FOLDER'],
-        app.config['QR_CODE_FOLDER'],
-        os.path.join(BASE_DIR, 'static')
-    ]
-    
-    for directory in possible_dirs:
-        file_path = os.path.join(directory, filename)
-        if os.path.isfile(file_path):
-            return send_from_directory(directory, os.path.basename(filename))
-    
-    # If we get here, the file wasn't found
-    return Response(f"File {filename} not found", status=404)
+    try:
+        # Check if the file exists in any of our directories
+        possible_dirs = [
+            app.config['UPLOAD_FOLDER'],
+            app.config['THUMBNAIL_FOLDER'],
+            app.config['PREVIEW_FOLDER'],
+            app.config['QR_CODE_FOLDER'],
+            os.path.join(BASE_DIR, 'static')
+        ]
+        
+        # Check development paths first
+        for directory in possible_dirs:
+            file_path = os.path.join(directory, filename)
+            if os.path.isfile(file_path):
+                return send_from_directory(directory, os.path.basename(filename))
+        
+        # Check production paths if available
+        if os.path.exists("/var/Inventarsystem/Web"):
+            prod_dirs = [
+                "/var/Inventarsystem/Web/uploads",
+                "/var/Inventarsystem/Web/thumbnails",
+                "/var/Inventarsystem/Web/previews",
+                "/var/Inventarsystem/Web/QRCodes",
+                "/var/Inventarsystem/Web/static"
+            ]
+            
+            for directory in prod_dirs:
+                file_path = os.path.join(directory, filename)
+                if os.path.isfile(file_path):
+                    return send_from_directory(directory, os.path.basename(filename))
+        
+        # Check if this looks like an image request
+        if any(filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'svg']):
+            # Use a placeholder image if file not found
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+        
+        # If we get here, the file wasn't found
+        return Response(f"File {filename} not found", status=404)
+    except Exception as e:
+        print(f"Error in catch-all route for {filename}: {str(e)}")
+        return Response(f"Error serving file: {str(e)}", status=500)
 
 
 @app.route('/test_connection', methods=['GET'])
