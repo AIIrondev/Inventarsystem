@@ -53,6 +53,8 @@ import qrcode
 from qrcode.constants import ERROR_CORRECT_L
 import threading
 import sys
+import shutil
+import uuid
 from PIL import Image, ImageOps
 import mimetypes
 import subprocess
@@ -1077,7 +1079,6 @@ def upload_item():
                     _, ext_part = os.path.splitext(secure_filename(image.filename))
                     
                     # Generate a completely unique filename using UUID
-                    import uuid
                     unique_id = str(uuid.uuid4())
                     timestamp = time.strftime("%Y%m%d%H%M%S")
                     
@@ -1155,18 +1156,44 @@ def upload_item():
 
     # Handle duplicate images if duplicating
     if duplicate_images:
-        # For mobile browsers, we need to verify the duplicate images exist
-        if is_mobile:
-            verified_duplicates = []
-            for dup_img in duplicate_images:
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
-                if os.path.exists(full_path) and os.path.isfile(full_path):
-                    verified_duplicates.append(dup_img)
-                else:
-                    app.logger.warning(f"Duplicate image not found: {dup_img}")
-            image_filenames.extend(verified_duplicates)
-        else:
-            image_filenames.extend(duplicate_images)
+        # For mobile browsers, we need to verify the duplicate images exist first
+        verified_duplicates = []
+        for dup_img in duplicate_images:
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
+            if os.path.exists(full_path) and os.path.isfile(full_path):
+                verified_duplicates.append(dup_img)
+            else:
+                app.logger.warning(f"Duplicate image not found: {dup_img}")
+        
+        # Create copies of verified images with new unique filenames
+        duplicate_image_copies = []
+        for dup_img in verified_duplicates:
+            try:
+                # Generate a new unique filename
+                unique_id = str(uuid.uuid4())
+                timestamp = time.strftime("%Y%m%d%H%M%S")
+                _, ext_part = os.path.splitext(dup_img)
+                new_filename = f"{unique_id}_{timestamp}{ext_part}"
+                
+                # Copy the image file to the new name
+                src_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
+                dst_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+                shutil.copy2(src_path, dst_path)
+                
+                # Generate optimized versions (thumbnails and previews) for the new copy
+                generate_optimized_versions(new_filename, max_original_width=500, target_size_kb=80)
+                
+                # Add the new filename to our list
+                duplicate_image_copies.append(new_filename)
+                processed_count += 1
+                
+                app.logger.info(f"Created copy of image {dup_img} as {new_filename}")
+            except Exception as e:
+                app.logger.error(f"Error creating copy of image {dup_img}: {str(e)}")
+                error_count += 1
+        
+        # Add the new image copies to our list of filenames
+        image_filenames.extend(duplicate_image_copies)
 
     # Handle book cover image if provided
     if book_cover_image:
