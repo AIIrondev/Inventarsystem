@@ -206,41 +206,55 @@
     
     // Function to remove an existing image
     function removeExistingImage(imageName, button) {
-        // Remove the preview element
-        const previewItem = button.closest('.image-preview-item');
-        if (previewItem) {
-            previewItem.remove();
-        }
-        
-        // Find and remove the corresponding hidden input
-        const form = document.getElementById('edit-item-form');
-        if (form) {
-            const hiddenInputs = form.querySelectorAll('input[name="existing_images"]');
-            hiddenInputs.forEach(input => {
-                if (input.value === imageName) {
-                    input.remove();
-                }
-            });
-        }
-        
-        // Remove the hidden input
-        const hiddenInputs = document.querySelectorAll('input[name="existing_images"]');
-        hiddenInputs.forEach(input => {
-            if (input.value === imageName) {
-                input.remove();
+        try {
+            // First, determine context - are we in edit mode or main view?
+            const inEditMode = !!document.getElementById('edit-item-form');
+            
+            // Always remove the preview element (works in both contexts)
+            const previewItem = button.closest('.image-preview-item');
+            if (previewItem) {
+                previewItem.remove();
             }
-        });
-        
-        // Add to removed images
-        const removedInput = document.createElement('input');
-        removedInput.type = 'hidden';
-        removedInput.name = 'removed_images';
-        removedInput.value = imageName;
-        document.getElementById('edit-form').appendChild(removedInput);
+            
+            // If we're in edit mode, handle form inputs
+            if (inEditMode) {
+                // Find and remove the corresponding hidden input in the edit form
+                const editForm = document.getElementById('edit-item-form');
+                
+                if (editForm) {
+                    // Remove from existing images
+                    const existingInputs = editForm.querySelectorAll('input[name="existing_images"]');
+                    existingInputs.forEach(input => {
+                        if (input.value === imageName) {
+                            input.remove();
+                        }
+                    });
+                    
+                    // Add to removed images
+                    const removedInput = document.createElement('input');
+                    removedInput.type = 'hidden';
+                    removedInput.name = 'removed_images';
+                    removedInput.value = imageName;
+                    editForm.appendChild(removedInput);
+                }
+            } else {
+                // In main view, we may need different logic
+                console.log(`Image ${imageName} removed from display in main view`);
+                // Add any main view specific handling here
+            }
+        } catch (error) {
+            console.error(`Error in removeExistingImage: ${error.message}`);
+        }
     }
     
     // Validate file types for image uploads
     document.addEventListener('DOMContentLoaded', function() {
+        // Check if we're in the edit item context
+        if (!document.getElementById('edit-item-form')) {
+            console.log('Edit item form not found, skipping edit item functions initialization');
+            return; // Exit early if we're not in the edit item context
+        }
+        
         const imageInput = document.getElementById('edit-new-images');
         const previewContainer = document.getElementById('edit-image-preview-container');
         

@@ -48,6 +48,7 @@ import json
 import datetime
 import time
 import traceback
+import re
 import io
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
@@ -384,9 +385,13 @@ def uploaded_file(filename):
             if os.path.exists(os.path.join(prod_path, filename)):
                 return send_from_directory(prod_path, filename)
             
-            # Use a placeholder image if file not found
-            placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
-            if os.path.exists(placeholder_path):
+            # Use a placeholder image if file not found - first try SVG, then PNG
+            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+            if os.path.exists(svg_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            elif os.path.exists(png_placeholder_path):
                 return send_from_directory(app.static_folder, 'img/no-image.png')
             
             # Default placeholder from static folder
@@ -417,8 +422,16 @@ def thumbnail_file(filename):
             if os.path.exists(os.path.join(prod_path, filename)):
                 return send_from_directory(prod_path, filename)
             
-            # Use a placeholder image if file not found
-            return send_from_directory(app.static_folder, 'img/no-image.svg')
+            # Use a placeholder image if file not found - first try SVG, then PNG
+            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+            if os.path.exists(svg_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            elif os.path.exists(png_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.png')
+            else:
+                return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving thumbnail {filename}: {str(e)}")
         return Response("Thumbnail not found", status=404)
@@ -445,8 +458,16 @@ def preview_file(filename):
             if os.path.exists(os.path.join(prod_path, filename)):
                 return send_from_directory(prod_path, filename)
             
-            # Use a placeholder image if file not found
-            return send_from_directory(app.static_folder, 'img/no-image.svg')
+            # Use a placeholder image if file not found - first try SVG, then PNG
+            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+            if os.path.exists(svg_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            elif os.path.exists(png_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.png')
+            else:
+                return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving preview {filename}: {str(e)}")
         return Response("Preview not found", status=404)
@@ -473,8 +494,16 @@ def qrcode_file(filename):
             if os.path.exists(os.path.join(prod_path, filename)):
                 return send_from_directory(prod_path, filename)
             
-            # Use a placeholder image if file not found
-            return send_from_directory(app.static_folder, 'img/no-image.svg')
+            # Use a placeholder image if file not found - first try SVG, then PNG
+            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+            if os.path.exists(svg_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            elif os.path.exists(png_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.png')
+            else:
+                return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving QR code {filename}: {str(e)}")
         return Response("QR code not found", status=404)
@@ -525,8 +554,16 @@ def catch_all_files(filename):
         
         # Check if this looks like an image request
         if any(filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'gif', 'svg']):
-            # Use a placeholder image if file not found
-            return send_from_directory(app.static_folder, 'img/no-image.svg')
+            # Use a placeholder image if file not found - first try SVG, then PNG
+            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+            if os.path.exists(svg_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.svg')
+            elif os.path.exists(png_placeholder_path):
+                return send_from_directory(app.static_folder, 'img/no-image.png')
+            else:
+                return send_from_directory(app.static_folder, 'favicon.ico')
         
         # If we get here, the file wasn't found
         return Response(f"File {filename} not found", status=404)
@@ -1177,46 +1214,173 @@ def upload_item():
         verified_duplicates = []
         for dup_img in duplicate_images:
             # Try looking in different paths
-            possible_paths = [
-                os.path.join(app.config['UPLOAD_FOLDER'], dup_img),  # Development path
-                os.path.join('/var/Inventarsystem/Web/uploads', dup_img)  # Production path
+            # Add all possible paths where images might be stored
+            dev_upload_path = app.config['UPLOAD_FOLDER']
+            prod_upload_path = '/var/Inventarsystem/Web/uploads'
+            
+            # Also look for image variations with suffixes that might be in the path
+            name_part, ext_part = os.path.splitext(dup_img)
+            possible_filenames = [
+                dup_img,
+                f"{name_part}.jpg",  # In case it was converted to JPG
+                f"{name_part}.png",  # In case it was saved as PNG
             ]
             
+            possible_paths = []
+            for filename in possible_filenames:
+                possible_paths.extend([
+                    os.path.join(dev_upload_path, filename),  # Development upload path
+                    os.path.join(prod_upload_path, filename),  # Production upload path
+                ])
+            
+            app.logger.info(f"Looking for duplicate image {dup_img} in paths: {possible_paths}")
+            
+            # Try to find the original image
             found = False
             for path in possible_paths:
                 if os.path.exists(path) and os.path.isfile(path):
                     verified_duplicates.append((dup_img, path))
+                    app.logger.info(f"Found duplicate image at: {path}")
                     found = True
                     break
             
             if not found:
                 app.logger.warning(f"Duplicate image not found: {dup_img}")
+                # Try to find any image with a similar filename (removing size or resolution parts)
+                # This handles cases where the filename may have variations like "_800" suffix
+                base_name = os.path.splitext(dup_img)[0]
+                base_name = re.sub(r'_\d+$', '', base_name)  # Remove trailing _NUMBER
+                
+                if len(base_name) > 5:  # Only if we have a meaningful base name
+                    app.logger.info(f"Trying to find similar images with base name: {base_name}")
+                    
+                    # Search in development directory
+                    dev_files = os.listdir(app.config['UPLOAD_FOLDER']) if os.path.exists(app.config['UPLOAD_FOLDER']) else []
+                    # Search in production directory
+                    prod_path = "/var/Inventarsystem/Web/uploads"
+                    prod_files = os.listdir(prod_path) if os.path.exists(prod_path) else []
+                    
+                    # Combine all files
+                    all_files = dev_files + prod_files
+                    
+                    # Find similar files
+                    for f in all_files:
+                        if base_name in f:
+                            img_path = os.path.join(app.config['UPLOAD_FOLDER'], f)
+                            if not os.path.exists(img_path):
+                                img_path = os.path.join(prod_path, f)
+                            
+                            if os.path.exists(img_path) and os.path.isfile(img_path):
+                                app.logger.info(f"Found similar image: {f} at {img_path}")
+                                verified_duplicates.append((f, img_path))
+                                found = True
+                                break
+                
+                # If we still can't find anything, just use a placeholder
+                if not found:
+                    app.logger.warning(f"Could not find any similar image for: {dup_img}, will use placeholder")
         
         # Create copies of verified images with new unique filenames
         duplicate_image_copies = []
-        for dup_img, src_path in verified_duplicates:
+        
+        # Create a placeholder name for each image that wasn't found
+        placeholder_used = False
+        original_count = len(duplicate_images)
+        
+        # Process each original image - either use found file or placeholder
+        for i, dup_img in enumerate(duplicate_images):
+            # Look for corresponding verified image
+            found_image = None
+            for verified_img, src_path in verified_duplicates:
+                if verified_img == dup_img:
+                    found_image = (verified_img, src_path)
+                    break
+            
             try:
-                # Generate a new unique filename
+                # Generate a new unique filename (same for real or placeholder)
                 unique_id = str(uuid.uuid4())
                 timestamp = time.strftime("%Y%m%d%H%M%S")
-                _, ext_part = os.path.splitext(dup_img)
+                _, ext_part = os.path.splitext(dup_img) if dup_img else '.jpg'
                 new_filename = f"{unique_id}_{timestamp}{ext_part}"
                 
-                # Copy the image file to the new name
-                dst_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-                shutil.copy2(src_path, dst_path)
+                # If we found the image, copy it
+                if found_image:
+                    dup_img, src_path = found_image
+                    app.logger.info(f"Copying image {i+1}/{original_count} from {src_path} to {new_filename}")
+                    
+                    # Copy the image file to the new name
+                    dst_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+                    
+                    # Make sure the target directory exists
+                    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                    
+                    # Copy the file
+                    shutil.copy2(src_path, dst_path)
+                    
+                    # Verify the file was copied successfully
+                    if os.path.exists(dst_path):
+                        app.logger.info(f"Successfully copied image to {dst_path}")
+                    else:
+                        app.logger.error(f"Failed to copy image to {dst_path}")
+                        # If copy fails, use placeholder
+                        raise Exception("Copy failed - will use placeholder")
+                    
+                    # Generate optimized versions (thumbnails and previews) for the new copy
+                    try:
+                        result = generate_optimized_versions(new_filename, max_original_width=500, target_size_kb=80)
+                        app.logger.info(f"Generated optimized versions: {result}")
+                    except Exception as e:
+                        app.logger.error(f"Error generating optimized versions for {new_filename}: {e}")
+                        # If optimization fails, at least keep the original file
+                        result = {'original': new_filename}
+                        traceback.print_exc()
                 
-                # Generate optimized versions (thumbnails and previews) for the new copy
-                generate_optimized_versions(new_filename, max_original_width=500, target_size_kb=80)
+                # If we didn't find the image, use a placeholder
+                else:
+                    app.logger.warning(f"Using placeholder for image {i+1}/{original_count} (original: {dup_img})")
+                    
+                    # Copy placeholder to uploads directory with the new filename
+                    placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+                    if not os.path.exists(placeholder_path):
+                        placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+                    
+                    if os.path.exists(placeholder_path):
+                        dst_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+                        shutil.copy2(placeholder_path, dst_path)
+                        app.logger.info(f"Copied placeholder image to {dst_path}")
+                        placeholder_used = True
+                        
+                        # Skip the optimization step for placeholder images
+                        # Just add directly to the list of image filenames
+                        continue
+                    else:
+                        app.logger.error(f"Placeholder image not found at {placeholder_path}")
+                        # Create a simple placeholder file
+                        with open(os.path.join(app.config['UPLOAD_FOLDER'], new_filename), 'w') as f:
+                            f.write("Placeholder")
+                        placeholder_used = True
+                        # Skip the optimization step
+                        continue
                 
-                # Add the new filename to our list
+                # Add the new filename to our list (either copied or placeholder)
                 duplicate_image_copies.append(new_filename)
                 processed_count += 1
                 
-                app.logger.info(f"Created copy of image {dup_img} as {new_filename}")
+                app.logger.info(f"Processed image {i+1}/{original_count}: {new_filename}")
             except Exception as e:
-                app.logger.error(f"Error creating copy of image {dup_img}: {str(e)}")
+                app.logger.error(f"Error processing image {i+1}/{original_count} ({dup_img}): {str(e)}")
+                traceback.print_exc()
                 error_count += 1
+        
+        # Log placeholder usage
+        if placeholder_used:
+            app.logger.warning(f"Used placeholders for some missing images during duplication")
+        
+        # Log if no images were processed
+        if not duplicate_image_copies:
+            app.logger.warning(f"No duplicate images were processed")
+            if duplicate_images:
+                app.logger.warning(f"Original had {len(duplicate_images)} images, but none were copied")
         
         # Add the new image copies to our list of filenames
         image_filenames.extend(duplicate_image_copies)
@@ -2701,6 +2865,11 @@ def my_borrowed_items():
         'Start': {'$gt': current_time}
     }))
     
+    # DEBUG: Log the number of planned appointments found
+    app.logger.info(f"Found {len(planned_ausleihungen)} planned appointments for user {username}")
+    for appt in planned_ausleihungen:
+        app.logger.info(f"Planned appointment: ID={str(appt['_id'])}, Item={str(appt.get('Item'))}, Start={appt.get('Start')}")
+    
     # Process items
     active_items = []
     planned_items = []
@@ -2771,6 +2940,12 @@ def my_borrowed_items():
             planned_items.append(item_obj)
     
     client.close()
+    
+    # DEBUG: Log what we're passing to the template
+    app.logger.info(f"Passing {len(active_items)} active items and {len(planned_items)} planned items to template")
+    if planned_items:
+        for i, item in enumerate(planned_items):
+            app.logger.info(f"Planned item {i+1}: {item['Name']}, Appointment ID: {item['AppointmentData']['id']}")
     
     return render_template(
         'my_borrowed_items.html',
@@ -3121,7 +3296,7 @@ def is_image_file(filename):
     Returns:
         bool: True if the file is an image, False otherwise
     """
-    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.svg'}
     extension = filename.lower()[filename.rfind('.'):]
     return extension in image_extensions
 
@@ -3273,6 +3448,21 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     if is_image_file(filename):
         result['is_image'] = True
         try:
+            # Check if the file exists first
+            if not os.path.exists(original_path):
+                app.logger.error(f"Image file not found: {original_path}")
+                # If this is a placeholder SVG, just copy it to thumbnail and preview
+                if filename.lower().endswith('.svg'):
+                    app.logger.info(f"Using SVG file directly as thumbnail and preview: {filename}")
+                    shutil.copy2(original_path, thumbnail_path)
+                    shutil.copy2(original_path, preview_path)
+                    result['thumbnail'] = thumbnail_filename
+                    result['preview'] = preview_filename
+                    return result
+                
+                # For other missing files, return early
+                return result
+            
             # Convert original to JPG if it's not already and resize/compress it
             with Image.open(original_path) as img:
                 # Calculate new dimensions to maintain aspect ratio with max width of max_original_width
@@ -3304,7 +3494,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                     try:
                         os.remove(original_path)
                     except Exception as e:
-                        print(f"Error removing original file: {str(e)}")
+                        app.logger.warning(f"Error removing original file: {str(e)}")
                         
                 original_path = converted_path  # Use the converted file for thumbnails
             
@@ -3317,7 +3507,20 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                 result['preview'] = preview_filename
                 
         except Exception as e:
-            print(f"Error converting image to JPG: {str(e)}")
+            app.logger.error(f"Error converting image to JPG: {str(e)}")
+            
+            # If conversion fails but file exists, try to copy it directly as thumbnail and preview
+            if os.path.exists(original_path):
+                try:
+                    shutil.copy2(original_path, thumbnail_path)
+                    shutil.copy2(original_path, preview_path)
+                    result['thumbnail'] = thumbnail_filename
+                    result['preview'] = preview_filename
+                    app.logger.info(f"Used original file as thumbnail and preview due to conversion error: {filename}")
+                except Exception as copy_err:
+                    app.logger.error(f"Failed to copy original as thumbnail/preview: {str(copy_err)}")
+            
+            traceback.print_exc()
             return result
             
     elif is_video_file(filename):

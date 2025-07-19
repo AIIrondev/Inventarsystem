@@ -364,7 +364,100 @@ check_venv_health() {
     return 0
 }
 
-# Function to check if systemd services are running
+# Function to create and fix upload directories in all environments
+fix_uploads_directories() {
+    log_message "Erstelle und korrigiere Upload-Verzeichnisse in allen Umgebungen..."
+    
+    # Development environment directories
+    local DEV_DIRS=(
+        "$SCRIPT_DIR/Web/uploads"
+        "$SCRIPT_DIR/Web/thumbnails"
+        "$SCRIPT_DIR/Web/previews"
+        "$SCRIPT_DIR/Web/QRCodes"
+    )
+    
+    # Production environment directories
+    local PROD_DIRS=(
+        "/var/Inventarsystem/Web/uploads"
+        "/var/Inventarsystem/Web/thumbnails"
+        "/var/Inventarsystem/Web/previews"
+        "/var/Inventarsystem/Web/QRCodes"
+    )
+    
+    # Create and set permissions for development directories
+    for dir in "${DEV_DIRS[@]}"; do
+        if [ ! -d "$dir" ]; then
+            log_message "Erstelle Verzeichnis: $dir"
+            mkdir -p "$dir" 2>/dev/null || log_error "Fehler beim Erstellen von $dir"
+        fi
+        
+        log_message "Setze Berechtigungen für $dir"
+        chmod -R 777 "$dir" 2>/dev/null || log_error "Fehler beim Setzen von Berechtigungen für $dir"
+        chown -R "$ACTUAL_USER:$ACTUAL_GROUP" "$dir" 2>/dev/null || log_error "Fehler beim Setzen von Eigentümerrechten für $dir"
+    done
+    
+    # Check if we are in production environment
+    if [ -d "/var/Inventarsystem" ] || [ -L "/var/Inventarsystem" ]; then
+        # Create and set permissions for production directories
+        for dir in "${PROD_DIRS[@]}"; do
+            if [ ! -d "$dir" ]; then
+                log_message "Erstelle Produktions-Verzeichnis: $dir"
+                mkdir -p "$dir" 2>/dev/null || log_error "Fehler beim Erstellen von $dir"
+            fi
+            
+            log_message "Setze Berechtigungen für $dir"
+            chmod -R 777 "$dir" 2>/dev/null || log_error "Fehler beim Setzen von Berechtigungen für $dir"
+            
+            # In production, use www-data as owner
+            chown -R www-data:www-data "$dir" 2>/dev/null || log_error "Fehler beim Setzen von Produktions-Eigentümerrechten für $dir"
+        done
+        
+        # Create symlinks if needed - for example if the app is looking in one path but files are in another
+        # This ensures that whether the app looks in dev or prod paths, it will find the files
+        if [ ! -L "/var/Inventarsystem/Web/uploads" ] && [ -d "$SCRIPT_DIR/Web/uploads" ]; then
+            # If production directory is empty but development has files, create symlink
+            if [ -z "$(ls -A "/var/Inventarsystem/Web/uploads" 2>/dev/null)" ] && [ -n "$(ls -A "$SCRIPT_DIR/Web/uploads" 2>/dev/null)" ]; then
+                log_message "Produktions-Upload-Verzeichnis ist leer, erstelle Symlink zu Entwicklungsverzeichnis"
+                rm -rf "/var/Inventarsystem/Web/uploads" 2>/dev/null
+                ln -sf "$SCRIPT_DIR/Web/uploads" "/var/Inventarsystem/Web/uploads" 2>/dev/null || log_error "Fehler beim Erstellen des Symlinks für uploads"
+            fi
+        fi
+        
+        # Ensure the application can find images in either location
+        log_message "Überprüfe Dateiübereinstimmung zwischen Entwicklungs- und Produktionsumgebung"
+        for env_dir in uploads thumbnails previews QRCodes; do
+            dev_dir="$SCRIPT_DIR/Web/$env_dir"
+            prod_dir="/var/Inventarsystem/Web/$env_dir"
+            
+            # If both directories exist and are not symlinks to each other
+            if [ -d "$dev_dir" ] && [ -d "$prod_dir" ] && [ ! -L "$prod_dir" ]; then
+                # Check for missing files in production that exist in development
+                for file in $(find "$dev_dir" -type f -name "*" 2>/dev/null); do
+                    filename=$(basename "$file")
+                    if [ ! -f "$prod_dir/$filename" ]; then
+                        log_message "Kopiere fehlende Datei in die Produktionsumgebung: $filename"
+                        cp -f "$file" "$prod_dir/" 2>/dev/null || log_error "Fehler beim Kopieren von $filename nach $prod_dir"
+                        chmod 666 "$prod_dir/$filename" 2>/dev/null
+                    fi
+                done
+                
+                # Check for missing files in development that exist in production
+                for file in $(find "$prod_dir" -type f -name "*" 2>/dev/null); do
+                    filename=$(basename "$file")
+                    if [ ! -f "$dev_dir/$filename" ]; then
+                        log_message "Kopiere fehlende Datei in die Entwicklungsumgebung: $filename"
+                        cp -f "$file" "$dev_dir/" 2>/dev/null || log_error "Fehler beim Kopieren von $filename nach $dev_dir"
+                        chmod 666 "$dev_dir/$filename" 2>/dev/null
+                    fi
+                done
+            fi
+        done
+    fi
+    
+    log_success "Upload-Verzeichnisse wurden erstellt und Berechtigungen gesetzt"
+}
+
+# Function to check if system services are running
 check_services() {
     if ! command -v systemctl >/dev/null 2>&1; then
         log_verbose "systemctl nicht verfügbar"
