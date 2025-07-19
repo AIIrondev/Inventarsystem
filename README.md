@@ -2,7 +2,7 @@
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
-**Aktuelle Version: 2.5.20**
+**Aktuelle Version: 2.5.18**
 
 Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen, zu reservieren und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung, Buchungskalender und eine filterbasierte Artikelsuche.
 
@@ -31,18 +31,14 @@ Das Inventarsystem bietet folgende Wartungsskripte:
 - Sicheres Bildspeichersystem mit UUID-basierten, einmaligen Dateinamen
 
 ### Buchungssystem
-- Terminkalender für Reservierungen
-- Farbcodierte Anzeige (aktuell, geplant, abgeschlossen)
 - Konfliktprüfung bei Buchungen
 - Automatische Aktivierung und Beendigung von Buchungen
 
-### QR-Code-Funktionalität
-- Automatische Generierung für jeden Artikel
-- Scannen mit eingebautem QR-Scanner
-- Schnellzugriff auf Artikeldetails
+### Bar-Code-Scanner
+- Eingebauter Scanner für Artikel Code
 
 ### Filterfunktionen
-- Zweistufiges Filtersystem (Kategorie 1 und 2)
+- Dreistufiges Filtersystem (Kategorie 1, 2 und 3)
 - Kombinierte Filter für präzise Ergebnisse
 
 ### Administratorwerkzeuge

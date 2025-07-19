@@ -1,16 +1,37 @@
 #!/bin/bash
+#
+# Inventarsystem Installation Script
+# This script installs all required dependencies and sets up the Inventarsystem
+#
 
+echo "========================================================"
+echo "          STARTING INVENTARSYSTEM INSTALLATION          "
+echo "========================================================"
+
+# Install required packages
+echo "Installing required packages..."
 sudo apt-get update
-sudo apt-get install -y curl wget git
+sudo apt-get install -y curl wget git python3 python3-pip nginx mongodb
+
+# Ensure MongoDB is running
+echo "Setting up MongoDB..."
+sudo systemctl enable mongodb
+sudo systemctl start mongodb
+sleep 2
+mongod --version || {
+    echo "Warning: MongoDB may not be installed correctly."
+    echo "You may need to install MongoDB manually following the official documentation."
+    echo "Visit: https://docs.mongodb.com/manual/installation/"
+}
 
 echo "Installing Inventarsystem..."
 # Clone the repository to /var
-git clone https://github.com/AIIrondev/Inventarsystem.git /var/Inventarsystem || {
+sudo git clone https://github.com/AIIrondev/Inventarsystem.git /var/Inventarsystem || {
     echo "Failed to clone repository to /var/Inventarsystem. Exiting."
     exit 1
 }
 
-REPO_DIR = "$(pwd)"
+REPO_DIR="/var/Inventarsystem"
 
 cd $REPO_DIR
 # Check if the start.sh script exists
@@ -19,34 +40,61 @@ if [ ! -f "./start.sh" ]; then
     exit 1
 fi
 
-# Make the script executable
-chmod +x ./start.sh
+# Make all scripts executable
+echo "Setting execute permissions on scripts..."
+sudo chmod +x ./start.sh
+sudo chmod +x ./fix-all.sh
+sudo chmod +x ./update.sh
+sudo chmod +x ./restart.sh
+sudo chmod +x ./run-backup.sh 2>/dev/null || echo "Some scripts not found, continuing..."
 
- "========================================================"
+# Install Python dependencies
+echo "Installing Python dependencies..."
+sudo pip3 install -r requirements.txt
+sudo pip3 install -r Web/requirements.txt 2>/dev/null || echo "Web/requirements.txt not found"
+
+echo "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
 echo "========================================================"
 
+# Run the fix-all script to set up permissions and directories
+echo "Setting up directories and permissions..."
 cd $REPO_DIR
-# Run the script
-# Ask the user if they want to run the script now
-echo "Running the script now..."
-./start.sh
-if [ $? -ne 0 ]; then
-    echo "Failed to run the script. Please check the logs for more details."
+sudo ./fix-all.sh || {
+    echo "Failed to run fix-all.sh. Please check the logs for more details."
     exit 1
-fi
-echo "Script executed successfully!"
+}
 
 echo "========================================================"
-echo "                   AUTOSTART INSTALLATION                   "
+echo "              STARTING APPLICATION                      "
 echo "========================================================"
 
-./update.sh --restart-server
-if [ $? -ne 0 ]; then
+# Run the main startup script
+echo "Starting Inventarsystem..."
+sudo ./start.sh || {
+    echo "Failed to run start.sh. Please check the logs for more details."
+    exit 1
+}
+
+echo "Application started successfully!"
+
+echo "========================================================"
+echo "              SETTING UP AUTOSTART                      "
+echo "========================================================"
+
+# Set up autostart using the update script with restart-server flag
+echo "Configuring autostart..."
+cd $REPO_DIR
+sudo ./update.sh --restart-server || {
     echo "Failed to set up autostart. Please check the logs for more details."
     exit 1
-fi
+}
+
 echo "Autostart setup successfully!"
 echo "========================================================"
-echo "              AUTOSTART INSTALLATION COMPLETED          "
+echo "          INVENTARSYSTEM INSTALLATION COMPLETE          "
 echo "========================================================"
+echo ""
+echo "The system is now installed and running at: http://localhost:8080"
+echo "Default login credentials can be found in README.md"
+echo ""
