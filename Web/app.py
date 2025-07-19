@@ -1390,7 +1390,20 @@ def upload_item():
         # Verify the book cover image exists
         full_path = os.path.join(app.config['UPLOAD_FOLDER'], book_cover_image)
         if os.path.exists(full_path) and os.path.isfile(full_path):
-            image_filenames.append(book_cover_image)
+            # Create a unique filename for the book cover
+            unique_id = str(uuid.uuid4())
+            timestamp = time.strftime("%Y%m%d%H%M%S")
+            _, ext_part = os.path.splitext(book_cover_image)
+            
+            new_filename = f"{unique_id}_{timestamp}_book_cover{ext_part}"
+            new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            
+            # Copy the file to the new unique name
+            shutil.copy2(full_path, new_path)
+            
+            # Use the new filename instead
+            image_filenames.append(new_filename)
+            app.logger.info(f"Copied book cover from {book_cover_image} to {new_filename}")
         else:
             app.logger.warning(f"Book cover image not found: {book_cover_image}")
     
@@ -1658,7 +1671,16 @@ def edit_item(id):
         if image and image.filename:
             is_allowed, error_message = allowed_file(image.filename)
             if is_allowed:
-                filename = secure_filename(image.filename)
+                # Get the file extension
+                _, ext_part = os.path.splitext(secure_filename(image.filename))
+                
+                # Generate a completely unique filename using UUID
+                unique_id = str(uuid.uuid4())
+                timestamp = time.strftime("%Y%m%d%H%M%S")
+                
+                # New filename format with UUID to ensure uniqueness
+                filename = f"{unique_id}_{timestamp}{ext_part}"
+                
                 image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 images.append(filename)
             else:
@@ -1973,9 +1995,13 @@ def create_qr_code(id):
     
     img = qr.make_image(fill_color="black", back_color="white")
     
-    # Create a safe filename using a combination of item name and id
+    # Create a unique filename using UUID
+    unique_id = str(uuid.uuid4())
+    timestamp = time.strftime("%Y%m%d%H%M%S")
+    
+    # Still include the original name for readability but ensure uniqueness with UUID
     safe_name = secure_filename(item['Name'])
-    filename = f"{safe_name}_{id}.png"
+    filename = f"{safe_name}_{unique_id}_{timestamp}.png"
     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
 
     
