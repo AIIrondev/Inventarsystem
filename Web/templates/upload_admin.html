@@ -39,6 +39,21 @@
     var serverDuplicateData = null;
     const dataElement = document.getElementById('server-duplicate-data');
     if (dataElement) {
+        // Safely parse JSON arrays with error handling
+        function safeJsonParse(jsonStr, defaultValue = []) {
+            try {
+                if (!jsonStr) return defaultValue;
+                return JSON.parse(jsonStr);
+            } catch (e) {
+                console.error("Error parsing JSON:", e, "Value was:", jsonStr);
+                return defaultValue;
+            }
+        }
+        
+        // Get images data and log it for debugging
+        const imagesData = dataElement.getAttribute('data-images') || "[]";
+        console.log("Raw images data attribute:", imagesData);
+        
         serverDuplicateData = {
             name: dataElement.getAttribute('data-name') || "",
             description: dataElement.getAttribute('data-description') || "",
@@ -46,10 +61,10 @@
             room: dataElement.getAttribute('data-room') || "",
             year: dataElement.getAttribute('data-year') || "",
             cost: dataElement.getAttribute('data-cost') || "",
-            images: JSON.parse(dataElement.getAttribute('data-images') || "[]"),
-            filter1: JSON.parse(dataElement.getAttribute('data-filter1') || "[]"),
-            filter2: JSON.parse(dataElement.getAttribute('data-filter2') || "[]"),
-            filter3: JSON.parse(dataElement.getAttribute('data-filter3') || "[]"),
+            images: safeJsonParse(imagesData),
+            filter1: safeJsonParse(dataElement.getAttribute('data-filter1')),
+            filter2: safeJsonParse(dataElement.getAttribute('data-filter2')),
+            filter3: safeJsonParse(dataElement.getAttribute('data-filter3')),
             original_id: dataElement.getAttribute('data-original-id') || ""
         };
         console.log("Server-provided duplicate data:", serverDuplicateData);
@@ -1398,8 +1413,22 @@
     
     // First check if serverDuplicateData is defined by the script above
     if (typeof serverDuplicateData !== 'undefined' && serverDuplicateData) {
-        console.log("Using server-provided duplicateData");
+        console.log("Using server-provided duplicateData:", serverDuplicateData);
         duplicateData = serverDuplicateData;
+        
+        // Ensure images is properly handled as an array
+        if (duplicateData.images) {
+            if (typeof duplicateData.images === 'string') {
+                try {
+                    duplicateData.images = JSON.parse(duplicateData.images);
+                    console.log("Parsed images from string:", duplicateData.images);
+                } catch (e) {
+                    console.warn("Failed to parse images string, using as single item:", duplicateData.images);
+                    duplicateData.images = [duplicateData.images];
+                }
+            }
+            console.log(`Final duplicateData.images (${Array.isArray(duplicateData.images) ? 'array' : typeof duplicateData.images}):`, duplicateData.images);
+        }
     }
     
     // Then check for sessionStorage data (takes priority)
@@ -1486,14 +1515,32 @@
                 form.appendChild(isDuplicatingField);
                 
                 // Add each image as a duplicate image
-                duplicateData.images.forEach((imageName, index) => {
-                    console.log(`Adding duplicate image ${index}: ${imageName}`);
-                    const imageField = document.createElement('input');
-                    imageField.type = 'hidden';
-                    imageField.name = 'duplicate_images';
-                    imageField.value = imageName;
-                    form.appendChild(imageField);
-                });
+                const images = duplicateData.images || [];
+                console.log(`Adding ${images.length} images as hidden fields`);
+                
+                if (Array.isArray(images)) {
+                    images.forEach((imageName, index) => {
+                        if (imageName) {
+                            console.log(`Adding duplicate image ${index}: ${imageName}`);
+                            const imageField = document.createElement('input');
+                            imageField.type = 'hidden';
+                            imageField.name = 'duplicate_images';
+                            imageField.value = imageName;
+                            form.appendChild(imageField);
+                        }
+                    });
+                } else {
+                    console.warn("Images is not an array:", images);
+                    // Try to handle as single item if it's a string
+                    if (typeof images === 'string' && images) {
+                        console.log("Adding single image:", images);
+                        const imageField = document.createElement('input');
+                        imageField.type = 'hidden';
+                        imageField.name = 'duplicate_images';
+                        imageField.value = images;
+                        form.appendChild(imageField);
+                    }
+                }
                 
                 // Show image preview
                 showDuplicateImagePreview(duplicateData.images);
@@ -1506,9 +1553,29 @@
         const previewContainer = document.getElementById('image-preview-container');
         if (!previewContainer) return;
         
+        console.log("showDuplicateImagePreview called with:", images);
+        
+        // Make sure images is treated as an array
+        if (!Array.isArray(images)) {
+            if (typeof images === 'string') {
+                // Try to parse if it's a JSON string
+                try {
+                    images = JSON.parse(images);
+                } catch (e) {
+                    // If parsing fails, wrap the single string in an array
+                    images = [images];
+                }
+            } else {
+                console.error("Invalid images data:", images);
+                return;
+            }
+        }
+        
         previewContainer.innerHTML = '';
+        console.log(`Processing ${images.length} images for preview`);
         
         images.forEach((imageName, index) => {
+            console.log(`Processing image ${index}:`, imageName);
             const preview = document.createElement('div');
             preview.className = 'image-preview-item';
             preview.innerHTML = `

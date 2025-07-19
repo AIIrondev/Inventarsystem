@@ -632,8 +632,10 @@ def upload_admin():
         try:
             original_item = it.get_item(duplicate_from)
             if original_item:
-                # Debug to check the Images field structure
-                print(f"DEBUG: Original item: {original_item.get('_id')} has these images: {original_item.get('Images', [])}")
+                # Enhanced debug logging for images
+                images = original_item.get('Images', [])
+                print(f"DEBUG: Original item: {original_item.get('_id')} has these images: {images}")
+                print(f"DEBUG: Images type: {type(images)}, count: {len(images) if isinstance(images, list) else 'not a list'}")
                 
                 duplicate_data = {
                     'name': original_item.get('Name', ''),
@@ -1017,6 +1019,11 @@ def upload_item():
         # Make sure duplicate_images is always a list, even if there's only one
         if is_duplicating and duplicate_images and not isinstance(duplicate_images, list):
             duplicate_images = [duplicate_images]
+        
+        # Log details about each image
+        if is_duplicating and duplicate_images:
+            for i, img in enumerate(duplicate_images):
+                print(f"DEBUG: Duplicate image {i+1}/{len(duplicate_images)}: {img}")
         
         # Get book cover image if downloaded
         book_cover_image = request.form.get('book_cover_image')
@@ -1806,6 +1813,7 @@ def create_qr_code(id):
     safe_name = secure_filename(item['Name'])
     filename = f"{safe_name}_{id}.png"
     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+
     
     # Fix the file handling - save to file object, not string
     with open(qr_path, 'wb') as f:
