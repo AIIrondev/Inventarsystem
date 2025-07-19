@@ -2,7 +2,21 @@
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
+**Aktuelle Version: 2.5.18**
+
 Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen, zu reservieren und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung, Buchungskalender und eine filterbasierte Artikelsuche.
+
+## Systemübersicht und Wartung
+
+Das Inventarsystem bietet folgende Wartungsskripte:
+- `update.sh` - Aktualisiert das System, erstellt ein Backup und installiert Abhängigkeiten
+- `fix-permissions.sh` - Behebt Berechtigungsprobleme der virtuellen Umgebung
+- `fix-all-permissions.sh` - Umfassende Korrektur aller Berechtigungen im System
+- `fix-pymongo.sh` - Behebt Konflikte zwischen pymongo und bson
+- `rebuild-venv.sh` - Baut die virtuelle Python-Umgebung neu auf
+- `start.sh`, `stop.sh`, `restart.sh` - Dienste steuern
+- `Backup-DB.py` - Manuelles Backup der Datenbank erstellen
+- `restore.sh` - Vorhandenes Backup wiederherstellen
 
 ## Funktionen
 
@@ -103,6 +117,12 @@ sudo ./start.sh
    - Öffnen Sie einen Webbrowser
    - Navigieren Sie zu `https://[Server-IP-Adresse]`
    - Sie sollten die Login-Seite sehen
+   
+5. Bei Installations- oder Berechtigungsproblemen:
+   - Führen Sie `sudo ./fix-all-permissions.sh` aus, um umfassend alle Berechtigungen zu korrigieren
+   - Oder führen Sie `sudo ./fix-permissions.sh` für eine gezielte Korrektur der Python-Umgebung aus
+   - Falls pymongo/bson-Fehler auftreten, führen Sie `sudo ./fix-pymongo.sh` aus
+   - Bei anhaltenden Problemen führen Sie `sudo ./rebuild-venv.sh` aus, um die Python-Umgebung komplett neu zu erstellen
 
 #### Konfiguration der Datenbank
 1. Die MongoDB-Datenbank wird automatisch erstellt und konfiguriert
@@ -116,7 +136,7 @@ sudo ./start.sh
    {
      "dbg": false,
      "key": "IhrGeheimSchlüssel",
-     "ver": "1.2.4",
+     "ver": "2.5.18",
      "host": "0.0.0.0",
      "port": 443
    }
@@ -333,11 +353,20 @@ sudo ./start.sh
    sudo ./update.sh
    ```
    
-3. Das Skript führt folgende Aktionen aus:
+3. Das Skript unterstützt verschiedene Parameter:
+   ```bash
+   sudo ./update.sh --restart-server        # Mit automatischem Neustart der Dienste
+   sudo ./update.sh --compression-level=5   # Mit angepasstem Kompressionslevel (0-9)
+   sudo ./update.sh --help                  # Hilfe und weitere Optionen anzeigen
+   ```
+   
+4. Das Skript führt folgende Aktionen aus:
    - Erstellt ein Backup des aktuellen Systems
    - Holt die neuesten Änderungen vom Git-Repository
    - Installiert erforderliche Abhängigkeiten
-   - Startet die Dienste neu
+   - Behebt mögliche Konflikte zwischen pymongo und bson
+   - Korrigiert Berechtigungen für kritische Verzeichnisse
+   - Startet die Dienste neu (falls --restart-server angegeben wurde)
 
 #### Virtuelle Umgebung neu aufbauen
 Falls Probleme mit Python-Abhängigkeiten auftreten:
@@ -364,12 +393,26 @@ Falls Probleme mit Python-Abhängigkeiten auftreten:
 #### Berechtigungen korrigieren
 Bei Zugriffsfehlern:
 
-1. Führen Sie das Berechtigungskorrekturs-Skript aus:
+1. Führen Sie das Berechtigungskorrekturs-Skript aus für grundlegende Berechtigungen:
    ```bash
    sudo ./fix-permissions.sh
    ```
    
-2. Stellen Sie sicher, dass das Logs-Verzeichnis korrekte Berechtigungen hat:
+2. Für eine umfassende Korrektur aller Berechtigungsprobleme nutzen Sie:
+   ```bash
+   sudo ./fix-all-permissions.sh
+   ```
+   Dieses Skript behebt alle bekannten Berechtigungsprobleme im gesamten System, einschließlich:
+   - Logs-Verzeichnisse und Dateien
+   - Skript-Ausführungsrechte
+   - Git Repository-Berechtigungen
+   - Web-Upload-Verzeichnisse
+   - QR-Code-Verzeichnisse
+   - Thumbnails und Vorschaubilder
+   - Python virtuelle Umgebung
+   - MongoDB-Zugriffsrechte
+
+3. Stellen Sie sicher, dass das Logs-Verzeichnis korrekte Berechtigungen hat:
    ```bash
    sudo chmod 777 logs
    ```
@@ -613,22 +656,33 @@ Dieser Konflikt tritt auf, wenn das separate `bson`-Paket zusammen mit `pymongo`
 
 Wenn Sie Berechtigungsfehler wie `Keine Berechtigung` oder `Permission denied` sehen:
 
-1. **Berechtigungen für kritische Verzeichnisse anpassen**:
+1. **Umfassende Berechtigung-Reparatur durchführen**:
+   ```bash
+   sudo ./fix-all-permissions.sh
+   ```
+   Dieses Skript behebt systematisch alle bekannten Berechtigungsprobleme im gesamten System und loggt alle Aktionen in `logs/permission_fixes.log`.
+
+2. **Alternativ: Gezielte Berechtigungskorrektur**:
    ```bash
    sudo ./fix-permissions.sh
    ```
-   Dieses Skript korrigiert die Berechtigungen für die virtuelle Umgebung und wichtige Verzeichnisse.
+   Dieses Skript korrigiert die Berechtigungen primär für die virtuelle Umgebung und kritische Verzeichnisse.
 
-2. **Logs-Verzeichnis manuell korrigieren**:
+3. **Logs-Verzeichnis manuell korrigieren**:
    ```bash
    sudo mkdir -p logs
    sudo chmod 777 logs
    ```
 
-3. **Falls Python-Skripte nicht ausgeführt werden können**:
+4. **Falls Python-Skripte nicht ausgeführt werden können**:
    ```bash
    sudo chmod +x *.py
    sudo chmod +x *.sh
+   ```
+
+5. **Git Repository-Probleme beheben**:
+   ```bash
+   git config --global --add safe.directory "$(pwd)"
    ```
 
 #### Backup und Wiederherstellung testen
@@ -709,3 +763,53 @@ So stellen Sie sicher, dass das Backup- und Wiederherstellungssystem korrekt fun
    sudo tar -xzf /var/backups/Inventarsystem-YYYY-MM-DD.tar.gz -C ~/temp_backup
    ls -la ~/temp_backup
    ```
+
+#### Beispiel: Beheben von Bild-Upload und QR-Code Problemen
+
+Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
+
+1. **Überprüfen Sie die Verzeichnisstruktur**:
+   ```bash
+   sudo ls -la Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   ```
+   
+2. **Fehlende Verzeichnisse anlegen**:
+   ```bash
+   sudo mkdir -p Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   ```
+   
+3. **Berechtigungen umfassend korrigieren**:
+   ```bash
+   sudo ./fix-all-permissions.sh
+   ```
+   
+4. **Oder gezielte Korrektur für Bildverzeichnisse**:
+   ```bash
+   sudo chmod -R 755 Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   sudo chown -R $(whoami):$(whoami) Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   ```
+   
+5. **System neustarten und testen**:
+   ```bash
+   sudo ./restart.sh
+   ```
+   
+   Testen Sie dann den Bild-Upload und die QR-Code Generierung erneut.
+
+## Änderungsprotokoll
+
+### Version 2.5.18
+- Verbesserte Berechtigungsverwaltung mit dem neuen `fix-all-permissions.sh` Skript
+- Erweiterte Backup- und Wiederherstellungsfunktionen in `update.sh`
+- Unterstützung für anpassbare Kompressionslevel bei Backups (`--compression-level`)
+- Robustere Fehlerbehebung bei pymongo/bson-Konflikten
+- Automatische Korrektur von Gitrepository-Berechtigungen
+- Verbesserte Logik bei Fehlern in der virtuellen Umgebung
+
+## Schlussfolgerung
+
+Das Inventarsystem ist eine komplette Lösung für die Verwaltung von Inventar, mit besonderem Fokus auf Bildungseinrichtungen. Es bietet robuste Werkzeuge für das Ausleihen, Zurückgeben und Verfolgen von Gegenständen, sowie umfassende Administratorfunktionen.
+
+Mit den verbesserten Wartungsskripten ist das System jetzt noch zuverlässiger und einfacher zu warten, selbst bei komplexen Installationen. Die automatischen Berechtigungskorrekturen und Backup-Funktionen sorgen für eine reibungslose Benutzererfahrung und Datensicherheit.
+
+Für weitere Unterstützung oder Feature-Anfragen öffnen Sie bitte ein Issue im GitHub-Repository.

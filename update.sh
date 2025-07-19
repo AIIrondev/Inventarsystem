@@ -44,8 +44,21 @@ done
 mkdir -p "$PROJECT_DIR/logs"
 # Ensure proper permissions for logs directory
 if [ -d "$PROJECT_DIR/logs" ]; then
-    chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+    chmod -R 777 "$PROJECT_DIR/logs" 2>/dev/null || {
+        echo "WARNING: Failed to set permissions on logs directory. Trying with sudo..."
+        sudo chmod -R 777 "$PROJECT_DIR/logs" 2>/dev/null || {
+            echo "WARNING: Failed to set permissions on logs directory even with sudo."
+        }
+    }
 fi
+
+# Set git repository as safe directory to prevent "dubious ownership" errors
+git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+    echo "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
+    sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+        echo "WARNING: Failed to set repository as safe directory. Git operations may fail."
+    }
+}
 
 # Function to log messages
 log_message() {
@@ -90,50 +103,113 @@ create_backup() {
     sudo mkdir -p "$BACKUP_DIR/mongodb_backup"
     sudo chmod 777 "$BACKUP_DIR/mongodb_backup"  # Temporarily give write permissions
     
+    # Create Backup_db.log and ensure it's writable
+    touch "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null
+    chmod 666 "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null || {
+        log_message "WARNING: Failed to set permissions on Backup_db.log. Trying with sudo..."
+        sudo touch "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null
+        sudo chmod 666 "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null || {
+            log_message "WARNING: Failed to create writable Backup_db.log. Redirecting output to /dev/null instead."
+            # Create a flag variable to use /dev/null instead of Backup_db.log if needed
+            USE_NULL_OUTPUT=true
+        }
+    }
+    
     # Install pymongo if not already installed
     log_message "Checking pymongo installation..."
     if ! python3 -c "import pymongo" &>/dev/null; then
         log_message "Installing pymongo..."
         # Try multiple installation methods
         if [ -f "$PROJECT_DIR/.venv/bin/pip" ]; then
-            "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
+            if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
+                "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 > /dev/null 2>&1 || {
+                    log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
+                    pip install pymongo==4.6.3 > /dev/null 2>&1 || {
+                        log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
+                        pip3 install pymongo==4.6.3 > /dev/null 2>&1 || {
+                            log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
+                        }
+                    }
+                }
+            else
+                "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                    log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
+                    pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                        log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
+                        pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+                            log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
+                        }
+                    }
+                }
+            fi
+        else
+            if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
+                pip install pymongo==4.6.3 > /dev/null 2>&1 || {
+                    log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
+                    pip3 install pymongo==4.6.3 > /dev/null 2>&1 || {
+                        log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
+                    }
+                }
+            else
                 pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                     log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
                     pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
                         log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
                     }
                 }
-            }
-        else
-            pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                    log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
-                }
-            }
+            fi
         fi
     fi
     
     # Run database backup with our helper script
     log_message "Executing database backup script..."
-    sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-        log_message "ERROR: Failed to backup database with original path"
+    if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
+        sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" > /dev/null 2>&1 || {
+            log_message "ERROR: Failed to backup database with original path"
+            
+            # Try an alternative approach - use a temporary directory
+            log_message "Attempting backup via temporary directory..."
+            tmp_backup_dir="/tmp/mongodb_backup_$$"
+            mkdir -p "$tmp_backup_dir"
+            
+            "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" > /dev/null 2>&1 && {
+                # Copy temporary backup files to the actual backup directory
+                log_message "Copying backup files from temporary directory..."
+                cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/"
+            } || {
+                log_message "ERROR: All attempts to backup database failed"
+            }
+        }
+    else
+        sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
+            log_message "ERROR: Failed to backup database with original path"
+            
+            # Try an alternative approach - use a temporary directory
+            log_message "Attempting backup via temporary directory..."
+            tmp_backup_dir="/tmp/mongodb_backup_$$"
+            mkdir -p "$tmp_backup_dir"
+            
+            "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 && {
+                # Copy temporary backup files to the actual backup directory
+                log_message "Copying backup files from temporary directory..."
+                cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/"
+            } || {
+                log_message "ERROR: All attempts to backup database failed"
+            }
+        }
+    fi
+    
+    # Check if any CSV files were created during backup
+    if ! find "$BACKUP_DIR/mongodb_backup" -name "*.csv" -quit; then
+        log_message "WARNING: No CSV files found in backup directory"
         
-        # Try an alternative approach - use a temporary directory
-        log_message "Attempting backup via temporary directory..."
-        tmp_backup_dir="/tmp/mongodb_backup_$$"
-        mkdir -p "$tmp_backup_dir"
-        
-        "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 && {
+        # If we used a temporary directory earlier and it still exists, try to use its contents
+        if [ -d "$tmp_backup_dir" ]; then
             log_message "Backup created in temporary directory, moving to backup location..."
             sudo cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/" 
             rm -rf "$tmp_backup_dir"
-        } || {
-            log_message "ERROR: All attempts to backup database failed"
-            # Continue with the backup process even if DB backup fails
-        }
-    }
+        fi
+    fi
     
     # Reset to more restrictive permissions after backup completes
     sudo chmod -R 755 "$BACKUP_DIR/mongodb_backup"
@@ -197,6 +273,23 @@ update_from_git() {
         log_message "ERROR: Could not navigate to project directory"
         return 1
     }
+    
+    # Set git repository as safe directory before pulling
+    git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+        log_message "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
+        sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+            log_message "WARNING: Failed to set repository as safe directory. Git operations may fail."
+        }
+    }
+    
+    # Fix ownership if needed
+    current_owner=$(stat -c '%U' "$PROJECT_DIR")
+    if [ "$current_owner" != "$(whoami)" ]; then
+        log_message "Fixing repository ownership..."
+        sudo chown -R $(whoami) "$PROJECT_DIR" 2>/dev/null || {
+            log_message "WARNING: Failed to fix ownership. Git operations may fail."
+        }
+    fi
     
     # Pull latest changes
     git pull || {

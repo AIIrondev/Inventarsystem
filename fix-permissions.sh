@@ -49,15 +49,30 @@ if [ -d "$VENV_DIR/lib/python3.12/site-packages/bson" ]; then
     log_message "Removed conflicting bson package"
 fi
 
-# Check if virtual environment is broken, if so, remove and recreate
-if [ ! -x "$VENV_DIR/bin/python" ] || [ ! -x "$VENV_DIR/bin/pip" ]; then
-    log_message "Virtual environment appears broken. Removing and recreating..."
-    rm -rf "$VENV_DIR"
-    python3 -m venv "$VENV_DIR" || {
-        log_message "ERROR: Failed to create virtual environment"
-        exit 1
+# Fix logs directory permissions
+log_message "Setting permissions for logs directory"
+mkdir -p "$SCRIPT_DIR/logs"
+chmod -R 777 "$SCRIPT_DIR/logs" || {
+    log_message "ERROR: Failed to set permissions on logs directory. Trying with sudo..."
+    sudo chmod -R 777 "$SCRIPT_DIR/logs" || {
+        log_message "ERROR: Failed to set permissions on logs directory even with sudo."
     }
-fi
+}
+
+# Fix git repository permissions
+log_message "Setting git repository as safe directory"
+git config --global --add safe.directory "$SCRIPT_DIR" || {
+    log_message "ERROR: Failed to add repository to git safe.directory. Trying with sudo..."
+    sudo git config --global --add safe.directory "$SCRIPT_DIR" || {
+        log_message "WARNING: Failed to set repository as safe directory. Git operations may fail."
+    }
+}
+
+# Make all script files executable
+log_message "Making all script files executable"
+find "$SCRIPT_DIR" -name "*.sh" -exec chmod +x {} \; || {
+    log_message "WARNING: Failed to make some script files executable"
+}
 
 # Make all directories accessible
 find "$VENV_DIR" -type d -exec chmod 755 {} \; 2>/dev/null
