@@ -18,6 +18,45 @@
 {% block title %}Artikel hochladen - Inventarsystem{% endblock %}
 
 {% block content %}
+{% if duplicate_data and duplicate_data.images %}
+<!-- Hidden server-side values for duplication, will be processed by JavaScript -->
+<div id="server-duplicate-data" 
+     data-name="{{ duplicate_data.name|default('') }}"
+     data-description="{{ duplicate_data.description|default('') }}"
+     data-location="{{ duplicate_data.location|default('') }}"
+     data-room="{{ duplicate_data.room|default('') }}"
+     data-year="{{ duplicate_data.year|default('') }}"
+     data-cost="{{ duplicate_data.cost|default('') }}"
+     data-images="{{ duplicate_data.images|tojson|safe }}"
+     data-filter1="{{ duplicate_data.filter1|tojson|safe if duplicate_data.filter1 else '[]' }}"
+     data-filter2="{{ duplicate_data.filter2|tojson|safe if duplicate_data.filter2 else '[]' }}"
+     data-filter3="{{ duplicate_data.filter3|tojson|safe if duplicate_data.filter3 else '[]' }}"
+     data-original-id="{{ duplicate_data.original_id|default('') }}"
+     style="display:none;">
+</div>
+<script>
+    // Pre-initialize duplicate data from server
+    var serverDuplicateData = null;
+    const dataElement = document.getElementById('server-duplicate-data');
+    if (dataElement) {
+        serverDuplicateData = {
+            name: dataElement.getAttribute('data-name') || "",
+            description: dataElement.getAttribute('data-description') || "",
+            location: dataElement.getAttribute('data-location') || "",
+            room: dataElement.getAttribute('data-room') || "",
+            year: dataElement.getAttribute('data-year') || "",
+            cost: dataElement.getAttribute('data-cost') || "",
+            images: JSON.parse(dataElement.getAttribute('data-images') || "[]"),
+            filter1: JSON.parse(dataElement.getAttribute('data-filter1') || "[]"),
+            filter2: JSON.parse(dataElement.getAttribute('data-filter2') || "[]"),
+            filter3: JSON.parse(dataElement.getAttribute('data-filter3') || "[]"),
+            original_id: dataElement.getAttribute('data-original-id') || ""
+        };
+        console.log("Server-provided duplicate data:", serverDuplicateData);
+    }
+</script>
+{% endif %}
+
 <style>
     /* Book information display styles */
     .book-info-container {
@@ -1357,9 +1396,11 @@
     // Initialize duplication data - handle both server-side and sessionStorage data
     let duplicateData = null;
     
-    // First, check for server-side template data
-    // Flask template data will be populated by server
-    // The actual check is done by the server templates
+    // First check if serverDuplicateData is defined by the script above
+    if (typeof serverDuplicateData !== 'undefined' && serverDuplicateData) {
+        console.log("Using server-provided duplicateData");
+        duplicateData = serverDuplicateData;
+    }
     
     // Then check for sessionStorage data (takes priority)
     const sessionData = sessionStorage.getItem('duplicateItemData');
@@ -1367,6 +1408,7 @@
         try {
             duplicateData = JSON.parse(sessionData);
             sessionStorage.removeItem('duplicateItemData'); // Clean up
+            console.log("Session storage duplicate data:", duplicateData);
         } catch (e) {
             console.error('Error parsing session duplicate data:', e);
         }
@@ -1433,6 +1475,7 @@
         
         // Handle images - add hidden inputs for duplicate images
         if (duplicateData.images && duplicateData.images.length > 0) {
+            console.log("Duplicate images data:", duplicateData.images);
             const form = document.querySelector('form[action*="upload_item"]');
             if (form) {
                 // Add hidden field to indicate duplication
@@ -1443,7 +1486,8 @@
                 form.appendChild(isDuplicatingField);
                 
                 // Add each image as a duplicate image
-                duplicateData.images.forEach(imageName => {
+                duplicateData.images.forEach((imageName, index) => {
+                    console.log(`Adding duplicate image ${index}: ${imageName}`);
                     const imageField = document.createElement('input');
                     imageField.type = 'hidden';
                     imageField.name = 'duplicate_images';

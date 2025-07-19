@@ -632,6 +632,9 @@ def upload_admin():
         try:
             original_item = it.get_item(duplicate_from)
             if original_item:
+                # Debug to check the Images field structure
+                print(f"DEBUG: Original item: {original_item.get('_id')} has these images: {original_item.get('Images', [])}")
+                
                 duplicate_data = {
                     'name': original_item.get('Name', ''),
                     'description': original_item.get('Beschreibung', ''),
@@ -1009,6 +1012,11 @@ def upload_item():
         
         # Get duplicate_images if duplicating
         duplicate_images = request.form.getlist('duplicate_images') if is_duplicating else []
+        print(f"DEBUG: Duplicate images from form: {duplicate_images}, count: {len(duplicate_images)}")
+        
+        # Make sure duplicate_images is always a list, even if there's only one
+        if is_duplicating and duplicate_images and not isinstance(duplicate_images, list):
+            duplicate_images = [duplicate_images]
         
         # Get book cover image if downloaded
         book_cover_image = request.form.get('book_cover_image')
@@ -1156,18 +1164,30 @@ def upload_item():
 
     # Handle duplicate images if duplicating
     if duplicate_images:
+        app.logger.info(f"Processing {len(duplicate_images)} duplicate images: {duplicate_images}")
+        
         # For mobile browsers, we need to verify the duplicate images exist first
         verified_duplicates = []
         for dup_img in duplicate_images:
-            full_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
-            if os.path.exists(full_path) and os.path.isfile(full_path):
-                verified_duplicates.append(dup_img)
-            else:
+            # Try looking in different paths
+            possible_paths = [
+                os.path.join(app.config['UPLOAD_FOLDER'], dup_img),  # Development path
+                os.path.join('/var/Inventarsystem/Web/uploads', dup_img)  # Production path
+            ]
+            
+            found = False
+            for path in possible_paths:
+                if os.path.exists(path) and os.path.isfile(path):
+                    verified_duplicates.append((dup_img, path))
+                    found = True
+                    break
+            
+            if not found:
                 app.logger.warning(f"Duplicate image not found: {dup_img}")
         
         # Create copies of verified images with new unique filenames
         duplicate_image_copies = []
-        for dup_img in verified_duplicates:
+        for dup_img, src_path in verified_duplicates:
             try:
                 # Generate a new unique filename
                 unique_id = str(uuid.uuid4())
@@ -1176,7 +1196,6 @@ def upload_item():
                 new_filename = f"{unique_id}_{timestamp}{ext_part}"
                 
                 # Copy the image file to the new name
-                src_path = os.path.join(app.config['UPLOAD_FOLDER'], dup_img)
                 dst_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
                 shutil.copy2(src_path, dst_path)
                 
@@ -3569,7 +3588,7 @@ def get_optimal_image_quality(img, target_size_kb=80):
         else:
             min_quality = quality + 1
             
-        # If we're within 10% of target, that's good enough
+        # If we’re within 10% of target, that’s good enough
         if abs(size - target_size_bytes) < (target_size_bytes * 0.1):
             return quality
     
