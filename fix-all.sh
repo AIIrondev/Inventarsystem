@@ -20,6 +20,7 @@ VERBOSE=false
 FIX_PERMISSIONS=true
 FIX_VENV=true
 FIX_PYMONGO=true
+FIX_PNG_TO_JPG=true
 AUTO_MODE=false
 SETUP_CRON=false
 EMAIL_REPORT=""
@@ -50,6 +51,18 @@ for arg in "$@"; do
             FIX_PYMONGO=true
             FIX_PERMISSIONS=false
             FIX_VENV=false
+            FIX_PNG_TO_JPG=false
+            shift
+            ;;
+        --fix-png-jpg)
+            FIX_PNG_TO_JPG=true
+            FIX_PERMISSIONS=false
+            FIX_VENV=false
+            FIX_PYMONGO=false
+            shift
+            ;;
+        --no-fix-png-jpg)
+            FIX_PNG_TO_JPG=false
             shift
             ;;
         --auto)
@@ -74,6 +87,8 @@ for arg in "$@"; do
             echo "  --fix-permissions Nur Berechtigungen korrigieren"
             echo "  --fix-venv        Nur virtuelle Umgebung reparieren"
             echo "  --fix-pymongo     Nur pymongo/bson-Konflikte beheben"
+            echo "  --fix-png-jpg     Nur PNG-zu-JPG Konvertierung durchführen"
+            echo "  --no-fix-png-jpg  PNG-zu-JPG Konvertierung überspringen"
             echo "  --auto            Automatischer Modus - erkennt und behebt Probleme ohne Benutzerinteraktion"
             echo "  --setup-cron      Richtet einen Cron-Job für regelmäßige Prüfungen ein"
             echo "  --email=ADRESSE   Sendet einen Bericht per E-Mail an die angegebene Adresse"
@@ -457,6 +472,76 @@ fix_uploads_directories() {
     log_success "Upload-Verzeichnisse wurden erstellt und Berechtigungen gesetzt"
 }
 
+# Function to ensure PNG images are converted to JPG for universal compatibility
+fix_png_to_jpg_conversion() {
+    if [ "$FIX_PNG_TO_JPG" != true ]; then
+        log_verbose "PNG zu JPG Konvertierung übersprungen (--no-fix-png-jpg Flag gesetzt)"
+        return 0
+    fi
+
+    log_section "Überprüfe PNG zu JPG Konvertierung"
+    log_message "Das System verwendet einheitlich JPG-Dateien für maximale Kompatibilität."
+    
+    # Check if the converter script exists
+    if [ ! -f "$SCRIPT_DIR/png_jpg_converter.py" ]; then
+        log_error "PNG zu JPG Konverter-Skript nicht gefunden: png_jpg_converter.py"
+        return 1
+    fi
+    
+    # Check if PIL/Pillow is installed in the virtual environment
+    if ! "$VENV_DIR/bin/pip" list | grep -i "pillow" >/dev/null 2>&1; then
+        log_message "Installiere Pillow für Bildkonvertierung..."
+        "$VENV_DIR/bin/pip" install pillow >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            log_error "Konnte Pillow nicht installieren"
+            return 1
+        fi
+        log_success "Pillow erfolgreich installiert"
+    fi
+    
+    # Run the converter in dry-run mode first
+    log_message "Überprüfe PNG-Dateien im System..."
+    PNG_COUNT=$("$VENV_DIR/bin/python" "$SCRIPT_DIR/png_jpg_converter.py" | grep "Total PNG files:" | awk '{print $4}')
+    
+    if [ -z "$PNG_COUNT" ]; then
+        PNG_COUNT=0
+    fi
+    
+    if [ "$PNG_COUNT" -eq 0 ]; then
+        log_success "Keine PNG-Dateien gefunden, System verwendet bereits einheitlich JPG-Dateien"
+        return 0
+    fi
+    
+    log_message "Gefunden: $PNG_COUNT PNG-Dateien, die zu JPG konvertiert werden sollten"
+    
+    if [ "$CHECK_ONLY" = true ]; then
+        log_warning "Im Check-Only-Modus wird keine Konvertierung durchgeführt"
+        return 0
+    fi
+    
+    # Confirm with user in interactive mode
+    if [ "$AUTO_MODE" != true ]; then
+        read -p "Möchten Sie alle PNG-Dateien zu JPG konvertieren? (j/n): " confirm
+        if [[ ! "$confirm" =~ ^[jJ] ]]; then
+            log_message "PNG zu JPG Konvertierung übersprungen"
+            return 0
+        fi
+    fi
+    
+    # Run the converter with execute flag
+    log_message "Konvertiere PNG-Dateien zu JPG..."
+    "$VENV_DIR/bin/python" "$SCRIPT_DIR/png_jpg_converter.py" --execute --quality 95
+    
+    if [ $? -eq 0 ]; then
+        log_success "PNG zu JPG Konvertierung erfolgreich abgeschlossen"
+    else
+        log_error "Fehler bei der PNG zu JPG Konvertierung"
+        return 1
+    fi
+    
+    return 0
+}
+
 # Function to check if system services are running
 check_services() {
     if ! command -v systemctl >/dev/null 2>&1; then
@@ -665,6 +750,9 @@ if [ $PERM_STATUS -ne 0 ] && [ "$FIX_PERMISSIONS" = true ]; then
     
     # Fix all upload directories in both development and production environments
     fix_uploads_directories
+    
+    # Convert any PNG files to JPG for universal compatibility
+    fix_png_to_jpg_conversion
 
     # Fix Web directory permissions and structure
     if [ -d "$SCRIPT_DIR/Web" ]; then

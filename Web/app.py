@@ -326,23 +326,143 @@ scheduler.start()
 import atexit
 atexit.register(lambda: scheduler.shutdown())
 
-def allowed_file(filename):
+def allowed_file(filename, file_content=None, max_size_mb=10):
     """
-    Check if a file has an allowed extension.
+    Check if a file has an allowed extension and valid content.
     
     Args:
         filename (str): Name of the file to check
+        file_content (FileStorage, optional): The actual file object to validate content
+        max_size_mb (int, optional): Maximum allowed file size in MB
         
     Returns:
-        tuple: (bool, str) - True if the file extension is allowed, False otherwise
-               along with an error message if not allowed
+        tuple: (bool, str) - True if the file is valid, False otherwise
+               along with an error message if not valid
     """
+    # Check file extension
     if '.' not in filename:
         return False, f"Datei '{filename}' hat keine Dateiendung. Erlaubte Formate: {', '.join(app.config['ALLOWED_EXTENSIONS'])}"
     
     extension = filename.rsplit('.', 1)[1].lower()
-    if extension not in app.config['ALLOWED_EXTENSIONS']:
+    allowed_extensions_lower = {ext.lower() for ext in app.config['ALLOWED_EXTENSIONS']}
+    if extension not in allowed_extensions_lower:
+        app.logger.warning(f"File extension not allowed: {extension} for file {filename}. Allowed: {allowed_extensions_lower}")
         return False, f"Datei '{filename}' hat ein nicht unterstütztes Format ({extension}). Erlaubte Formate: {', '.join(app.config['ALLOWED_EXTENSIONS'])}"
+    
+    # Check file size if content is provided
+    if file_content is not None:
+        # Check file size
+        file_content.seek(0, os.SEEK_END)
+        file_size = file_content.tell() / (1024 * 1024)  # Size in MB
+        file_content.seek(0)  # Reset file pointer to beginning
+        
+        if file_size > max_size_mb:
+            return False, f"Datei '{filename}' ist zu groß ({file_size:.1f} MB). Maximale Größe: {max_size_mb} MB."
+        
+        # Verify file content matches extension
+        try:
+            if extension in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']:
+                try:
+                    # Special debug for PNG files
+                    if extension == 'png':
+                        app.logger.info(f"PNG DEBUG: Validating PNG file: {filename}, size: {file_size:.2f}MB")
+                        # Save first few bytes for magic number checking
+                        header_bytes = file_content.read(32)  # Reading more bytes for deeper analysis
+                        file_content.seek(0)  # Reset pointer
+                        
+                        # Check PNG magic number (first 8 bytes)
+                        png_signature = b'\x89PNG\r\n\x1a\n'
+                        is_valid_signature = header_bytes.startswith(png_signature)
+                        
+                        # Create a hex dump of the header for debugging
+                        hex_dump = ' '.join([f"{b:02x}" for b in header_bytes[:16]])
+                        app.logger.info(f"PNG DEBUG: File {filename} - Header hex dump: {hex_dump}")
+                        app.logger.info(f"PNG DEBUG: Valid PNG signature: {is_valid_signature}, first bytes: {header_bytes[:8]!r}")
+                        
+                        # More detailed analysis of PNG chunks
+                        if is_valid_signature:
+                            try:
+                                # IHDR chunk should start at byte 8
+                                if header_bytes[8:12] == b'IHDR':
+                                    app.logger.info(f"PNG DEBUG: Found IHDR chunk at correct position")
+                                else:
+                                    app.logger.warning(f"PNG DEBUG: IHDR chunk not found at expected position. Found: {header_bytes[8:12]!r}")
+                            except Exception as chunk_err:
+                                app.logger.error(f"PNG DEBUG: Error analyzing PNG chunks: {str(chunk_err)}")
+                        else:
+                            app.logger.error(f"PNG DEBUG: Invalid PNG signature for {filename}. Expected: {png_signature!r}")
+                    
+                    with Image.open(file_content) as img:
+                        # Verify it's a valid image by accessing its format and size
+                        img_format = img.format
+                        img_mode = img.mode
+                        img_size = img.size
+                        
+                        if extension == 'png':
+                            app.logger.info(f"PNG DEBUG: Successfully opened PNG - Format: {img_format}, Mode: {img_mode}, Size: {img_size[0]}x{img_size[1]}")
+                            # Add more PNG-specific checks
+                            app.logger.info(f"PNG DEBUG: Image info - Bands: {len(img.getbands())}, Bands: {img.getbands()}")
+                            # Check if there's transparency
+                            has_alpha = 'A' in img.getbands() or img.mode == 'P' and img.info.get('transparency') is not None
+                            app.logger.info(f"PNG DEBUG: Has transparency: {has_alpha}")
+                        
+                        if not img_format:
+                            if extension == 'png':
+                                app.logger.error(f"PNG DEBUG: Invalid format - got None for {filename}")
+                            return False, f"Datei '{filename}' scheint keine gültige Bilddatei zu sein."
+                        
+                        file_content.seek(0)  # Reset file pointer after reading
+                except Exception as e:
+                    error_msg = f"Error validating image content for {filename}: {str(e)}"
+                    app.logger.error(error_msg)
+                    
+                    if extension == 'png':
+                        app.logger.error(f"PNG DEBUG: Failed to process PNG file: {filename}")
+                        app.logger.error(f"PNG DEBUG: Error details: {str(e)}")
+                        app.logger.error(f"PNG DEBUG: Error type: {type(e).__name__}")
+                        
+                        # Get the full traceback as string and log it
+                        import io
+                        tb_output = io.StringIO()
+                        traceback.print_exc(file=tb_output)
+                        app.logger.error(f"PNG DEBUG: Full traceback for {filename}:\n{tb_output.getvalue()}")
+                        
+                        # Try to manually read the file data and check it
+                        try:
+                            file_content.seek(0)
+                            file_bytes = file_content.read(1024)  # Read first KB
+                            file_content.seek(0)  # Reset again
+                            
+                            hex_signature = ' '.join([f"{b:02x}" for b in file_bytes[:16]])
+                            app.logger.error(f"PNG DEBUG: Raw file bytes (first 16): {hex_signature}")
+                            
+                            # Check for common corruption patterns
+                            if not file_bytes.startswith(png_signature):
+                                app.logger.error(f"PNG DEBUG: File doesn't start with PNG signature")
+                                if file_bytes.startswith(b'<'):
+                                    app.logger.error(f"PNG DEBUG: File appears to be XML/HTML, not PNG")
+                                elif file_bytes.startswith(b'\xff\xd8'):
+                                    app.logger.error(f"PNG DEBUG: File appears to be JPEG, not PNG")
+                            
+                            # Check file size again to make sure it's not empty
+                            file_content.seek(0, os.SEEK_END)
+                            actual_size = file_content.tell()
+                            file_content.seek(0)
+                            if actual_size < 100:  # Very small for a PNG
+                                app.logger.error(f"PNG DEBUG: File is suspiciously small: {actual_size} bytes")
+                        except Exception as raw_err:
+                            app.logger.error(f"PNG DEBUG: Error during raw file analysis: {str(raw_err)}")
+                        
+                        traceback.print_exc()
+                    
+                    return False, f"Datei '{filename}' konnte nicht als Bild erkannt werden. Fehler: {str(e)}"
+                    
+            # Add more content type validations as needed for other file types
+                
+        except Exception as e:
+            app.logger.error(f"Error during content validation for {filename}: {str(e)}")
+            file_content.seek(0)  # Reset file pointer in case of error
+            # Don't reject the file based on content validation failure alone
     
     return True, ""
 
@@ -1116,95 +1236,454 @@ def upload_item():
             flash(error_msg, 'error')
             return redirect(url_for('home_admin'))
 
-    # Process any new uploaded images with better mobile handling
+    # Process any new uploaded images with robust error handling
     image_filenames = []
     processed_count = 0
     error_count = 0
     skipped_count = 0
     
-    for image in images:
-        if image and image.filename:
-            is_allowed, error_message = allowed_file(image.filename)
-            if is_allowed:
+    # Create a structured log entry for upload session
+    upload_session_id = str(uuid.uuid4())[:8]
+    app.logger.info(f"Starting image upload session {upload_session_id} - Files: {len(images)}, User: {username}")
+    
+    # Ensure all required directories exist
+    for directory in [app.config['UPLOAD_FOLDER'], app.config['THUMBNAIL_FOLDER'], app.config['PREVIEW_FOLDER']]:
+        try:
+            os.makedirs(directory, exist_ok=True)
+        except Exception as e:
+            app.logger.error(f"Failed to create directory {directory}: {str(e)}")
+    
+    # Process each image independently
+    for index, image in enumerate(images):
+        image_log_prefix = f"[Upload {upload_session_id}][Image {index+1}/{len(images)}]"
+        
+        if not image or not image.filename or image.filename == '':
+            app.logger.warning(f"{image_log_prefix} Empty file or filename")
+            skipped_count += 1
+            continue
+            
+        # Get file extension for special handling
+        _, file_ext = os.path.splitext(image.filename.lower())
+        is_png = file_ext.lower() == '.png'
+        
+        if is_png:
+            app.logger.info(f"PNG DEBUG: {image_log_prefix} Detected PNG file: {image.filename}")
+            # Check file size
+            image.seek(0, os.SEEK_END)
+            file_size = image.tell() / (1024 * 1024)  # Size in MB
+            image.seek(0)  # Reset file pointer
+            app.logger.info(f"PNG DEBUG: {image_log_prefix} PNG file size: {file_size:.2f}MB")
+            
+            # Check first few bytes for PNG signature and analyze header
+            header_bytes = image.read(64)  # Read more for thorough analysis
+            image.seek(0)  # Reset pointer
+            png_signature = b'\x89PNG\r\n\x1a\n'
+            is_valid_signature = header_bytes.startswith(png_signature)
+            
+            # Create a hex dump of header for debugging
+            hex_dump = ' '.join([f"{b:02x}" for b in header_bytes[:32]])
+            app.logger.info(f"PNG DEBUG: {image_log_prefix} PNG header hex: {hex_dump}")
+            app.logger.info(f"PNG DEBUG: {image_log_prefix} PNG signature valid: {is_valid_signature}, bytes: {header_bytes[:8]!r}")
+            
+            # Analyze PNG chunks if signature is valid
+            if is_valid_signature:
                 try:
-                    # Get the file extension for content type determination
-                    _, ext_part = os.path.splitext(secure_filename(image.filename))
-                    
-                    # Generate a completely unique filename using UUID
-                    unique_id = str(uuid.uuid4())
-                    timestamp = time.strftime("%Y%m%d%H%M%S")
-                    
-                    # New filename format with UUID to ensure uniqueness
-                    saved_filename = f"{unique_id}_{timestamp}{ext_part}"
-                    
-                    # For iOS devices, we need special handling for the file save
-                    if is_ios:
-                        # Save to a temporary file first to avoid iOS stream issues
-                        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{saved_filename}")
-                        image.save(temp_path)
-                        
-                        # Validate the saved file
-                        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-                            # Rename to the final filename
-                            final_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
-                            os.rename(temp_path, final_path)
-                        else:
-                            raise Exception("Failed to save image file (zero size or missing)")
+                    # Look for IHDR chunk that should follow the signature
+                    if header_bytes[8:12] == b'IHDR':
+                        # Extract width and height from IHDR chunk (bytes 16-23)
+                        import struct
+                        width = struct.unpack('>I', header_bytes[16:20])[0]
+                        height = struct.unpack('>I', header_bytes[20:24])[0]
+                        bit_depth = header_bytes[24]
+                        color_type = header_bytes[25]
+                        app.logger.info(f"PNG DEBUG: {image_log_prefix} PNG dimensions from header: {width}x{height}, bit depth: {bit_depth}, color type: {color_type}")
                     else:
-                        # Regular file save for non-iOS devices
-                        image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-                    
-                    # Generate optimized versions (thumbnails and previews)
-                    try:
-                        # Log original file size before optimization
-                        original_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
-                        original_size = os.path.getsize(original_path)
-                        
-                        # Get original image dimensions
-                        original_dimensions = ""
-                        try:
-                            with Image.open(original_path) as img:
-                                original_dimensions = f"{img.width}x{img.height}"
-                        except:
-                            pass
-                        
-                        # Generate optimized versions (this will also resize and compress the original)
-                        # Target 80KB for a good balance between quality and size
-                        generate_optimized_versions(saved_filename, max_original_width=500, target_size_kb=80)
-                        
-                        # Log file size after optimization
-                        optimized_name = os.path.splitext(saved_filename)[0] + '.jpg'
-                        optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
-                        if os.path.exists(optimized_path):
-                            optimized_size = os.path.getsize(optimized_path)
-                            reduction = (1 - (optimized_size / original_size)) * 100 if original_size > 0 else 0
-                            
-                            # Get optimized dimensions
-                            optimized_dimensions = ""
-                            try:
-                                with Image.open(optimized_path) as img:
-                                    optimized_dimensions = f"{img.width}x{img.height}"
-                            except:
-                                pass
-                                
-                            app.logger.info(
-                                f"Image optimization: {saved_filename} → {optimized_name}\n"
-                                f"  Size: {original_size/1024:.1f}KB → {optimized_size/1024:.1f}KB ({reduction:.1f}% reduction)\n"
-                                f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
-                            )
-                    except Exception as e:
-                        app.logger.warning(f"Warning: Could not generate optimized versions for {saved_filename}: {str(e)}")
-                    
-                    image_filenames.append(saved_filename)
-                    processed_count += 1
-                except Exception as e:
-                    app.logger.error(f"Error saving image {image.filename}: {str(e)}")
-                    error_count += 1
+                        app.logger.warning(f"PNG DEBUG: {image_log_prefix} Expected IHDR chunk not found. Found: {header_bytes[8:12]!r}")
+                except Exception as chunk_err:
+                    app.logger.error(f"PNG DEBUG: {image_log_prefix} Error analyzing PNG chunks: {str(chunk_err)}")
             else:
-                app.logger.warning(f"Skipped file with disallowed type: {image.filename}")
+                app.logger.error(f"PNG DEBUG: {image_log_prefix} Invalid PNG signature!")
+        
+        app.logger.info(f"{image_log_prefix} Processing: {image.filename}")
+        
+        try:
+            # Comprehensive file validation with detailed logging
+            is_allowed, error_message = allowed_file(image.filename, image, max_size_mb=15)
+            
+            if not is_allowed:
+                app.logger.warning(f"{image_log_prefix} Validation failed: {error_message}")
+                if is_png:
+                    app.logger.error(f"PNG DEBUG: {image_log_prefix} PNG validation failed: {error_message}")
                 skipped_count += 1
                 if not is_mobile:
                     flash(error_message, 'error')
+                continue
+                
+            # Get the file extension for content type determination
+            secure_name = secure_filename(image.filename)
+            _, ext_part = os.path.splitext(secure_name)
+            is_png = ext_part.lower() == '.png'
+            
+            # Generate a completely unique filename using UUID
+            unique_id = str(uuid.uuid4())
+            timestamp = time.strftime("%Y%m%d%H%M%S")
+            
+            # New filename format with UUID to ensure uniqueness
+            saved_filename = f"{unique_id}_{timestamp}{ext_part}"
+            app.logger.info(f"{image_log_prefix} Assigned unique filename: {saved_filename}")
+            
+            if is_png:
+                app.logger.info(f"PNG DEBUG: {image_log_prefix} Creating PNG with filename: {saved_filename}")
+            
+            # For iOS devices, we need special handling for the file save
+            if is_ios:
+                app.logger.info(f"{image_log_prefix} Using iOS-specific file handling")
+                # Save to a temporary file first to avoid iOS stream issues
+                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{saved_filename}")
+                
+                try:
+                    if is_png:
+                        app.logger.info(f"PNG DEBUG: {image_log_prefix} Using iOS PNG save method")
+                        # Before saving, verify the file content again
+                        try:
+                            image.seek(0)
+                            pre_save_data = image.read(16)
+                            image.seek(0)
+                            pre_save_hex = ' '.join([f"{b:02x}" for b in pre_save_data])
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Pre-save data: {pre_save_hex}")
+                        except Exception as pre_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Error checking pre-save data: {str(pre_err)}")
+                    
+                    # For PNGs, try a direct binary save first
+                    if is_png:
+                        try:
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting binary save for iOS PNG")
+                            image.seek(0)
+                            png_data = image.read()
+                            with open(temp_path, 'wb') as f:
+                                f.write(png_data)
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Binary write complete, size: {len(png_data)} bytes")
+                        except Exception as bin_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Binary write failed: {str(bin_err)}")
+                            # Fall back to normal save
+                            image.seek(0)
+                            image.save(temp_path)
+                    else:
+                        image.save(temp_path)
+                    
+                    # Validate the saved file
+                    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                        if is_png:
+                            file_size = os.path.getsize(temp_path)
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Temp PNG file saved successfully: {file_size/1024:.1f}KB")
+                            
+                            # Verify it's a valid PNG
+                            try:
+                                with open(temp_path, 'rb') as f:
+                                    png_header = f.read(16)
+                                    png_signature = b'\x89PNG\r\n\x1a\n'
+                                    is_valid = png_header.startswith(png_signature)
+                                    
+                                    header_hex = ' '.join([f"{b:02x}" for b in png_header])
+                                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved file header: {header_hex}")
+                                    
+                                    if not is_valid:
+                                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Invalid PNG signature in saved file!")
+                                    else:
+                                        app.logger.info(f"PNG DEBUG: {image_log_prefix} Valid PNG signature confirmed in saved file")
+                                        
+                                    # Try opening with PIL to confirm it's valid
+                                    try:
+                                        with Image.open(temp_path) as img:
+                                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG validates with PIL: {img.format} {img.size}")
+                                    except Exception as pil_err:
+                                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Saved PNG fails PIL validation: {str(pil_err)}")
+                                        
+                            except Exception as verify_err:
+                                app.logger.error(f"PNG DEBUG: {image_log_prefix} Error verifying PNG: {str(verify_err)}")
+                        
+                        # Rename to the final filename
+                        final_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+                        os.rename(temp_path, final_path)
+                        app.logger.info(f"{image_log_prefix} Successfully saved via iOS handler: {os.path.getsize(final_path)/1024:.1f}KB")
+                    else:
+                        if is_png:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Failed to save temp PNG file (zero size or missing)")
+                        raise Exception("Failed to save image file (zero size or missing)")
+                except Exception as e:
+                    app.logger.error(f"{image_log_prefix} iOS save failed: {str(e)}")
+                    if is_png:
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} iOS PNG save failed: {str(e)}")
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(e).__name__}")
+                        # Log full traceback for PNG errors
+                        import io
+                        tb_output = io.StringIO()
+                        traceback.print_exc(file=tb_output)
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Full traceback:\n{tb_output.getvalue()}")
+                    
+                    # Try regular save as fallback
+                    try:
+                        image.seek(0)  # Reset file pointer
+                        if is_png:
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting fallback PNG save method")
+                        
+                        image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                        app.logger.info(f"{image_log_prefix} Fallback save successful")
+                        
+                        if is_png:
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Fallback PNG save successful")
+                    except Exception as fallback_err:
+                        app.logger.error(f"{image_log_prefix} Fallback save also failed: {str(fallback_err)}")
+                        if is_png:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Fallback PNG save also failed: {str(fallback_err)}")
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(fallback_err).__name__}")
+                            traceback.print_exc()
+                        error_count += 1
+                        continue
+            else:
+                # Regular file save for non-iOS devices
+                try:
+                    if is_png:
+                        app.logger.info(f"PNG DEBUG: {image_log_prefix} Using standard PNG save method")
+                        
+                        # Check file content before saving
+                        try:
+                            image.seek(0)
+                            pre_save_data = image.read(16)
+                            image.seek(0)
+                            pre_save_hex = ' '.join([f"{b:02x}" for b in pre_save_data])
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Pre-save data: {pre_save_hex}")
+                            
+                            # Check if it's really a PNG
+                            png_signature = b'\x89PNG\r\n\x1a\n'
+                            if not pre_save_data.startswith(png_signature):
+                                app.logger.error(f"PNG DEBUG: {image_log_prefix} File does not have valid PNG signature before save!")
+                        except Exception as pre_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Error checking pre-save data: {str(pre_err)}")
+                        
+                        # Try an alternative saving method for PNGs with detailed error tracking
+                        try:
+                            # Read the image data directly
+                            image.seek(0)
+                            image_data = image.read()
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Read {len(image_data)} bytes of PNG data")
+                            
+                            # Write it manually to file
+                            save_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+                            with open(save_path, 'wb') as f:
+                                f.write(image_data)
+                            
+                            file_size = os.path.getsize(save_path)
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Direct binary PNG write successful: {file_size/1024:.1f}KB")
+                            
+                            # Verify the saved file
+                            try:
+                                with open(save_path, 'rb') as f:
+                                    saved_header = f.read(16)
+                                    header_hex = ' '.join([f"{b:02x}" for b in saved_header])
+                                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG header: {header_hex}")
+                                    
+                                    is_valid = saved_header.startswith(png_signature)
+                                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG has valid signature: {is_valid}")
+                                    
+                                    if is_valid:
+                                        # Additional validation with PIL
+                                        try:
+                                            with Image.open(save_path) as img:
+                                                app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG validates with PIL: {img.format} {img.size}")
+                                        except Exception as pil_err:
+                                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Saved PNG fails PIL validation: {str(pil_err)}")
+                            except Exception as verify_err:
+                                app.logger.error(f"PNG DEBUG: {image_log_prefix} Error verifying saved PNG: {str(verify_err)}")
+                            
+                        except Exception as png_write_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Direct PNG write failed: {str(png_write_err)}")
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(png_write_err).__name__}")
+                            
+                            # Log traceback for PNG errors
+                            import io
+                            tb_output = io.StringIO()
+                            traceback.print_exc(file=tb_output)
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Binary write traceback:\n{tb_output.getvalue()}")
+                            
+                            # Fall back to standard method
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting standard PIL save method")
+                            image.seek(0)
+                            image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                    else:
+                        # Standard save for non-PNG files
+                        image.save(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                    
+                    app.logger.info(f"{image_log_prefix} Standard save successful")
+                except Exception as save_err:
+                    app.logger.error(f"{image_log_prefix} Failed to save file: {str(save_err)}")
+                    if is_png:
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Standard PNG save failed: {str(save_err)}")
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(save_err).__name__}")
+                        
+                        # Log traceback for PNG errors
+                        import io
+                        tb_output = io.StringIO()
+                        traceback.print_exc(file=tb_output)
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Standard save traceback:\n{tb_output.getvalue()}")
+                        
+                        # Try one last method - save as a different format
+                        try:
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting last resort conversion to JPG")
+                            image.seek(0)
+                            
+                            # Try to convert PNG to JPG as a last resort
+                            with Image.open(image) as img:
+                                rgb_img = img.convert('RGB')
+                                jpg_path = os.path.splitext(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))[0] + '.jpg'
+                                rgb_img.save(jpg_path, 'JPEG')
+                                app.logger.info(f"PNG DEBUG: {image_log_prefix} Successfully saved as JPG instead: {jpg_path}")
+                                # Update the saved_filename to reflect the new extension
+                                saved_filename = os.path.basename(jpg_path)
+                        except Exception as jpg_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Final JPG conversion failed: {str(jpg_err)}")
+                            
+                        traceback.print_exc()
+                    error_count += 1
+                    continue
+            
+            # Verify the file was saved correctly
+            saved_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+            if not os.path.exists(saved_path) or os.path.getsize(saved_path) == 0:
+                app.logger.error(f"{image_log_prefix} Saved file is missing or empty: {saved_path}")
+                if is_png:
+                    app.logger.error(f"PNG DEBUG: {image_log_prefix} Saved PNG is missing or empty: {saved_path}")
+                error_count += 1
+                continue
+            
+            # Special verification for PNG files
+            if is_png:
+                try:
+                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Verifying saved PNG: {saved_path}")
+                    saved_size = os.path.getsize(saved_path) / 1024.0  # in KB
+                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG size: {saved_size:.1f}KB")
+                    
+                    # Check file integrity by trying to open it
+                    try:
+                        with Image.open(saved_path) as img:
+                            png_width, png_height = img.size
+                            png_mode = img.mode
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Saved PNG valid: {png_width}x{png_height}, mode: {png_mode}")
+                    except Exception as png_verify_err:
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} PNG verification failed: {str(png_verify_err)}")
+                        
+                        # Try to fix by copying from the original
+                        try:
+                            image.seek(0)
+                            with open(saved_path, 'wb') as f:
+                                f.write(image.read())
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempted to fix PNG by direct copy")
+                        except Exception as png_fix_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} PNG fix attempt failed: {str(png_fix_err)}")
+                except Exception as e:
+                    app.logger.error(f"PNG DEBUG: {image_log_prefix} PNG verification error: {str(e)}")
+            
+            # Generate optimized versions (thumbnails and previews)
+            optimization_success = False
+            try:
+                # Log original file size before optimization
+                original_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
+                original_size = os.path.getsize(original_path)
+                
+                # Get original image dimensions
+                original_dimensions = "unknown"
+                try:
+                    with Image.open(original_path) as img:
+                        original_dimensions = f"{img.width}x{img.height}"
+                        if is_png:
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Original PNG dimensions: {original_dimensions}, mode: {img.mode}")
+                except Exception as dim_err:
+                    app.logger.warning(f"{image_log_prefix} Could not get image dimensions: {str(dim_err)}")
+                    if is_png:
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Could not get PNG dimensions: {str(dim_err)}")
+                        app.logger.error(f"PNG DEBUG: {image_log_prefix} Error type: {type(dim_err).__name__}")
+                        traceback.print_exc()
+                
+                app.logger.info(f"{image_log_prefix} Starting optimization for {saved_filename} ({original_size/1024:.1f}KB, {original_dimensions})")
+                
+                # PNG-specific optimization options
+                if is_png:
+                    app.logger.info(f"PNG DEBUG: {image_log_prefix} Starting PNG optimization")
+                    # For PNGs, we might need different parameters
+                    optimization_result = generate_optimized_versions(
+                        saved_filename, 
+                        max_original_width=500, 
+                        target_size_kb=100,  # Higher target for PNGs to maintain transparency
+                        debug_prefix=f"PNG DEBUG: {image_log_prefix}"
+                    )
+                else:
+                    # Standard optimization for non-PNG images
+                    optimization_result = generate_optimized_versions(saved_filename, max_original_width=500, target_size_kb=80)
+                
+                # Log file size after optimization
+                optimized_name = os.path.splitext(saved_filename)[0] + '.jpg'
+                optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
+                
+                if os.path.exists(optimized_path):
+                    optimized_size = os.path.getsize(optimized_path)
+                    reduction = (1 - (optimized_size / original_size)) * 100 if original_size > 0 else 0
+                    
+                    # Get optimized dimensions
+                    optimized_dimensions = "unknown"
+                    try:
+                        with Image.open(optimized_path) as img:
+                            optimized_dimensions = f"{img.width}x{img.height}"
+                    except Exception as dim_err:
+                        app.logger.warning(f"{image_log_prefix} Could not get optimized dimensions: {str(dim_err)}")
+                        
+                    app.logger.info(
+                        f"{image_log_prefix} Optimization results:\n"
+                        f"  File: {saved_filename} → {optimized_name}\n"
+                        f"  Size: {original_size/1024:.1f}KB → {optimized_size/1024:.1f}KB ({reduction:.1f}% reduction)\n"
+                        f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
+                    )
+                    optimization_success = True
+                else:
+                    app.logger.warning(f"{image_log_prefix} Optimized file not found: {optimized_path}")
+            except Exception as e:
+                app.logger.error(f"{image_log_prefix} Optimization failed: {str(e)}")
+                traceback.print_exc()
+                
+                # Try a simplified optimization fallback if the full one fails
+                try:
+                    app.logger.info(f"{image_log_prefix} Attempting simplified thumbnail generation as fallback")
+                    # Simply create thumbnails directly from original without full optimization
+                    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], os.path.splitext(saved_filename)[0] + '_thumb.jpg')
+                    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], os.path.splitext(saved_filename)[0] + '_preview.jpg')
+                    
+                    with Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)) as img:
+                        # Make a small thumbnail
+                        img.thumbnail((150, 150))
+                        img.save(thumbnail_path, 'JPEG', quality=85)
+                        
+                        # Make a medium preview
+                        img = Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
+                        img.thumbnail((300, 300))
+                        img.save(preview_path, 'JPEG', quality=85)
+                        
+                    app.logger.info(f"{image_log_prefix} Fallback thumbnail generation successful")
+                except Exception as fallback_err:
+                    app.logger.error(f"{image_log_prefix} Fallback thumbnail generation also failed: {str(fallback_err)}")
+            
+            # Always add the filename to our list even if optimization failed
+            # We'll use the original in that case
+            image_filenames.append(saved_filename)
+            processed_count += 1
+            app.logger.info(f"{image_log_prefix} Successfully processed")
+            
+        except Exception as e:
+            app.logger.error(f"{image_log_prefix} Unexpected error: {str(e)}")
+            traceback.print_exc()
+            error_count += 1
+            # Continue with the next image
+    
+    # Log summary of upload session
+    app.logger.info(f"Upload session {upload_session_id} completed: {processed_count} processed, {error_count} errors, {skipped_count} skipped")
 
     # Handle duplicate images if duplicating
     if duplicate_images:
@@ -3342,7 +3821,7 @@ def is_video_file(filename):
     return extension in video_extensions
 
 
-def create_image_thumbnail(image_path, thumbnail_path, size):
+def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
     """
     Create a thumbnail for an image file, always converting to JPG format.
     
@@ -3350,36 +3829,132 @@ def create_image_thumbnail(image_path, thumbnail_path, size):
         image_path (str): Path to the original image
         thumbnail_path (str): Path where the thumbnail should be saved
         size (tuple): Thumbnail size as (width, height)
+        debug_prefix (str, optional): Prefix for debug logs
         
     Returns:
         bool: True if thumbnail was created successfully, False otherwise
     """
+    # Check if this is a PNG file
+    is_png = image_path.lower().endswith('.png')
+    log_prefix = debug_prefix if debug_prefix else (f"PNG DEBUG: [{os.path.basename(image_path)}]" if is_png else "")
+    
     try:
-        with Image.open(image_path) as img:
-            # Always convert to RGB for JPG output
-            if img.mode in ('RGBA', 'LA', 'P'):
-                # Create a white background
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
-            elif img.mode != 'RGB':
-                img = img.convert('RGB')
+        if is_png and log_prefix:
+            app.logger.info(f"{log_prefix} Creating thumbnail from PNG: {image_path} -> {thumbnail_path}")
+            # Check the PNG file header directly
+            try:
+                with open(image_path, 'rb') as f:
+                    header_bytes = f.read(16)
+                    png_signature = b'\x89PNG\r\n\x1a\n'
+                    is_valid_signature = header_bytes.startswith(png_signature)
+                    header_hex = ' '.join([f"{b:02x}" for b in header_bytes[:16]])
+                    app.logger.info(f"{log_prefix} PNG file header: {header_hex}")
+                    app.logger.info(f"{log_prefix} PNG has valid signature: {is_valid_signature}")
+            except Exception as header_err:
+                app.logger.error(f"{log_prefix} Error checking PNG header: {str(header_err)}")
             
-            # Create thumbnail with proper aspect ratio
-            img.thumbnail(size, Image.Resampling.LANCZOS)
-            
-            # Create a new image with the exact size (add padding if needed)
-            thumb = Image.new('RGB', size, (255, 255, 255))
-            
-            # Calculate position to center the image
-            x = (size[0] - img.size[0]) // 2
-            y = (size[1] - img.size[1]) // 2
-            
-            thumb.paste(img, (x, y))
-            
-            # Ensure the thumbnail path ends with .jpg
+        try:
+            with Image.open(image_path) as img:
+                if is_png and log_prefix:
+                    app.logger.info(f"{log_prefix} PNG opened successfully: Format={img.format}, Mode={img.mode}, Size={img.size}")
+                    app.logger.info(f"{log_prefix} PNG bands: {img.getbands()}")
+                
+                # Always convert to RGB for JPG output
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Create a white background
+                    if is_png and log_prefix:
+                        app.logger.info(f"{log_prefix} Converting PNG from {img.mode} to RGB with background")
+                        
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        if is_png and log_prefix:
+                            app.logger.info(f"{log_prefix} Converting PNG from P to RGBA first")
+                            # Check if palette has transparency
+                            has_transparency = img.info.get('transparency') is not None
+                            app.logger.info(f"{log_prefix} PNG palette has transparency: {has_transparency}")
+                        img = img.convert('RGBA')
+                    
+                    # For PNG files, let's add extra transparency debug
+                    if is_png and log_prefix:
+                        if img.mode == 'RGBA':
+                            # Check if image actually has transparency
+                            alpha = img.split()[3]
+                            has_transparency = alpha.getextrema()[0] < 255
+                            app.logger.info(f"{log_prefix} PNG has transparency: {has_transparency}")
+                            
+                    # Do the paste with alpha mask if available
+                    if img.mode == 'RGBA':
+                        alpha_channel = img.split()[3]
+                        if is_png and log_prefix:
+                            app.logger.info(f"{log_prefix} Using alpha channel for PNG composite")
+                        background.paste(img, mask=alpha_channel)
+                    else:
+                        if is_png and log_prefix:
+                            app.logger.info(f"{log_prefix} No alpha channel for PNG composite")
+                        background.paste(img)
+                        
+                    img = background
+                    
+                    if is_png and log_prefix:
+                        app.logger.info(f"{log_prefix} PNG background compositing completed")
+                elif img.mode != 'RGB':
+                    if is_png and log_prefix:
+                        app.logger.info(f"{log_prefix} Converting PNG from {img.mode} to RGB directly")
+                    img = img.convert('RGB')
+                
+                # Create thumbnail with proper aspect ratio
+                if is_png and log_prefix:
+                    app.logger.info(f"{log_prefix} Resizing PNG to {size}")
+                try:
+                    img.thumbnail(size, Image.Resampling.LANCZOS)
+                except Exception as resize_err:
+                    if is_png and log_prefix:
+                        app.logger.error(f"{log_prefix} Error during PNG resize: {str(resize_err)}")
+                        app.logger.info(f"{log_prefix} Trying alternative resize method")
+                    # Try alternative resize method
+                    img = img.resize((min(img.width, size[0]), min(img.height, size[1])), Image.Resampling.BILINEAR)
+                
+                # Create a new image with the exact size (add padding if needed)
+                thumb = Image.new('RGB', size, (255, 255, 255))
+                
+                # Calculate position to center the image
+                x = (size[0] - img.size[0]) // 2
+                y = (size[1] - img.size[1]) // 2
+                
+                thumb.paste(img, (x, y))
+                
+                # Ensure the thumbnail path ends with .jpg
+        except Exception as img_err:
+            # Special handling for corrupted PNGs
+            if is_png and log_prefix:
+                app.logger.error(f"{log_prefix} Error opening PNG with PIL: {str(img_err)}")
+                app.logger.error(f"{log_prefix} Error type: {type(img_err).__name__}")
+                
+                # Log traceback for PNG errors
+                import io
+                tb_output = io.StringIO()
+                traceback.print_exc(file=tb_output)
+                app.logger.error(f"{log_prefix} Image open traceback:\n{tb_output.getvalue()}")
+                
+                # Try to fix the PNG if possible
+                app.logger.info(f"{log_prefix} Attempting to fix corrupt PNG")
+                try:
+                    # Create a placeholder thumbnail since we can't process this PNG
+                    thumb = Image.new('RGB', size, (200, 200, 200))
+                    # Add text indicating error
+                    from PIL import ImageDraw, ImageFont
+                    draw = ImageDraw.Draw(thumb)
+                    text = "PNG Error"
+                    # Use default font since we can't rely on specific fonts
+                    draw.text((size[0]//4, size[1]//2), text, fill=(0, 0, 0))
+                    # Continue with saving this placeholder
+                    app.logger.info(f"{log_prefix} Created placeholder for corrupt PNG")
+                except Exception as fix_err:
+                    app.logger.error(f"{log_prefix} Failed to create PNG placeholder: {str(fix_err)}")
+                    raise img_err  # Re-raise the original error if we couldn't create a placeholder
+            else:
+                # For non-PNG files, just propagate the error
+                raise
             if not thumbnail_path.lower().endswith('.jpg'):
                 thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
                 
@@ -3437,7 +4012,7 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
         return False
 
 
-def generate_optimized_versions(filename, max_original_width=500, target_size_kb=80):
+def generate_optimized_versions(filename, max_original_width=500, target_size_kb=80, debug_prefix=""):
     """
     Generate thumbnail and preview versions of uploaded files.
     Convert all image files to JPG format.
@@ -3451,6 +4026,15 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     Returns:
         dict: Dictionary with paths to generated files
     """
+    # Create a process ID for logging
+    process_id = str(uuid.uuid4())[:6]
+    log_prefix = f"[Optimize-{process_id}][{filename}]"
+    app.logger.info(f"{log_prefix} Starting optimization")
+    
+    # Make sure all required directories exist
+    for directory in [app.config['UPLOAD_FOLDER'], app.config['THUMBNAIL_FOLDER'], app.config['PREVIEW_FOLDER']]:
+        os.makedirs(directory, exist_ok=True)
+    
     original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
     # Generate file paths
@@ -3468,98 +4052,473 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         'thumbnail': None,
         'preview': None,
         'is_image': False,
-        'is_video': False
+        'is_video': False,
+        'success': False
     }
+    
+    # Check if the file actually exists
+    if not os.path.exists(original_path):
+        app.logger.error(f"{log_prefix} Original file not found: {original_path}")
+        
+        # Check if we need to use a placeholder
+        placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+        if not os.path.exists(placeholder_path):
+            placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+            
+        if os.path.exists(placeholder_path):
+            app.logger.info(f"{log_prefix} Using placeholder image instead")
+            try:
+                # Copy placeholder to uploads folder with the original filename
+                shutil.copy2(placeholder_path, original_path)
+                # Also create thumbnails
+                shutil.copy2(placeholder_path, thumbnail_path)
+                shutil.copy2(placeholder_path, preview_path)
+                result['original'] = filename
+                result['thumbnail'] = thumbnail_filename
+                result['preview'] = preview_filename
+                result['is_placeholder'] = True
+                result['success'] = True
+                return result
+            except Exception as e:
+                app.logger.error(f"{log_prefix} Failed to use placeholder: {str(e)}")
+                return result
+        else:
+            app.logger.error(f"{log_prefix} No placeholder found, cannot continue")
+            return result
+    
+    # Check if it's an image or video file
+    is_png = filename.lower().endswith('.png')
     
     if is_image_file(filename):
         result['is_image'] = True
-        try:
-            # Check if the file exists first
-            if not os.path.exists(original_path):
-                app.logger.error(f"Image file not found: {original_path}")
-                # If this is a placeholder SVG, just copy it to thumbnail and preview
-                if filename.lower().endswith('.svg'):
-                    app.logger.info(f"Using SVG file directly as thumbnail and preview: {filename}")
-                    shutil.copy2(original_path, thumbnail_path)
-                    shutil.copy2(original_path, preview_path)
-                    result['thumbnail'] = thumbnail_filename
-                    result['preview'] = preview_filename
-                    return result
-                
-                # For other missing files, return early
-                return result
-            
-            # Convert original to JPG if it's not already and resize/compress it
-            with Image.open(original_path) as img:
-                # Calculate new dimensions to maintain aspect ratio with max width of max_original_width
-                original_width, original_height = img.size
-                if original_width > max_original_width:
-                    scaling_factor = max_original_width / original_width
-                    new_width = max_original_width
-                    new_height = int(original_height * scaling_factor)
-                    # Resize with high quality resampling
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                # Convert to RGB for JPG output
-                if img.mode in ('RGBA', 'LA', 'P'):
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode == 'P':
-                        img = img.convert('RGBA')
-                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                    img = background
-                elif img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                # Save as JPG with compression to target file size
-                # Get optimal quality setting to reach target size
-                quality = get_optimal_image_quality(img, target_size_kb=target_size_kb)
-                img.save(converted_path, 'JPEG', quality=quality, optimize=True)
-                
-                # Remove the original non-JPG file or if it's been resized
-                if not filename.lower().endswith('.jpg') or original_width > max_original_width:
-                    try:
-                        os.remove(original_path)
-                    except Exception as e:
-                        app.logger.warning(f"Error removing original file: {str(e)}")
-                        
-                original_path = converted_path  # Use the converted file for thumbnails
-            
-            # Create thumbnail
-            if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-                result['thumbnail'] = thumbnail_filename
-            
-            # Create preview
-            if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-                result['preview'] = preview_filename
-                
-        except Exception as e:
-            app.logger.error(f"Error converting image to JPG: {str(e)}")
-            
-            # If conversion fails but file exists, try to copy it directly as thumbnail and preview
-            if os.path.exists(original_path):
-                try:
-                    shutil.copy2(original_path, thumbnail_path)
-                    shutil.copy2(original_path, preview_path)
-                    result['thumbnail'] = thumbnail_filename
-                    result['preview'] = preview_filename
-                    app.logger.info(f"Used original file as thumbnail and preview due to conversion error: {filename}")
-                except Exception as copy_err:
-                    app.logger.error(f"Failed to copy original as thumbnail/preview: {str(copy_err)}")
-            
-            traceback.print_exc()
-            return result
-            
+        app.logger.info(f"{log_prefix} Processing as image file")
+        
+        # Special logging for PNG files
+        if is_png:
+            if debug_prefix:
+                app.logger.info(f"{debug_prefix} Processing PNG in optimization function")
+            else:
+                app.logger.info(f"PNG DEBUG: {log_prefix} Processing PNG in optimization function")
     elif is_video_file(filename):
         result['is_video'] = True
-        # Create video thumbnail
-        if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-            result['thumbnail'] = thumbnail_filename
+        app.logger.info(f"{log_prefix} Processing as video file")
         
-        # Create video preview
-        if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-            result['preview'] = preview_filename
+        # Create video thumbnail
+        try:
+            if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+                result['thumbnail'] = thumbnail_filename
+                app.logger.info(f"{log_prefix} Created video thumbnail")
+            
+            # Create video preview
+            if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+                result['preview'] = preview_filename
+                app.logger.info(f"{log_prefix} Created video preview")
+                
+            result['success'] = True
+            return result
+        except Exception as e:
+            app.logger.error(f"{log_prefix} Failed to create video thumbnails: {str(e)}")
+            # Continue with regular processing as fallback
+    else:
+        app.logger.info(f"{log_prefix} Not an image or video file, skipping optimization")
+        return result
     
-    return result
+    try:
+        # Get file info before processing
+        original_size = os.path.getsize(original_path)
+        app.logger.info(f"{log_prefix} Original size: {original_size/1024:.1f}KB")
+        
+        # Try to open and process the image
+        try:
+            with Image.open(original_path) as img:
+                # Special handling for PNG
+                is_png = filename.lower().endswith('.png')
+                if is_png:
+                    debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                    app.logger.info(f"{debug_msg} Processing PNG image in optimization function")
+                    app.logger.info(f"{debug_msg} PNG details - Format: {img.format}, Mode: {img.mode}")
+                
+                # Log original dimensions
+                original_width, original_height = img.size
+                app.logger.info(f"{log_prefix} Original dimensions: {original_width}x{original_height}")
+                
+                # Resize if needed
+                resized = False
+                if original_width > max_original_width:
+                    try:
+                        scaling_factor = max_original_width / original_width
+                        new_width = max_original_width
+                        new_height = int(original_height * scaling_factor)
+                        # Resize with high quality resampling
+                        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        app.logger.info(f"{log_prefix} Resized to {new_width}x{new_height}")
+                        if is_png:
+                            app.logger.info(f"{debug_msg} PNG resized to {new_width}x{new_height}")
+                        resized = True
+                    except Exception as e:
+                        app.logger.error(f"{log_prefix} Resize failed: {str(e)}")
+                        if is_png:
+                            app.logger.error(f"{debug_msg} PNG resize failed: {str(e)}")
+                            app.logger.error(f"{debug_msg} Error type: {type(e).__name__}")
+                        # Continue without resizing
+                
+                # Handle color mode conversion
+                try:
+                    original_mode = img.mode
+                    if img.mode in ('RGBA', 'LA', 'P'):
+                        app.logger.info(f"{log_prefix} Converting from {img.mode} to RGB")
+                        
+                        if is_png:
+                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                            app.logger.info(f"{debug_msg} PNG has transparency (mode: {img.mode})")
+                            
+                            # Special handling for PNG with transparency
+                            if img.mode == 'RGBA' or img.mode == 'LA':
+                                app.logger.info(f"{debug_msg} Preserving PNG transparency during conversion")
+                                # Try to preserve alpha during conversion by using a white background
+                                background = Image.new('RGB', img.size, (255, 255, 255))
+                                if img.mode == 'P':
+                                    app.logger.info(f"{debug_msg} Converting PNG from P to RGBA first")
+                                    img = img.convert('RGBA')
+                                
+                                # Get alpha channel if available
+                                alpha = None
+                                if img.mode == 'RGBA':
+                                    alpha = img.split()[3]
+                                elif img.mode == 'LA':
+                                    alpha = img.split()[1]
+                                
+                                # Paste with alpha mask
+                                if alpha:
+                                    app.logger.info(f"{debug_msg} PNG using alpha channel for paste")
+                                    background.paste(img, mask=alpha)
+                                else:
+                                    app.logger.info(f"{debug_msg} PNG no alpha channel found, using regular paste")
+                                    background.paste(img)
+                                
+                                img = background
+                            else:
+                                # For other modes like P
+                                app.logger.info(f"{debug_msg} Standard conversion for PNG mode {img.mode}")
+                                img = img.convert('RGB')
+                        else:
+                            # Standard conversion for non-PNG files
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            if img.mode == 'P':
+                                img = img.convert('RGBA')
+                            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                            img = background
+                    elif img.mode != 'RGB':
+                        app.logger.info(f"{log_prefix} Converting from {img.mode} to RGB")
+                        if is_png:
+                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                            app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB")
+                        img = img.convert('RGB')
+                except Exception as e:
+                    app.logger.error(f"{log_prefix} Mode conversion failed: {str(e)}")
+                    if is_png:
+                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                        app.logger.error(f"{debug_msg} PNG mode conversion failed: {str(e)}")
+                        app.logger.error(f"{debug_msg} Error type: {type(e).__name__}")
+                        traceback.print_exc()
+                    
+                    # Try a simpler conversion method as fallback
+                    try:
+                        app.logger.info(f"{log_prefix} Attempting simple RGB conversion as fallback")
+                        img = img.convert('RGB')
+                        if is_png:
+                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                            app.logger.info(f"{debug_msg} Simple PNG RGB conversion fallback")
+                    except Exception as conv_err:
+                        if is_png:
+                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                            app.logger.error(f"{debug_msg} All PNG conversion methods failed: {str(conv_err)}")
+                        # If conversion fails entirely, we'll save without conversion
+                        pass
+                
+                # Save as JPG with compression to target file size
+                try:
+                    # Get optimal quality setting to reach target size
+                    quality = get_optimal_image_quality(img, target_size_kb=target_size_kb)
+                    app.logger.info(f"{log_prefix} Using quality setting: {quality}")
+                    
+                    if is_png:
+                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                        app.logger.info(f"{debug_msg} Converting PNG to JPG with quality: {quality}")
+                        app.logger.info(f"{debug_msg} PNG details before conversion - Mode: {img.mode}, Size: {img.size}, Bands: {img.getbands()}")
+                        
+                        # Special handling for PNG conversion
+                        try:
+                            # For PNGs, we might want to try a special save method first
+                            temp_converted_path = f"{converted_path}.temp"
+                            
+                            # Additional debugging for problem PNGs
+                            try:
+                                # Check for transparency issues
+                                has_transparency = False
+                                if img.mode == 'RGBA':
+                                    alpha = img.split()[3]
+                                    has_transparency = alpha.getextrema()[0] < 255
+                                    app.logger.info(f"{debug_msg} PNG has alpha transparency: {has_transparency}")
+                                elif img.mode == 'P' and 'transparency' in img.info:
+                                    has_transparency = True
+                                    app.logger.info(f"{debug_msg} PNG has palette transparency")
+                                    
+                                if has_transparency:
+                                    app.logger.info(f"{debug_msg} Handling PNG transparency for conversion")
+                                    # Create a white background layer first
+                                    background = Image.new('RGB', img.size, (255, 255, 255))
+                                    if img.mode == 'P':
+                                        img = img.convert('RGBA')
+                                    
+                                    # Composite with alpha mask if available
+                                    alpha_mask = None
+                                    if img.mode == 'RGBA':
+                                        alpha_mask = img.split()[3]
+                                    
+                                    background.paste(img, mask=alpha_mask)
+                                    img = background
+                                    app.logger.info(f"{debug_msg} PNG transparency handled, now in mode: {img.mode}")
+                            except Exception as trans_err:
+                                app.logger.error(f"{debug_msg} Error handling PNG transparency: {str(trans_err)}")
+                                # Continue with conversion anyway
+                            
+                            # Try to ensure we have RGB mode
+                            if img.mode != 'RGB':
+                                app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB before save")
+                                img = img.convert('RGB')
+                            
+                            # Save with high quality first to preserve details
+                            img.save(temp_converted_path, 'JPEG', quality=95, optimize=True)
+                            app.logger.info(f"{debug_msg} Initial PNG to JPG conversion successful")
+                            
+                            # Verify the temporary file
+                            if os.path.exists(temp_converted_path) and os.path.getsize(temp_converted_path) > 0:
+                                app.logger.info(f"{debug_msg} Temp JPG file size: {os.path.getsize(temp_converted_path)/1024:.1f}KB")
+                                
+                                # Now optimize the saved JPG to target size
+                                with Image.open(temp_converted_path) as temp_img:
+                                    temp_img.save(converted_path, 'JPEG', quality=quality, optimize=True)
+                                    
+                                # Remove temp file
+                                if os.path.exists(temp_converted_path):
+                                    os.remove(temp_converted_path)
+                                    
+                                app.logger.info(f"{debug_msg} PNG converted to JPG and optimized successfully: {os.path.getsize(converted_path)/1024:.1f}KB")
+                            else:
+                                app.logger.error(f"{debug_msg} Temp JPG file missing or zero size")
+                                raise Exception("Temporary conversion file missing or empty")
+                        except Exception as png_save_err:
+                            app.logger.error(f"{debug_msg} PNG special conversion failed: {str(png_save_err)}")
+                            app.logger.error(f"{debug_msg} Error type: {type(png_save_err).__name__}")
+                            
+                            # Log traceback for PNG errors
+                            import io
+                            tb_output = io.StringIO()
+                            traceback.print_exc(file=tb_output)
+                            app.logger.error(f"{debug_msg} PNG conversion traceback:\n{tb_output.getvalue()}")
+                            
+                            # Fall back to standard method
+                            app.logger.info(f"{debug_msg} Trying direct PNG to JPG conversion...")
+                            
+                            # Try to ensure we have RGB mode
+                            if img.mode != 'RGB':
+                                app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB for fallback")
+                                img = img.convert('RGB')
+                                
+                            img.save(converted_path, 'JPEG', quality=quality, optimize=True)
+                            app.logger.info(f"{debug_msg} Direct PNG to JPG conversion successful")
+                    else:
+                        # Standard save for non-PNG images
+                        img.save(converted_path, 'JPEG', quality=quality, optimize=True)
+                        app.logger.info(f"{log_prefix} Saved optimized JPG: {converted_path}")
+                        
+                except Exception as save_err:
+                    app.logger.error(f"{log_prefix} Failed to save optimized JPG: {str(save_err)}")
+                    if is_png:
+                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                        app.logger.error(f"{debug_msg} Failed to save PNG as JPG: {str(save_err)}")
+                        app.logger.error(f"{debug_msg} Error type: {type(save_err).__name__}")
+                        
+                        # Log traceback for PNG errors
+                        import io
+                        tb_output = io.StringIO()
+                        traceback.print_exc(file=tb_output)
+                        app.logger.error(f"{debug_msg} PNG save traceback:\n{tb_output.getvalue()}")
+                        
+                        # Try a more direct approach for problematic PNGs
+                        try:
+                            app.logger.info(f"{debug_msg} Attempting last resort PNG conversion method...")
+                            # Try to ensure we have RGB mode
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+                            # Use lowest-level save method
+                            img.save(converted_path, 'JPEG', quality=85)
+                            app.logger.info(f"{debug_msg} Last resort PNG conversion successful")
+                        except Exception as final_err:
+                            app.logger.error(f"{debug_msg} All PNG conversion methods failed: {str(final_err)}")
+                            # Give up and let the code continue to next error handling step
+                    
+                    # Try with default quality as fallback
+                    try:
+                        app.logger.info(f"{log_prefix} Attempting save with default quality")
+                        img.save(converted_path, 'JPEG', quality=85)
+                        app.logger.info(f"{log_prefix} Saved JPG with default quality")
+                    except Exception as default_save_err:
+                        if is_png:
+                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
+                            app.logger.error(f"{debug_msg} PNG fallback save also failed: {str(default_save_err)}")
+                        
+                        # If JPG conversion fails entirely, copy original
+                        shutil.copy2(original_path, converted_path)
+                        app.logger.warning(f"{log_prefix} Used original file without optimization")
+                    
+                    # Compare file sizes
+                    if os.path.exists(converted_path):
+                        new_size = os.path.getsize(converted_path)
+                        reduction = (1 - (new_size / original_size)) * 100 if original_size > 0 else 0
+                        app.logger.info(f"{log_prefix} Size reduction: {original_size/1024:.1f}KB -> {new_size/1024:.1f}KB ({reduction:.1f}%)")
+                    
+                    # Remove the original non-JPG file if it was converted or resized
+                    if os.path.exists(converted_path) and (not filename.lower().endswith('.jpg') or resized):
+                        try:
+                            os.remove(original_path)
+                            app.logger.info(f"{log_prefix} Removed original file after conversion")
+                        except Exception as e:
+                            app.logger.warning(f"{log_prefix} Error removing original file: {str(e)}")
+                    
+                except Exception as e:
+                    app.logger.error(f"{log_prefix} Compression error: {str(e)}")
+                    # Use original file if optimization fails
+                    if not os.path.exists(converted_path):
+                        shutil.copy2(original_path, converted_path)
+                        app.logger.warning(f"{log_prefix} Used original file as fallback")
+                
+                # Use the converted file for thumbnails if it exists
+                if os.path.exists(converted_path):
+                    original_path = converted_path
+        
+        except Exception as e:
+            app.logger.error(f"{log_prefix} Failed to process image: {str(e)}")
+            traceback.print_exc()
+            # Just copy the original file as is
+            if os.path.exists(original_path) and not os.path.exists(converted_path):
+                try:
+                    shutil.copy2(original_path, converted_path)
+                    app.logger.warning(f"{log_prefix} Used original file after processing error")
+                except Exception as copy_err:
+                    app.logger.error(f"{log_prefix} Failed to copy original file: {str(copy_err)}")
+        
+        # Create thumbnail - with multiple fallbacks
+        thumbnail_created = False
+        try:
+            if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
+                result['thumbnail'] = thumbnail_filename
+                thumbnail_created = True
+                app.logger.info(f"{log_prefix} Created thumbnail successfully")
+        except Exception as thumb_err:
+            app.logger.error(f"{log_prefix} Thumbnail creation failed: {str(thumb_err)}")
+            
+            # Try direct copy if thumbnail creation fails
+            if not thumbnail_created:
+                try:
+                    # Just copy the original (or converted) file
+                    shutil.copy2(original_path, thumbnail_path)
+                    result['thumbnail'] = thumbnail_filename
+                    thumbnail_created = True
+                    app.logger.warning(f"{log_prefix} Used original as thumbnail after error")
+                except Exception as copy_err:
+                    app.logger.error(f"{log_prefix} Failed to copy original as thumbnail: {str(copy_err)}")
+            
+            # If all else fails, try a very simple PIL thumbnail as last resort
+            if not thumbnail_created:
+                try:
+                    with Image.open(original_path) as img:
+                        img.thumbnail(THUMBNAIL_SIZE)
+                        img.save(thumbnail_path, 'JPEG')
+                        result['thumbnail'] = thumbnail_filename
+                        thumbnail_created = True
+                        app.logger.warning(f"{log_prefix} Created thumbnail with fallback method")
+                except Exception as last_err:
+                    app.logger.error(f"{log_prefix} All thumbnail creation methods failed: {str(last_err)}")
+        
+        # Create preview - with multiple fallbacks
+        preview_created = False
+        try:
+            if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
+                result['preview'] = preview_filename
+                preview_created = True
+                app.logger.info(f"{log_prefix} Created preview successfully")
+        except Exception as prev_err:
+            app.logger.error(f"{log_prefix} Preview creation failed: {str(prev_err)}")
+            
+            # Try direct copy if preview creation fails
+            if not preview_created:
+                try:
+                    # Just copy the original (or converted) file
+                    shutil.copy2(original_path, preview_path)
+                    result['preview'] = preview_filename
+                    preview_created = True
+                    app.logger.warning(f"{log_prefix} Used original as preview after error")
+                except Exception as copy_err:
+                    app.logger.error(f"{log_prefix} Failed to copy original as preview: {str(copy_err)}")
+            
+            # If all else fails, try a very simple PIL thumbnail as last resort
+            if not preview_created:
+                try:
+                    with Image.open(original_path) as img:
+                        img.thumbnail(PREVIEW_SIZE)
+                        img.save(preview_path, 'JPEG')
+                        result['preview'] = preview_filename
+                        preview_created = True
+                        app.logger.warning(f"{log_prefix} Created preview with fallback method")
+                except Exception as last_err:
+                    app.logger.error(f"{log_prefix} All preview creation methods failed: {str(last_err)}")
+        
+        # Mark success if we have at least the original or converted file
+        if os.path.exists(original_path) or os.path.exists(converted_path):
+            result['success'] = True
+            app.logger.info(f"{log_prefix} Optimization completed successfully")
+            
+            # Log verification of all created files
+            for file_type, file_path in [
+                ('Original', original_path),
+                ('Converted', converted_path),
+                ('Thumbnail', thumbnail_path),
+                ('Preview', preview_path)
+            ]:
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path) / 1024.0  # KB
+                    app.logger.info(f"{log_prefix} {file_type}: {os.path.basename(file_path)} ({file_size:.1f}KB)")
+                else:
+                    app.logger.warning(f"{log_prefix} {file_type} file missing: {os.path.basename(file_path)}")
+            
+        return result
+        
+    except Exception as e:
+        app.logger.error(f"{log_prefix} Unhandled exception in optimization: {str(e)}")
+        traceback.print_exc()
+        
+        # If anything went wrong but the original file exists, just use it
+        if os.path.exists(original_path):
+            try:
+                # Copy original to all required outputs as last resort
+                for target_path in [converted_path, thumbnail_path, preview_path]:
+                    if not os.path.exists(os.path.dirname(target_path)):
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    shutil.copy2(original_path, target_path)
+                
+                result['original'] = filename
+                result['thumbnail'] = thumbnail_filename
+                result['preview'] = preview_filename
+                result['success'] = True
+                result['recovery'] = True
+                app.logger.warning(f"{log_prefix} Recovery completed: using original file for all outputs")
+                return result
+            except Exception as recovery_err:
+                app.logger.error(f"{log_prefix} Recovery failed: {str(recovery_err)}")
+        
+        return result
 
 def get_thumbnail_info(filename):
     """

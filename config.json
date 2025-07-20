@@ -21,7 +21,7 @@
         "port": 27017,
         "db": "Inventarsystem"
     },
-    "allowed_extensions": ["PNG","JPG","JPEG","png", "jpg", "jpeg", "gif", "HEVC", "HEIF", "mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "ogg", "flac", "aac", "m4a", "opus", "pdf", "docx", "xlsx", "pptx", "txt"],
+    "allowed_extensions": ["png", "jpg", "jpeg", "gif", "hevc", "heif", "mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "ogg", "flac", "aac", "m4a", "opus", "pdf", "docx", "xlsx", "pptx", "txt"],
     "scheduler": {
         "interval_minutes": 1
     },

@@ -564,18 +564,53 @@ Bei Problemen beim Bild-Upload oder QR-Code-Generierung:
    ```bash
    sudo ls -la Web/uploads
    sudo ls -la Web/QRCodes
+   sudo ls -la Web/thumbnails
+   sudo ls -la Web/previews
    ```
 
-2. **Berechtigungen korrigieren**:
+2. **Fehlende Verzeichnisse anlegen und Berechtigungen korrigieren**:
    ```bash
-   sudo chmod -R 755 Web/uploads
-   sudo chmod -R 755 Web/QRCodes
+   # Verzeichnisse erstellen falls nicht vorhanden
+   sudo mkdir -p Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   
+   # Berechtigungen korrigieren
+   sudo chmod -R 755 Web/uploads Web/QRCodes Web/thumbnails Web/previews
+   sudo chown -R $(whoami):$(whoami) Web/uploads Web/QRCodes Web/thumbnails Web/previews
    ```
 
 3. **Log-Dateien auf spezifische Fehler prüfen**:
    ```bash
+   # Fehler bei Bildverarbeitung suchen
    sudo tail -n 100 logs/error.log | grep "image"
    sudo tail -n 100 logs/error.log | grep "upload"
+   
+   # Fehler bei der Optimierung und Thumbnail-Erstellung suchen
+   sudo tail -n 100 logs/error.log | grep "Optimize"
+   sudo tail -n 100 logs/error.log | grep "thumbnail"
+   ```
+
+4. **Bei Problemen mit teilweisen Uploads (nur manche Bilder werden hochgeladen)**:
+   ```bash
+   # Alle Upload-Session-IDs der letzten Uploads anzeigen
+   sudo grep "Upload session" logs/access.log | tail -n 20
+   
+   # Detaillierte Informationen zu einer bestimmten Session abrufen (SESSION_ID ersetzen)
+   sudo grep "Upload SESSION_ID" logs/access.log
+   
+   # Auf Dateisystem-Probleme prüfen
+   df -h
+   ```
+
+5. **Fix-All-Script ausführen** (behebt die häufigsten Probleme automatisch):
+   ```bash
+   sudo ./fix-all.sh
+   ```
+
+6. **Python Pillow-Bibliothek neu installieren** (bei Problemen mit Bildkonvertierung):
+   ```bash
+   source .venv/bin/activate
+   pip uninstall -y Pillow
+   pip install --force-reinstall Pillow
    ```
 
 #### Anmelde-/Authentifizierungsprobleme
@@ -750,9 +785,9 @@ So stellen Sie sicher, dass das Backup- und Wiederherstellungssystem korrekt fun
 
 #### Beispiel: Beheben von Bild-Upload und QR-Code Problemen
 
-Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
+Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten, folgen Sie dieser schrittweisen Fehlerbehebung:
 
-1. **Überprüfen Sie die Verzeichnisstruktur**:
+1. **Überprüfen Sie die Verzeichnisstruktur und Berechtigungen**:
    ```bash
    sudo ls -la Web/uploads Web/QRCodes Web/thumbnails Web/previews
    ```
@@ -767,18 +802,57 @@ Wenn Probleme bei Bild-Uploads oder der QR-Code Generierung auftreten:
    sudo ./fix-all.sh
    ```
    
-4. **Oder gezielte Korrektur für Bildverzeichnisse**:
+   Falls das Script nicht funktioniert, führen Sie diese Befehle manuell aus:
    ```bash
    sudo chmod -R 755 Web/uploads Web/QRCodes Web/thumbnails Web/previews
    sudo chown -R $(whoami):$(whoami) Web/uploads Web/QRCodes Web/thumbnails Web/previews
    ```
    
-5. **System neustarten und testen**:
+4. **Logs auf spezifische Fehler überprüfen**:
+   ```bash
+   # Fehlerhafte Bild-Upload-Sessions identifizieren
+   sudo grep -i "error" logs/error.log | grep -i "upload" | tail -n 50
+   
+   # Fehler bei der Bildoptimierung finden
+   sudo grep -i "failed" logs/error.log | grep -i "image" | tail -n 20
+   ```
+   
+5. **Bei Problemen mit bestimmten Dateitypen**:
+   ```bash
+   # Wenn nur bestimmte Dateitypen Probleme verursachen (z.B. PNG)
+   sudo grep -i "png" logs/error.log | tail -n 20
+   
+   # Vorhandene Dateien überprüfen
+   ls -la Web/uploads | grep ".png"
+   ```
+   
+6. **Wenn nur einige der hochgeladenen Bilder fehlen**:
+   
+   Suchen Sie nach Upload-Sessions, bei denen nicht alle Dateien verarbeitet wurden:
+   ```bash
+   sudo grep "Upload session" logs/access.log | grep "completed" | tail -n 10
+   ```
+   
+   Überprüfen Sie die Details einer bestimmten Session (SESSION_ID ersetzen):
+   ```bash
+   sudo grep "Upload SESSION_ID" logs/access.log
+   ```
+   
+   Dieser Fehler wird oft durch Berechtigungs- oder Speicherplatzprobleme verursacht.
+   
+7. **System neustarten und testen**:
    ```bash
    sudo ./restart.sh
    ```
    
-   Testen Sie dann den Bild-Upload und die QR-Code Generierung erneut.
+   Testen Sie dann den Bild-Upload mit verschiedenen Dateitypen (JPG, PNG) und beobachten Sie das Verhalten.
+   
+8. **Überprüfen Sie die Protokolle während des Uploads in Echtzeit**:
+   ```bash
+   sudo tail -f logs/error.log
+   ```
+   
+   Führen Sie in einem anderen Terminal-Fenster einen Upload durch und beobachten Sie die Logs.
 
 ## Schlussfolgerung
 
@@ -896,3 +970,40 @@ Das System kann so konfiguriert werden, dass es täglich automatisch nach Proble
    ```bash
    sudo crontab -l | grep fix-all
    ```
+
+#### Behebung von PNG-Anzeigeproblemen
+
+Wenn PNG-Bilder nicht korrekt angezeigt werden:
+
+1. **Browser-Cache leeren**:
+   ```bash
+   # Der erste Schritt sollte immer sein, den Browser-Cache zu leeren
+   # Dies kann in den Browser-Einstellungen durchgeführt werden
+   ```
+   
+2. **Berechtigungen der Bild-Dateien prüfen**:
+   ```bash
+   sudo ls -la Web/uploads/*.png
+   sudo chmod 644 Web/uploads/*.png
+   ```
+   
+3. **Diagnose-Skript ausführen**:
+   ```bash
+   sudo ./test_png_issue.py
+   ```
+   Dieses Skript prüft:
+   - Berechtigungen der Verzeichnisse
+   - Konfiguration in config.json
+   - HTML-Templates auf korrekte Bild-URL-Konstruktion
+   
+4. **Style-Fehler beheben**:
+   ```bash
+   # Bei Problemen mit der Darstellung von Buttons oder anderen UI-Elementen
+   # kann das Fix-Script verwendet werden, um die CSS-Styles zu korrigieren
+   sudo ./test_png_display.py
+   ```
+
+5. **Wenn keine der obigen Lösungen hilft**:
+   Überprüfen Sie die Bildpfade in der Browser-Entwicklerkonsole (F12) und prüfen Sie,
+   ob der Server die richtigen Antworten liefert. Es könnte ein Problem mit dem URL-Routing
+   oder der MIME-Typ-Erkennung vorliegen.
