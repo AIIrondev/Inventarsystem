@@ -528,6 +528,12 @@ sudo systemctl enable inventarsystem-nginx.service
 sudo systemctl start inventarsystem-gunicorn.service
 sudo systemctl start inventarsystem-nginx.service
 
+echo " ------------------------------------------"
+echo "             FIREWALL SETUP                "
+echo " ------------------------------------------"
+
+
+
 echo "✓ Services configured and started"
 echo "To check status: sudo systemctl status inventarsystem-gunicorn.service"
 echo "To view logs: sudo journalctl -u inventarsystem-gunicorn.service -f"
