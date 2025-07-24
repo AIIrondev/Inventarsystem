@@ -55,7 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Toggle the visual state of the container
         passwordContainer.classList.toggle('password-visible');
-        
+
+       //Toggle visability of eye according to state
+       
         // Update aria-label for accessibility
         const isVisible = type === 'text';
         togglePassword.setAttribute('aria-label', isVisible ? 'Hide password' : 'Show password');
