@@ -532,6 +532,28 @@ echo " ------------------------------------------"
 echo "             FIREWALL SETUP                "
 echo " ------------------------------------------"
 
+# Enable UFW and set default rules
+sudo apt update
+sudo apt install -y ufw
+
+# Reset to default settings (optional, clears all previous rules)
+sudo ufw --force reset
+
+# Deny all incoming by default, allow all outgoing
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Allow SSH (port 22)
+sudo ufw allow 22
+
+# Allow HTTPS (port 443)
+sudo ufw allow 443
+
+# Enable UFW
+sudo ufw --force enable
+
+# Show status
+sudo ufw status verbose
 
 
 echo "✓ Services configured and started"
