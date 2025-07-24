@@ -18,7 +18,234 @@
 {% block title %}Inventarsystem{% endblock %}
 
 {% block content %}
+<!-- Hamster Loader -->
+<div id="hamster-loader" class="hamster-loader-container">
+    <div class="hamster-loader">
+        <div class="hamster">
+            <div class="hamster-body">
+                <div class="hamster-head">
+                    <div class="hamster-ear hamster-ear-left"></div>
+                    <div class="hamster-ear hamster-ear-right"></div>
+                    <div class="hamster-eye hamster-eye-left"></div>
+                    <div class="hamster-eye hamster-eye-right"></div>
+                    <div class="hamster-nose"></div>
+                </div>
+                <div class="hamster-limb hamster-limb-front-left"></div>
+                <div class="hamster-limb hamster-limb-front-right"></div>
+                <div class="hamster-limb hamster-limb-back-left"></div>
+                <div class="hamster-limb hamster-limb-back-right"></div>
+                <div class="hamster-tail"></div>
+            </div>
+            <div class="hamster-wheel">
+                <div class="hamster-wheel-inner"></div>
+            </div>
+        </div>
+        <div class="loading-text">Loading...</div>
+    </div>
+</div>
+
 <style>
+    /* Hamster Loader Styles */
+    .hamster-loader-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        transition: opacity 0.5s ease-out;
+    }
+
+    .hamster-loader {
+        text-align: center;
+    }
+
+    .hamster {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 20px;
+    }
+
+    .hamster-wheel {
+        position: absolute;
+        width: 80px;
+        height: 80px;
+        border: 3px solid #8B4513;
+        border-radius: 50%;
+        left: 10px;
+        top: 10px;
+        animation: spin 2s linear infinite;
+    }
+
+    .hamster-wheel-inner {
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        border: 2px solid #8B4513;
+        border-radius: 50%;
+        left: 7px;
+        top: 7px;
+        opacity: 0.5;
+    }
+
+    .hamster-body {
+        position: absolute;
+        width: 30px;
+        height: 35px;
+        background: #F4A460;
+        border-radius: 15px 15px 10px 10px;
+        left: 35px;
+        top: 25px;
+        animation: hamster-run 1s ease-in-out infinite;
+    }
+
+    .hamster-head {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        background: #F4A460;
+        border-radius: 50%;
+        left: 5px;
+        top: -10px;
+    }
+
+    .hamster-ear {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        background: #F4A460;
+        border-radius: 50%;
+    }
+
+    .hamster-ear-left {
+        left: 2px;
+        top: 2px;
+    }
+
+    .hamster-ear-right {
+        right: 2px;
+        top: 2px;
+    }
+
+    .hamster-eye {
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        background: #000;
+        border-radius: 50%;
+        top: 6px;
+    }
+
+    .hamster-eye-left {
+        left: 4px;
+    }
+
+    .hamster-eye-right {
+        right: 4px;
+    }
+
+    .hamster-nose {
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: #FF69B4;
+        border-radius: 50%;
+        left: 9px;
+        top: 10px;
+    }
+
+    .hamster-limb {
+        position: absolute;
+        width: 4px;
+        height: 8px;
+        background: #F4A460;
+        border-radius: 2px;
+    }
+
+    .hamster-limb-front-left {
+        left: 8px;
+        top: 15px;
+        animation: limb-move-front 1s ease-in-out infinite;
+    }
+
+    .hamster-limb-front-right {
+        right: 8px;
+        top: 15px;
+        animation: limb-move-front 1s ease-in-out infinite reverse;
+    }
+
+    .hamster-limb-back-left {
+        left: 4px;
+        top: 20px;
+        animation: limb-move-back 1s ease-in-out infinite;
+    }
+
+    .hamster-limb-back-right {
+        right: 4px;
+        top: 20px;
+        animation: limb-move-back 1s ease-in-out infinite reverse;
+    }
+
+    .hamster-tail {
+        position: absolute;
+        width: 3px;
+        height: 6px;
+        background: #F4A460;
+        border-radius: 2px;
+        right: -2px;
+        top: 10px;
+        animation: tail-wag 0.5s ease-in-out infinite alternate;
+    }
+
+    .loading-text {
+        font-size: 18px;
+        color: #8B4513;
+        font-weight: bold;
+        animation: fade-in-out 2s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    @keyframes hamster-run {
+        0%, 100% { transform: translateX(0px) rotate(0deg); }
+        25% { transform: translateX(2px) rotate(5deg); }
+        75% { transform: translateX(-2px) rotate(-5deg); }
+    }
+
+    @keyframes limb-move-front {
+        0%, 100% { transform: rotate(0deg); }
+        50% { transform: rotate(30deg); }
+    }
+
+    @keyframes limb-move-back {
+        0%, 100% { transform: rotate(0deg); }
+        50% { transform: rotate(-30deg); }
+    }
+
+    @keyframes tail-wag {
+        0% { transform: rotate(-10deg); }
+        100% { transform: rotate(10deg); }
+    }
+
+    @keyframes fade-in-out {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+    }
+
+    /* Hide loader when page is loaded */
+    .hamster-loader-container.hidden {
+        opacity: 0;
+        pointer-events: none;
+    }
+
     /* Main container and layout styles */
     body {
         font-family: Arial, sans-serif;
@@ -3456,6 +3683,23 @@
         futureAppointments.sort((a, b) => new Date(a.date) - new Date(b.date));
         return futureAppointments[0];
     }
+
+    // Hamster Loader Control
+    window.addEventListener('load', function() {
+        const loader = document.getElementById('hamster-loader');
+        if (loader) {
+            // Add a small delay to ensure smooth transition
+            setTimeout(function() {
+                loader.classList.add('hidden');
+                // Remove from DOM after transition completes
+                setTimeout(function() {
+                    if (loader.parentNode) {
+                        loader.parentNode.removeChild(loader);
+                    }
+                }, 500);
+            }, 800); // Keep loader visible for at least 800ms
+        }
+    });
 </script>
 
 <!-- Include edit item functions -->
