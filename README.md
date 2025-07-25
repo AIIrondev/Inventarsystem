@@ -103,7 +103,7 @@ sudo ./start.sh
 
 3. Nach der Installation:
    ```bash
-   cd /pfad/zum/Inventarsystem
+   cd /opt/Inventarsystem
    sudo ./start.sh
    ```
 
