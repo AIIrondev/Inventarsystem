@@ -262,7 +262,10 @@ import os
 import csv
 import sys
 import argparse
+import re
+import ast
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 from datetime import datetime
 
 def parse_args():
@@ -288,8 +291,67 @@ def restore_collection(client, db_name, csv_file):
     with open(csv_file, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Convert empty strings to None
-            doc = {k: (None if v == '' else v) for k, v in row.items()}
+            # Convert empty strings to None and process values
+            doc = {}
+            for k, v in row.items():
+                if v == '':
+                    doc[k] = None
+                elif k == 'filter_num' and v.isdigit():
+                    # Convert numeric filter_num to integer
+                    doc[k] = int(v)
+                elif isinstance(v, str) and v.isdigit():
+                    # Convert other numeric strings to integers
+                    doc[k] = int(v)
+                else:
+                    doc[k] = v
+            
+            # Handle special field types
+            for k, v in doc.items():
+                # Convert ObjectId strings to actual ObjectIds
+                if k == "_id" and isinstance(v, str):
+                    # Strip quotes if present
+                    clean_v = v.strip('"').strip("'")
+                    
+                    # Check if it's a standard ObjectId format
+                    if re.match(r'^[0-9a-f]{24}$', clean_v):
+                        doc[k] = ObjectId(clean_v)
+                        print(f"  Converted _id to ObjectId: {clean_v}")
+                    # Check for {"$oid":"..."} format
+                    elif clean_v.startswith('{"$oid":') and clean_v.endswith('}'):
+                        try:
+                            oid = clean_v.split('"')[3]  # Extract the ID part
+                            doc[k] = ObjectId(oid)
+                            print(f"  Converted $oid format to ObjectId: {oid}")
+                        except Exception as e:
+                            print(f"  Failed to parse $oid format: {e}")
+                            pass
+                
+                # Parse list strings (values like "['item1', 'item2']")
+                if isinstance(v, str) and v.startswith('[') and v.endswith(']'):
+                    try:
+                        # Use ast.literal_eval which is safer than eval for parsing literals
+                        import ast
+                        # Remove any surrounding quotes if present
+                        cleaned_str = v
+                        if cleaned_str.startswith('"') and cleaned_str.endswith('"'):
+                            cleaned_str = cleaned_str[1:-1]
+                        elif cleaned_str.startswith("'") and cleaned_str.endswith("'"):
+                            cleaned_str = cleaned_str[1:-1]
+                        
+                        # Try to parse the list
+                        doc[k] = ast.literal_eval(cleaned_str)
+                    except:
+                        # If parsing fails, try a simple string split approach for basic lists
+                        try:
+                            # Remove brackets and split by comma
+                            simple_list = v.strip('[]').split(',')
+                            # Clean up each item (remove quotes and extra spaces)
+                            doc[k] = [item.strip().strip("'").strip('"') for item in simple_list]
+                            print(f"  Used fallback parsing for list value: {k}")
+                        except:
+                            # If all parsing fails, keep the original string value
+                            print(f"  Warning: Could not parse list value for {k}: {v}")
+                            pass
             
             # Handle nested fields (keys containing dots)
             nested_doc = {}
@@ -304,7 +366,6 @@ def restore_collection(client, db_name, csv_file):
                     current[parts[-1]] = v
                 else:
                     nested_doc[k] = v
-            
             documents.append(nested_doc)
     
     # Insert documents
