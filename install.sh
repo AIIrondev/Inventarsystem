@@ -13,7 +13,7 @@ git clone https://github.com/AIIrondev/Inventarsystem.git /opt/Inventarsystem ||
 cd /opt/Inventarsystem
 # Check if the start.sh script exists
 if [ ! -f "./start.sh" ]; then
-    echo "start.sh script not found in /var/Inventarsystem"
+    echo "start.sh script not found in /opt/Inventarsystem"
     exit 1
 fi
 
