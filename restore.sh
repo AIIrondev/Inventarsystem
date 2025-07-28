@@ -22,6 +22,7 @@ log_message() {
 BACKUP_DATE=""
 RESTART_SERVICES=false
 RESTORE_DB=true
+DROP_DATABASE=false  # Default is not to drop the database
 
 # Display help
 show_help() {
@@ -31,6 +32,7 @@ show_help() {
     echo "Options:"
     echo "  --date=YYYY-MM-DD     Required: Date of backup to restore"
     echo "  --no-db               Skip database restoration"
+    echo "  --drop-database       Drop the entire database before restoring (USE WITH CAUTION!)"
     echo "  --restart-services    Restart services after restoration"
     echo "  --list                List available backups"
     echo "  --help                Show this help message"
@@ -38,6 +40,7 @@ show_help() {
     echo "Examples:"
     echo "  $0 --date=2025-07-14          # Restore backup from July 14, 2025"
     echo "  $0 --date=latest              # Restore most recent backup"
+    echo "  $0 --date=latest --drop-database  # Restore latest backup with clean database"
     echo "  $0 --list                     # Show available backups"
 }
 
@@ -273,6 +276,8 @@ def parse_args():
     parser.add_argument("--uri", required=True, help="MongoDB URI")
     parser.add_argument("--db", required=True, help="Database name")
     parser.add_argument("--dir", required=True, help="Directory containing CSV files")
+    parser.add_argument("--drop-database", action="store_true", 
+                        help="Drop the entire database before restoring (USE WITH CAUTION!)")
     return parser.parse_args()
 
 def restore_collection(client, db_name, csv_file):
@@ -375,11 +380,28 @@ def restore_collection(client, db_name, csv_file):
     else:
         print(f"  No documents to restore")
 
+def drop_database(client, db_name):
+    """Drop the entire database to start fresh"""
+    try:
+        print(f"Dropping database: {db_name}")
+        client.drop_database(db_name)
+        print(f"Database {db_name} dropped successfully")
+        return True
+    except Exception as e:
+        print(f"Error dropping database {db_name}: {e}")
+        return False
+
 def main():
     args = parse_args()
     
     # Connect to MongoDB
     client = MongoClient(args.uri)
+    
+    # Drop the entire database if requested
+    if args.drop_database:
+        drop_result = drop_database(client, args.db)
+        if not drop_result:
+            print("Warning: Database drop failed, continuing with restoration...")
     
     # Get CSV files
     csv_files = [os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith('.csv')]
@@ -408,12 +430,21 @@ PYTHON_SCRIPT
     
     # Execute the restoration script
     log_message "Restoring database from CSV files..."
+    # Prepare command parameters
+    DB_CMD_ARGS="--uri \"mongodb://localhost:27017/\" --db \"Inventarsystem\" --dir \"$db_backup_location\""
+    
+    # Add the drop-database flag if requested
+    if [ "$DROP_DATABASE" = true ]; then
+        log_message "WARNING: Database will be dropped before restoration as requested"
+        DB_CMD_ARGS="$DB_CMD_ARGS --drop-database"
+    fi
+    
     # Try to use virtualenv Python if available
     if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
-        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
             log_message "ERROR: Failed to restore database with virtualenv Python"
             # Try with system Python as fallback
-            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
                 log_message "ERROR: Failed to restore database"
                 [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
                 return 1
@@ -421,7 +452,7 @@ PYTHON_SCRIPT
         fi
     else
         # Use system Python
-        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
             log_message "ERROR: Failed to restore database"
             [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
             return 1
@@ -468,6 +499,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-db)
             RESTORE_DB=false
+            shift
+            ;;
+        --drop-database)
+            DROP_DATABASE=true
             shift
             ;;
         --list)
