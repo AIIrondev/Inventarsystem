@@ -111,7 +111,7 @@ check_and_install() {
                     echo "Using repository for $UBUNTU_CODENAME"
                     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
     
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 fi
                 
@@ -527,6 +527,34 @@ sudo systemctl enable inventarsystem-gunicorn.service
 sudo systemctl enable inventarsystem-nginx.service
 sudo systemctl start inventarsystem-gunicorn.service
 sudo systemctl start inventarsystem-nginx.service
+
+echo " ------------------------------------------"
+echo "             FIREWALL SETUP                "
+echo " ------------------------------------------"
+
+# Enable UFW and set default rules
+sudo apt update
+sudo apt install -y ufw
+
+# Reset to default settings (optional, clears all previous rules)
+sudo ufw --force reset
+
+# Deny all incoming by default, allow all outgoing
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Allow SSH (port 22)
+sudo ufw allow 22
+
+# Allow HTTPS (port 443)
+sudo ufw allow 443
+
+# Enable UFW
+sudo ufw --force enable
+
+# Show status
+sudo ufw status verbose
+
 
 echo "✓ Services configured and started"
 echo "To check status: sudo systemctl status inventarsystem-gunicorn.service"

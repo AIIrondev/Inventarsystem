@@ -1,7 +1,7 @@
 {
     "dbg": false,
     "key": 123457,
-    "ver": "2.5.18",
+    "ver": "2.5.20",
     "host": "0.0.0.0",
     "port": 443,
     "schoolPeriods": {

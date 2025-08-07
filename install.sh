@@ -5,26 +5,26 @@ sudo apt-get install -y curl wget git
 
 echo "Installing Inventarsystem..."
 # Clone the repository to /var
-git clone https://github.com/AIIrondev/Inventarsystem.git /var/Inventarsystem || {
+git clone https://github.com/AIIrondev/Inventarsystem.git /opt/Inventarsystem || {
     echo "Failed to clone repository to /var/Inventarsystem. Exiting."
     exit 1
 }
 
-cd /var/Inventarsystem
+cd /opt/Inventarsystem
 # Check if the start.sh script exists
 if [ ! -f "./start.sh" ]; then
-    echo "start.sh script not found in /var/Inventarsystem"
+    echo "start.sh script not found in /opt/Inventarsystem"
     exit 1
 fi
 
 # Make the script executable
 chmod +x ./start.sh
 
- "========================================================"
+echo "========================================================"
 echo "                  INSTALLATION COMPLETE                 "
 echo "========================================================"
 
-cd /var/Inventarsystem
+cd /opt/Inventarsystem
 # Run the script
 # Ask the user if they want to run the script now
 echo "Running the script now..."

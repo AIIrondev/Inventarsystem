@@ -349,6 +349,10 @@
     }
 
     /* Navigation buttons */
+    .navbar-nav {
+       align-items: center;
+    }
+   
     .navigation-buttons {
         display: flex;
         justify-content: center;
@@ -2173,8 +2177,15 @@
             // No need to call applyFilters() here as it will be called after this function
         }
         
-        // Populate filter 2 dropdown with only available values
-        populateFilterOptions('filter2-options', [...availableFilter2Selections].sort(), 2);
+        // Make sure we're using the correct variable before populating
+        if (typeof availableFilter2Values !== 'undefined') {
+            // Populate filter 2 dropdown with only available values
+            populateFilterOptions('filter2-options', [...availableFilter2Values].sort(), 2);
+        } else {
+            console.error("availableFilter2Values is undefined in rebuildFilter2Options");
+            // Fallback to using an empty array
+            populateFilterOptions('filter2-options', [], 2);
+        }
     }
 
     function saveFilterState() {

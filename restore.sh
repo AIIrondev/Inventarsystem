@@ -22,6 +22,7 @@ log_message() {
 BACKUP_DATE=""
 RESTART_SERVICES=false
 RESTORE_DB=true
+DROP_DATABASE=false  # Default is not to drop the database
 
 # Display help
 show_help() {
@@ -31,6 +32,7 @@ show_help() {
     echo "Options:"
     echo "  --date=YYYY-MM-DD     Required: Date of backup to restore"
     echo "  --no-db               Skip database restoration"
+    echo "  --drop-database       Drop the entire database before restoring (USE WITH CAUTION!)"
     echo "  --restart-services    Restart services after restoration"
     echo "  --list                List available backups"
     echo "  --help                Show this help message"
@@ -38,6 +40,7 @@ show_help() {
     echo "Examples:"
     echo "  $0 --date=2025-07-14          # Restore backup from July 14, 2025"
     echo "  $0 --date=latest              # Restore most recent backup"
+    echo "  $0 --date=latest --drop-database  # Restore latest backup with clean database"
     echo "  $0 --list                     # Show available backups"
 }
 
@@ -262,7 +265,10 @@ import os
 import csv
 import sys
 import argparse
+import re
+import ast
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 from datetime import datetime
 
 def parse_args():
@@ -270,6 +276,8 @@ def parse_args():
     parser.add_argument("--uri", required=True, help="MongoDB URI")
     parser.add_argument("--db", required=True, help="Database name")
     parser.add_argument("--dir", required=True, help="Directory containing CSV files")
+    parser.add_argument("--drop-database", action="store_true", 
+                        help="Drop the entire database before restoring (USE WITH CAUTION!)")
     return parser.parse_args()
 
 def restore_collection(client, db_name, csv_file):
@@ -288,8 +296,67 @@ def restore_collection(client, db_name, csv_file):
     with open(csv_file, 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Convert empty strings to None
-            doc = {k: (None if v == '' else v) for k, v in row.items()}
+            # Convert empty strings to None and process values
+            doc = {}
+            for k, v in row.items():
+                if v == '':
+                    doc[k] = None
+                elif k == 'filter_num' and v.isdigit():
+                    # Convert numeric filter_num to integer
+                    doc[k] = int(v)
+                elif isinstance(v, str) and v.isdigit():
+                    # Convert other numeric strings to integers
+                    doc[k] = int(v)
+                else:
+                    doc[k] = v
+            
+            # Handle special field types
+            for k, v in doc.items():
+                # Convert ObjectId strings to actual ObjectIds
+                if k == "_id" and isinstance(v, str):
+                    # Strip quotes if present
+                    clean_v = v.strip('"').strip("'")
+                    
+                    # Check if it's a standard ObjectId format
+                    if re.match(r'^[0-9a-f]{24}$', clean_v):
+                        doc[k] = ObjectId(clean_v)
+                        print(f"  Converted _id to ObjectId: {clean_v}")
+                    # Check for {"$oid":"..."} format
+                    elif clean_v.startswith('{"$oid":') and clean_v.endswith('}'):
+                        try:
+                            oid = clean_v.split('"')[3]  # Extract the ID part
+                            doc[k] = ObjectId(oid)
+                            print(f"  Converted $oid format to ObjectId: {oid}")
+                        except Exception as e:
+                            print(f"  Failed to parse $oid format: {e}")
+                            pass
+                
+                # Parse list strings (values like "['item1', 'item2']")
+                if isinstance(v, str) and v.startswith('[') and v.endswith(']'):
+                    try:
+                        # Use ast.literal_eval which is safer than eval for parsing literals
+                        import ast
+                        # Remove any surrounding quotes if present
+                        cleaned_str = v
+                        if cleaned_str.startswith('"') and cleaned_str.endswith('"'):
+                            cleaned_str = cleaned_str[1:-1]
+                        elif cleaned_str.startswith("'") and cleaned_str.endswith("'"):
+                            cleaned_str = cleaned_str[1:-1]
+                        
+                        # Try to parse the list
+                        doc[k] = ast.literal_eval(cleaned_str)
+                    except:
+                        # If parsing fails, try a simple string split approach for basic lists
+                        try:
+                            # Remove brackets and split by comma
+                            simple_list = v.strip('[]').split(',')
+                            # Clean up each item (remove quotes and extra spaces)
+                            doc[k] = [item.strip().strip("'").strip('"') for item in simple_list]
+                            print(f"  Used fallback parsing for list value: {k}")
+                        except:
+                            # If all parsing fails, keep the original string value
+                            print(f"  Warning: Could not parse list value for {k}: {v}")
+                            pass
             
             # Handle nested fields (keys containing dots)
             nested_doc = {}
@@ -304,7 +371,6 @@ def restore_collection(client, db_name, csv_file):
                     current[parts[-1]] = v
                 else:
                     nested_doc[k] = v
-            
             documents.append(nested_doc)
     
     # Insert documents
@@ -314,11 +380,28 @@ def restore_collection(client, db_name, csv_file):
     else:
         print(f"  No documents to restore")
 
+def drop_database(client, db_name):
+    """Drop the entire database to start fresh"""
+    try:
+        print(f"Dropping database: {db_name}")
+        client.drop_database(db_name)
+        print(f"Database {db_name} dropped successfully")
+        return True
+    except Exception as e:
+        print(f"Error dropping database {db_name}: {e}")
+        return False
+
 def main():
     args = parse_args()
     
     # Connect to MongoDB
     client = MongoClient(args.uri)
+    
+    # Drop the entire database if requested
+    if args.drop_database:
+        drop_result = drop_database(client, args.db)
+        if not drop_result:
+            print("Warning: Database drop failed, continuing with restoration...")
     
     # Get CSV files
     csv_files = [os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith('.csv')]
@@ -347,12 +430,21 @@ PYTHON_SCRIPT
     
     # Execute the restoration script
     log_message "Restoring database from CSV files..."
+    # Prepare command parameters
+    DB_CMD_ARGS="--uri \"mongodb://localhost:27017/\" --db \"Inventarsystem\" --dir \"$db_backup_location\""
+    
+    # Add the drop-database flag if requested
+    if [ "$DROP_DATABASE" = true ]; then
+        log_message "WARNING: Database will be dropped before restoration as requested"
+        DB_CMD_ARGS="$DB_CMD_ARGS --drop-database"
+    fi
+    
     # Try to use virtualenv Python if available
     if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
-        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
             log_message "ERROR: Failed to restore database with virtualenv Python"
             # Try with system Python as fallback
-            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
                 log_message "ERROR: Failed to restore database"
                 [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
                 return 1
@@ -360,7 +452,7 @@ PYTHON_SCRIPT
         fi
     else
         # Use system Python
-        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location"; then
+        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
             log_message "ERROR: Failed to restore database"
             [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
             return 1
@@ -407,6 +499,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-db)
             RESTORE_DB=false
+            shift
+            ;;
+        --drop-database)
+            DROP_DATABASE=true
             shift
             ;;
         --list)
