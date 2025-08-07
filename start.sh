@@ -32,7 +32,7 @@ if [ ! -d "$VENV_DIR" ]; then
     # Check if venv module is available
     python3 -m venv --help > /dev/null 2>&1 || {
         echo "Python venv module not available. Installing..."
-        sudo apt-get update
+        # sudo apt-get update
         sudo apt-get install -y python3-venv || {
             echo "Failed to install python3-venv. Exiting."
             exit 1
@@ -71,14 +71,14 @@ check_and_install() {
         echo "Installing $1..."
         case $1 in
             nginx)
-                sudo apt-get update
+		# sudo apt-get update
                 sudo apt-get install -y nginx || return 1
                 ;;
             gunicorn)
                 pip install gunicorn || return 1
                 ;;
             openssl)
-                sudo apt-get update
+                # sudo apt-get update
                 sudo apt-get install -y openssl || return 1
                 ;;
             mongod)
@@ -116,7 +116,7 @@ check_and_install() {
                 fi
                 
                 # Install MongoDB
-                sudo apt-get update
+                # sudo apt-get update
                 sudo apt-get install -y mongodb-org || return 1
                 ;;
             *)
