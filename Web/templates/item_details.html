@@ -1,0 +1,1218 @@
+{% extends "base.html" %}
+
+{% block title %}Objektdetails{% endblock %}
+
+{% block head %}
+<style>
+    /* Define CSS variables for consistency */
+    :root {
+        --primary-color: #2563eb;
+        --primary-light: #3b82f6;
+        --primary-dark: #1d4ed8;
+        --danger-color: #dc2626;
+        --warning-color: #f59e0b;
+        --success-color: #10b981;
+        --info-color: #0ea5e9;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-300: #d1d5db;
+        --gray-400: #9ca3af;
+        --gray-500: #6b7280;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --gray-900: #111827;
+        
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.125rem;
+        --font-size-xl: 1.25rem;
+        --font-size-2xl: 1.5rem;
+        --font-size-3xl: 1.875rem;
+        
+        --spacing-xs: 0.25rem;
+        --spacing-sm: 0.5rem;
+        --spacing-md: 0.75rem;
+        --spacing-lg: 1rem;
+        --spacing-xl: 1.5rem;
+        --spacing-2xl: 2rem;
+        
+        --radius-sm: 0.125rem;
+        --radius-md: 0.375rem;
+        --radius-lg: 0.5rem;
+        --radius-xl: 0.75rem;
+        --radius-2xl: 1rem;
+        
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        
+        --transition-fast: 0.15s ease-in-out;
+        --transition-normal: 0.3s ease-in-out;
+    }
+    
+    /* Item Details Page Styling */
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--spacing-2xl);
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    h1 {
+        text-align: center;
+        font-size: var(--font-size-3xl);
+        font-weight: 700;
+        margin-bottom: var(--spacing-xl);
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        position: relative;
+    }
+    
+    h1::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+        border-radius: var(--radius-sm);
+    }
+    
+    .item-details-card {
+        background-color: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+        margin-bottom: var(--spacing-2xl);
+        border: 1px solid var(--gray-200);
+    }
+    
+    .item-header {
+        padding: var(--spacing-lg) var(--spacing-xl);
+        border-bottom: 1px solid var(--gray-200);
+        background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+    }
+    
+    .item-header h2 {
+        margin: 0;
+        color: var(--gray-800);
+        font-size: var(--font-size-2xl);
+        font-weight: 600;
+    }
+    
+    /* Image Gallery */
+    .modal-image-container {
+        position: relative;
+        width: 100%;
+        height: 400px;
+        background-color: var(--gray-100);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    
+    .detail-image {
+        max-width: 100%;
+        max-height: 400px;
+        display: none;
+        object-fit: contain;
+    }
+    
+    .detail-image.active-image {
+        display: block;
+    }
+    
+    .no-image {
+        color: var(--gray-500);
+        font-style: italic;
+    }
+    
+    .modal-image-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        font-size: var(--font-size-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        opacity: 0.7;
+        z-index: 10;
+    }
+    
+    .modal-image-nav:hover {
+        background-color: rgba(0, 0, 0, 0.8);
+        transform: translateY(-50%) scale(1.1);
+        opacity: 1;
+    }
+    
+    .modal-prev-image {
+        left: var(--spacing-lg);
+    }
+    
+    .modal-next-image {
+        right: var(--spacing-lg);
+    }
+    
+    .image-counter {
+        position: absolute;
+        bottom: var(--spacing-lg);
+        right: var(--spacing-lg);
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: var(--spacing-xs) var(--spacing-md);
+        border-radius: var(--radius-xl);
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+    }
+    
+    /* Item Details */
+    .modal-details {
+        padding: var(--spacing-xl);
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-gap: var(--spacing-lg);
+    }
+    
+    .detail-group {
+        margin-bottom: var(--spacing-md);
+        background: var(--gray-50);
+        padding: var(--spacing-md);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--gray-100);
+        transition: all var(--transition-fast);
+    }
+    
+    .detail-group:hover {
+        background: white;
+        border-color: var(--primary-light);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .detail-group.full-width {
+        grid-column: span 2;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: var(--gray-700);
+        margin-bottom: var(--spacing-xs);
+        font-size: var(--font-size-sm);
+    }
+    
+    .detail-value {
+        color: var(--gray-800);
+        word-break: break-word;
+        font-size: var(--font-size-base);
+    }
+    
+    .status-borrowed {
+        color: var(--danger-color);
+        font-weight: 600;
+    }
+    
+    /* Action Buttons */
+    .action-buttons {
+        padding: var(--spacing-lg) var(--spacing-xl);
+        border-top: 1px solid var(--gray-200);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-md);
+        background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+    }
+    
+    .action-buttons a, 
+    .action-buttons button,
+    .action-buttons form button {
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 120px;
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .action-buttons a:hover, 
+    .action-buttons button:hover,
+    .action-buttons form button:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .action-buttons a:active, 
+    .action-buttons button:active,
+    .action-buttons form button:active {
+        transform: translateY(0);
+    }
+    
+    /* Button styles with pseudo-elements for hover effects */
+    .edit-button {
+        background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+        color: white;
+    }
+    
+    .edit-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .edit-button:hover::after {
+        opacity: 1;
+    }
+    
+    .delete-button {
+        background: linear-gradient(135deg, var(--danger-color), #f87171);
+        color: white;
+    }
+    
+    .delete-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #b91c1c, var(--danger-color));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .delete-button:hover::after {
+        opacity: 1;
+    }
+    
+    .duplicate-button {
+        background: linear-gradient(135deg, var(--gray-500), var(--gray-600));
+        color: white;
+    }
+    
+    .duplicate-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, var(--gray-600), var(--gray-700));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .duplicate-button:hover::after {
+        opacity: 1;
+    }
+    
+    .ausleihen {
+        background: linear-gradient(135deg, var(--success-color), #34d399);
+        color: white;
+    }
+    
+    .ausleihen::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #059669, var(--success-color));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .ausleihen:hover::after {
+        opacity: 1;
+    }
+    
+    .return-button {
+        background: linear-gradient(135deg, var(--warning-color), #fbbf24);
+        color: var(--gray-900);
+    }
+    
+    .return-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #d97706, var(--warning-color));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .return-button:hover::after {
+        opacity: 1;
+    }
+    
+    .schedule-button {
+        background: linear-gradient(135deg, var(--info-color), #38bdf8);
+        color: white;
+    }
+    
+    .schedule-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #0284c7, var(--info-color));
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .schedule-button:hover::after {
+        opacity: 1;
+    }
+    
+    .qr-button {
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: white;
+    }
+    
+    .qr-button::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+        z-index: -1;
+    }
+    
+    .qr-button:hover::after {
+        opacity: 1;
+    }
+    
+    /* Modals */
+    .item-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        overflow-y: auto;
+        backdrop-filter: blur(5px);
+    }
+    
+    .item-modal.visible {
+        display: block;
+        animation: modalFadeIn 0.3s forwards;
+    }
+    
+    @keyframes modalFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    .modal-content {
+        position: relative;
+        background-color: white;
+        margin: 50px auto;
+        max-width: 800px;
+        width: 90%;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-xl);
+        padding: var(--spacing-xl);
+        animation: modalSlideIn 0.3s forwards;
+    }
+    
+    @keyframes modalSlideIn {
+        from { transform: translateY(-20px); }
+        to { transform: translateY(0); }
+    }
+    
+    .close-modal {
+        position: absolute;
+        top: var(--spacing-lg);
+        right: var(--spacing-lg);
+        font-size: var(--font-size-2xl);
+        font-weight: bold;
+        color: var(--gray-500);
+        cursor: pointer;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all var(--transition-fast);
+    }
+    
+    .close-modal:hover {
+        color: var(--gray-800);
+        background-color: var(--gray-100);
+    }
+    
+    /* Form Styling */
+    .form-group {
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .form-row {
+        display: flex;
+        gap: var(--spacing-lg);
+    }
+    
+    .form-row .form-group {
+        flex: 1;
+    }
+    
+    label {
+        display: block;
+        margin-bottom: var(--spacing-xs);
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+    
+    input[type="text"],
+    input[type="date"],
+    select,
+    textarea {
+        width: 100%;
+        padding: var(--spacing-md);
+        border: 1px solid var(--gray-300);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-base);
+        transition: all var(--transition-fast);
+        background-color: white;
+    }
+    
+    input[type="text"]:focus,
+    input[type="date"]:focus,
+    select:focus,
+    textarea:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+    
+    .form-actions {
+        display: flex;
+        gap: var(--spacing-md);
+        margin-top: var(--spacing-xl);
+    }
+    
+    .form-actions button {
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        border: none;
+        min-width: 120px;
+    }
+    
+    .save-button {
+        background: linear-gradient(135deg, var(--success-color), #34d399);
+        color: white;
+    }
+    
+    .save-button:hover {
+        background: linear-gradient(135deg, #059669, var(--success-color));
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .cancel-button {
+        background: linear-gradient(135deg, var(--gray-400), var(--gray-500));
+        color: white;
+    }
+    
+    .cancel-button:hover {
+        background: linear-gradient(135deg, var(--gray-500), var(--gray-600));
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .container {
+            padding: var(--spacing-lg);
+            margin: var(--spacing-md) auto;
+        }
+        
+        h1 {
+            font-size: var(--font-size-2xl);
+        }
+        
+        .modal-details {
+            grid-template-columns: 1fr;
+            padding: var(--spacing-lg);
+        }
+        
+        .detail-group.full-width {
+            grid-column: span 1;
+        }
+        
+        .modal-content {
+            width: 95%;
+            margin: 20px auto;
+            padding: var(--spacing-lg);
+        }
+        
+        .form-row {
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        
+        .action-buttons a, 
+        .action-buttons button,
+        .action-buttons form button {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Objektdetails</h1>
+    
+    <div class="item-details-card">
+        <div class="item-header">
+            <h2 id="item-name">{{ item.Name }}</h2>
+        </div>
+        
+        <!-- Image Gallery -->
+        <div class="modal-image-container">
+            {% if item.Images %}
+                {% for image in item.Images %}
+                    {% if is_video_file(image) %}
+                        <video src="{{ image }}" class="detail-image {% if loop.first %}active-image{% endif %}" id="detail-image-{{ loop.index0 }}" controls preload="metadata"></video>
+                    {% else %}
+                        <img src="{{ image }}" alt="{{ item.Name }}" class="detail-image {% if loop.first %}active-image{% endif %}" id="detail-image-{{ loop.index0 }}">
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <div class="no-image">Kein Bild verfügbar</div>
+            {% endif %}
+            
+            {% if item.Images and item.Images|length > 1 %}
+                <button class="modal-image-nav modal-prev-image" id="prev-image-btn">&#10094;</button>
+                <button class="modal-image-nav modal-next-image" id="next-image-btn">&#10095;</button>
+                <div class="image-counter">
+                    <span id="current-image">1</span>/<span id="total-images">{{ item.Images|length }}</span>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Item Details -->
+        <div class="modal-details">
+            <div class="detail-group">
+                <div class="detail-label">Ort:</div>
+                <div class="detail-value">{{ item.Location or '-' }}</div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Status:</div>
+                <div class="detail-value {% if not item.Verfuegbar %}status-borrowed{% endif %}">
+                    {% if item.Verfuegbar %}
+                        Verfügbar
+                    {% else %}
+                        Ausgeliehen
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Unterrichtsfach:</div>
+                <div class="detail-value">
+                    {% if item.Filter %}
+                        {% if item.Filter is string %}
+                            {{ item.Filter }}
+                        {% else %}
+                            {{ item.Filter|join(', ') }}
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Jahrgangsstufe:</div>
+                <div class="detail-value">
+                    {% if item.Filter2 %}
+                        {% if item.Filter2 is string %}
+                            {{ item.Filter2 }}
+                        {% else %}
+                            {{ item.Filter2|join(', ') }}
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Thema:</div>
+                <div class="detail-value">
+                    {% if item.Filter3 %}
+                        {% if item.Filter3 is string %}
+                            {{ item.Filter3 }}
+                        {% else %}
+                            {{ item.Filter3|join(', ') }}
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Code:</div>
+                <div class="detail-value">{{ item.Code or '-' }}</div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Anschaffungsjahr:</div>
+                <div class="detail-value">{{ item.Anschaffungsjahr if item.Anschaffungsjahr else '-' }}</div>
+            </div>
+            
+            <div class="detail-group">
+                <div class="detail-label">Anschaffungskosten:</div>
+                <div class="detail-value">{{ item.Anschaffungskosten if item.Anschaffungskosten else '-' }}</div>
+            </div>
+            
+            <div class="detail-group full-width">
+                <div class="detail-label">Beschreibung:</div>
+                <div class="detail-value">{{ item.Description or '-' }}</div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            {% if user_is_admin %}
+                <a href="#" onclick="openEditModal('{{ item._id }}'); return false;" class="edit-button">Bearbeiten</a>
+                <button id="delete-button" data-item-id="{{ item._id }}" class="delete-button" onclick="confirmDelete('{{ item._id }}')">Löschen</button>
+                <button id="duplicate-button" data-item-id="{{ item._id }}" class="duplicate-button" onclick="duplicateItem('{{ item._id }}')">Duplizieren</button>
+                {% if item.Verfuegbar %}
+                    <form method="POST" action="{{ url_for('ausleihen', id=item._id) }}" onsubmit="return confirm('Möchten Sie diesen Artikel wirklich ausleihen?');">
+                        <button type="submit" class="ausleihen">Ausleihen</button>
+                    </form>
+                {% else %}
+                    {% if user_is_admin or item.User == current_user %}
+                    <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}" onsubmit="return confirm('Möchten Sie diesen Artikel wirklich zurückgeben?');">
+                        <button type="submit" class="ausleihen return-button">Zurückgeben</button>
+                    </form>
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                {% if item.Verfuegbar %}
+                <form method="POST" action="{{ url_for('ausleihen', id=item._id) }}" onsubmit="return confirm('Möchten Sie diesen Artikel wirklich ausleihen?');">
+                    <button type="submit" class="ausleihen">Ausleihen</button>
+                </form>
+                {% else %}
+                    {% if item.User == current_user %}
+                    <form method="POST" action="{{ url_for('zurueckgeben', id=item._id) }}" onsubmit="return confirm('Möchten Sie diesen Artikel wirklich zurückgeben?');">
+                        <button type="submit" class="ausleihen return-button">Zurückgeben</button>
+                    </form>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+            
+            {% if item.Verfuegbar %}
+                <button class="schedule-button" onclick="openScheduleModal('{{ item._id }}')">Termin planen</button>
+            {% endif %}
+            
+            {% if item.QRCode %}
+                <a href="{{ url_for('static', filename='QRCodes/' + item.QRCode) }}" download class="qr-button">QR-Code</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Hidden modal for edit functionality -->
+<div id="edit-modal" class="item-modal">
+    <div class="modal-content">
+        <span class="close-modal" id="close-edit-modal">&times;</span>
+        <h2>Objekt bearbeiten</h2>
+        <form id="edit-item-form" method="POST" enctype="multipart/form-data">
+            {% include 'edit_item_functions.html' %}
+        </form>
+    </div>
+</div>
+
+<!-- Hidden modal for schedule functionality -->
+<div id="schedule-modal" class="item-modal">
+    <div class="modal-content">
+        <span class="close-modal" id="close-schedule-modal">&times;</span>
+        <h2>Termin planen</h2>
+        <form id="schedule-item-form">
+            <input type="hidden" id="schedule-item-id" name="item_id">
+            
+            <div class="form-group">
+                <label for="schedule-date">Datum:</label>
+                <input type="date" id="schedule-date" name="schedule_date" required>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="start-period">Von Stunde:</label>
+                    <select id="start-period" name="start_period" required>
+                        {% for period_num, period in school_periods.items() %}
+                            <option value="{{ period_num }}">{{ period.label }} ({{ period.start }} - {{ period.end }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="end-period">Bis Stunde:</label>
+                    <select id="end-period" name="end_period" required>
+                        {% for period_num, period in school_periods.items() %}
+                            <option value="{{ period_num }}">{{ period.label }} ({{ period.start }} - {{ period.end }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="schedule-notes">Notizen:</label>
+                <textarea id="schedule-notes" name="notes"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" id="schedule-submit" class="save-button">Termin speichern</button>
+                <button type="button" class="cancel-button" id="cancel-schedule-button">Abbrechen</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Global variables
+    let currentImageIndex = 0;
+    
+    // Console log to confirm script is loaded
+    console.log('Item details script loaded');
+    
+    // Global function for opening edit modal
+    function openEditModal(itemId) {
+        console.log('Opening edit modal for item:', itemId);
+        const modal = document.getElementById('edit-modal');
+        
+        if (!modal) {
+            console.error('Edit modal not found');
+            alert('Fehler: Bearbeitungsdialog nicht gefunden');
+            return;
+        }
+        
+        // Disable body scrolling
+        document.body.style.overflow = 'hidden';
+        
+        // Get item data and populate form
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch item data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Received item data:', data);
+                if (data.item) {
+                    fillEditForm(data.item);
+                    modal.classList.add('visible');
+                } else {
+                    throw new Error('No item data received');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching item data:', error);
+                alert('Fehler beim Laden der Objektdaten: ' + error.message);
+                // Restore body scrolling on error
+                document.body.style.overflow = '';
+            });
+    }
+    
+    // Global function for closing edit modal
+    function closeEditModal() {
+        const modal = document.getElementById('edit-modal');
+        if (modal) {
+            modal.classList.remove('visible');
+        }
+        
+        // Restore body scrolling
+        document.body.style.overflow = '';
+    }
+
+    // Function to check if a file is a video
+    function isVideoFile(filename) {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
+        if (!filename) return false;
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        return videoExtensions.includes(extension);
+    }
+
+    // Load location options for edit modal
+    function loadLocationOptions() {
+        fetch('/get_predefined_locations')
+            .then(response => response.json())
+            .then(data => {
+                const ortSelect = document.getElementById('edit-location');
+                if (ortSelect) {
+                    // Clear existing options except the first one
+                    while (ortSelect.children.length > 1) {
+                        ortSelect.removeChild(ortSelect.lastChild);
+                    }
+                    
+                    // Add new options - data.locations contains the array
+                    if (data.locations) {
+                        data.locations.forEach(location => {
+                            const option = document.createElement('option');
+                            option.value = location;
+                            option.textContent = location;
+                            ortSelect.appendChild(option);
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading location options:', error);
+            });
+    }
+
+    // Fill the edit form with item data
+    function fillEditForm(item) {
+        if (!item) {
+            console.error('fillEditForm called with no item.');
+            return;
+        }
+
+        // Populate the edit form with current item data
+        const itemIdField = document.getElementById('edit-item-id');
+        if(itemIdField) itemIdField.value = item._id;
+
+        const nameField = document.getElementById('edit-name');
+        if(nameField) nameField.value = item.Name || '';
+
+        const descField = document.getElementById('edit-description');
+        if(descField) descField.value = item.Beschreibung || item.Description || '';
+
+        const codeField = document.getElementById('edit-code4');
+        if(codeField) codeField.value = item.Code_4 || item.Code || '';
+
+        const yearField = document.getElementById('edit-year');
+        if(yearField) yearField.value = item.Anschaffungsjahr || '';
+
+        const costField = document.getElementById('edit-cost');
+        if(costField) costField.value = item.Anschaffungskosten || '';
+
+        // Load location options and then set the value
+        loadLocationOptions();
+        setTimeout(() => {
+            const locationSelect = document.getElementById('edit-location');
+            if (locationSelect && item.Ort) {
+                locationSelect.value = item.Ort;
+            }
+        }, 200); // A small delay to allow options to load
+
+        // Handle filter arrays - set current values
+        const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+        const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+        const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+
+        // Set filter dropdowns (up to 4 each)
+        for (let i = 1; i <= 4; i++) {
+            const filter1Select = document.getElementById(`edit-filter1-${i}`);
+            if (filter1Select) filter1Select.value = filter1Array[i-1] || '';
+            
+            const filter2Select = document.getElementById(`edit-filter2-${i}`);
+            if (filter2Select) filter2Select.value = filter2Array[i-1] || '';
+            
+            const filter3Select = document.getElementById(`edit-filter3-${i}`);
+            if (filter3Select) filter3Select.value = filter3Array[i-1] || '';
+        }
+    }
+    
+    // Global function for opening schedule modal
+    function openScheduleModal(itemId) {
+        console.log('Opening schedule modal for item:', itemId);
+        const modal = document.getElementById('schedule-modal');
+        const itemIdField = document.getElementById('schedule-item-id');
+        const dateField = document.getElementById('schedule-date');
+        
+        if (!modal) {
+            console.error('Schedule modal not found');
+            alert('Fehler: Terminplanungsdialog nicht gefunden');
+            return;
+        }
+        
+        if (!itemIdField) {
+            console.error('Schedule item ID field not found');
+            alert('Fehler: Item-ID-Feld nicht gefunden');
+            return;
+        }
+        
+        itemIdField.value = itemId;
+        
+        // Set default date to tomorrow
+        if (dateField) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            dateField.value = tomorrow.toISOString().split('T')[0];
+        }
+        
+        // Disable body scrolling
+        document.body.style.overflow = 'hidden';
+        
+        // Show modal
+        modal.classList.add('visible');
+    }
+    
+    // Global function for closing schedule modal
+    function closeScheduleModal() {
+        const modal = document.getElementById('schedule-modal');
+        if (modal) {
+            modal.classList.remove('visible');
+        }
+        
+        // Restore body scrolling
+        document.body.style.overflow = '';
+    }
+    
+    // Global function for delete confirmation
+    function confirmDelete(itemId) {
+        if (confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+            // Show loading indicator or disable button here if desired
+            window.location.href = `/delete_item/${itemId}`;
+        }
+    }
+    
+    // Global function for duplicating items
+    function duplicateItem(itemId) {
+        if (confirm('Möchten Sie dieses Objekt duplizieren? Es wird eine Kopie mit einer neuen Inventarnummer erstellt.')) {
+            // Show loading state if desired
+            
+            fetch('/duplicate_item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `id=${itemId}`
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.new_item_id) {
+                    alert('Objekt erfolgreich dupliziert!');
+                    // Redirect to the new item's detail page
+                    window.location.href = `/item/${data.new_item_id}`;
+                } else {
+                    throw new Error(data.message || 'Unbekannter Fehler beim Duplizieren.');
+                }
+            })
+            .catch(error => {
+                console.error('Error duplicating item:', error);
+                alert('Fehler beim Duplizieren des Objekts: ' + error.message);
+            });
+        }
+    }
+    
+    // Image gallery function
+    function changeImage(direction) {
+        const images = document.querySelectorAll('.detail-image');
+        if (images.length <= 1) return;
+        
+        // Hide current image
+        images[currentImageIndex].classList.remove('active-image');
+        
+        // Calculate new index
+        currentImageIndex = (currentImageIndex + direction + images.length) % images.length;
+        
+        // Show new image
+        images[currentImageIndex].classList.add('active-image');
+        
+        // Update counter
+        const counter = document.getElementById('current-image');
+        if (counter) counter.textContent = (currentImageIndex + 1).toString();
+    }
+    
+    // Initialize variables and setup functions
+    document.addEventListener('DOMContentLoaded', function() {
+        const totalImages = document.querySelectorAll('.detail-image').length;
+        
+        // Set up image navigation buttons
+        const prevButton = document.getElementById('prev-image-btn');
+        const nextButton = document.getElementById('next-image-btn');
+        
+        if (prevButton && nextButton) {
+            prevButton.addEventListener('click', function() {
+                changeImage(-1);
+            });
+            
+            nextButton.addEventListener('click', function() {
+                changeImage(1);
+            });
+        }
+        
+        // Setup close modal buttons
+        const closeEditButton = document.getElementById('close-edit-modal');
+        const closeScheduleButton = document.getElementById('close-schedule-modal');
+        const cancelScheduleButton = document.getElementById('cancel-schedule-button');
+        
+        if (closeEditButton) {
+            closeEditButton.addEventListener('click', closeEditModal);
+        }
+        
+        if (closeScheduleButton) {
+            closeScheduleButton.addEventListener('click', closeScheduleModal);
+        }
+        
+        if (cancelScheduleButton) {
+            cancelScheduleButton.addEventListener('click', closeScheduleModal);
+        }
+        
+        // Setup schedule form submission
+        const scheduleSubmitBtn = document.getElementById('schedule-submit');
+        if (scheduleSubmitBtn) {
+            scheduleSubmitBtn.addEventListener('click', function() {
+                const form = document.getElementById('schedule-item-form');
+                
+                // Create form data object
+                const formData = new FormData(form);
+                
+                // Send schedule request
+                fetch('/schedule_appointment', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Termin erfolgreich geplant!');
+                        closeScheduleModal();
+                        // Reload page to show updated status
+                        window.location.reload();
+                    } else {
+                        alert('Fehler: ' + (data.error || 'Unbekannter Fehler'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error scheduling appointment:', error);
+                    alert('Fehler beim Planen des Termins.');
+                });
+            });
+        }
+        
+        // Setup edit form submission
+        const editForm = document.getElementById('edit-item-form');
+        if (editForm) {
+            editForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Try to get item ID from multiple possible sources
+                const itemIdField = document.getElementById('edit-item-id');
+                let itemId = null;
+                
+                if (itemIdField) {
+                    itemId = itemIdField.value;
+                } else {
+                    // If no edit-item-id field, try to get from URL or other sources
+                    const urlParts = window.location.pathname.split('/');
+                    itemId = urlParts[urlParts.length - 1];
+                }
+                
+                if (!itemId) {
+                    alert('Fehler: Item-ID nicht gefunden');
+                    return;
+                }
+                
+                const formData = new FormData(this);
+                
+                fetch(`/edit_item/${itemId}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        closeEditModal();
+                        // Reload page to show updated information
+                        window.location.reload();
+                    } else {
+                        alert('Fehler beim Aktualisieren des Items');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating item:', error);
+                    alert('Fehler beim Aktualisieren des Items');
+                });
+            });
+        }
+        
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('item-modal')) {
+                if (event.target.id === 'edit-modal') {
+                    closeEditModal();
+                } else if (event.target.id === 'schedule-modal') {
+                    closeScheduleModal();
+                }
+            }
+        };
+    });
+</script>
+{% endblock %}
