@@ -2646,6 +2646,7 @@
                                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                                 <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                                <a href="/item/${item._id}" class="details-button">Details</a>
                             </div>
                         `;
                         itemsContainer.appendChild(card);
@@ -2665,10 +2666,8 @@
                                 
                                 e.stopPropagation();
                                 
-                                const modalItemData = {...item};
-                                modalItemData.Images = item.Images ? item.Images.map(img => "{{ url_for('uploaded_file', filename='') }}" + img) : [];
-                                
-                                openItemModal(modalItemData);
+                                // Redirect to the dedicated item details page instead of opening a modal
+                                window.location.href = `/item/${item._id}`;
                             });
                         }
                     } catch (err) {
