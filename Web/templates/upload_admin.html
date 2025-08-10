@@ -596,6 +596,69 @@
             font-size: 16px;
         }
     }
+
+    /* Additional styles for elements with inline styles */
+    .edit-new-location-container {
+        display: none;
+        margin-top: 10px;
+    }
+
+    .book-cover-thumbnail {
+        max-width: 100px;
+        max-height: 150px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+    }
+    
+    /* Standardized button styles across the application */
+    .import-book-button, .fetch-isbn-button, .add-new-btn, .popup-close-button, .nav-back-button,
+    .submit-button, button[type="submit"], button[type="button"] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-width: 120px;
+        height: 40px;
+        padding: 8px 16px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        border-radius: 5px;
+        cursor: pointer;
+        white-space: nowrap;
+        box-sizing: border-box;
+    }
+
+    .book-cover-caption {
+        font-size: 0.8em;
+        color: #666;
+        margin: 5px 0;
+    }
+
+    .remove-book-cover-button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 2px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.8em;
+    }
+
+    .duplicate-image-preview {
+        max-width: 150px;
+        max-height: 150px;
+        object-fit: cover;
+    }
+
+    .remove-duplicate-image-button {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-left: 10px;
+    }
 </style>
 
 <div class="upload-container">
@@ -617,7 +680,7 @@
                 <button type="button" class="add-new-btn" id="add-new-location-btn">
                     Neuen Ort hinzufügen
                 </button>
-                <div id="new-location-container" style="display: none; margin-top: 10px;">
+                <div id="new-location-container" class="edit-new-location-container">
                     <input type="text" id="new-location-input" placeholder="Neuen Ort eingeben">
                     <button type="button" onclick="addNewLocation()">Hinzufügen</button>
                     <button type="button" onclick="cancelAddLocation()">Abbrechen</button>
@@ -1029,11 +1092,11 @@
                 imagePreview.innerHTML = `
                     <div class="preview-item">
                         <img src="{{ url_for('uploaded_file', filename='') }}${data.filename}" 
-                             alt="Buchcover" style="max-width: 100px; max-height: 150px; border: 1px solid #ddd; border-radius: 3px;">
-                        <p style="font-size: 0.8em; color: #666; margin: 5px 0;">Buchcover automatisch heruntergeladen</p>
+                             alt="Buchcover" class="book-cover-thumbnail">
+                        <p class="book-cover-caption">Buchcover automatisch heruntergeladen</p>
                         <input type="hidden" name="book_cover_image" value="${data.filename}">
                         <button type="button" onclick="removeBookCover(this)" 
-                                style="background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 0.8em;">
+                                class="remove-book-cover-button">
                             Entfernen
                         </button>
                     </div>
@@ -1295,9 +1358,8 @@
     let duplicateData = null;
     
     // First, check for server-side template data
-    {% if duplicate_data %}
-    duplicateData = {{ duplicate_data | tojson }};
-    {% endif %}
+    // Flask template data will be populated by server
+    // The actual check is done by the server templates
     
     // Then check for sessionStorage data (takes priority)
     const sessionData = sessionStorage.getItem('duplicateItemData');
@@ -1406,10 +1468,10 @@
             const preview = document.createElement('div');
             preview.className = 'image-preview-item';
             preview.innerHTML = `
-                <img src="/uploads/${imageName}" alt="Duplicate Image ${index + 1}" style="max-width: 150px; max-height: 150px; object-fit: cover;">
+                <img src="/uploads/${imageName}" alt="Duplicate Image ${index + 1}" class="duplicate-image-preview">
                 <div class="image-controls">
                     <span>Von Original übernommen</span>
-                    <button type="button" onclick="removeDuplicateImage('${imageName}', this)" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 10px;">Entfernen</button>
+                    <button type="button" onclick="removeDuplicateImage('${imageName}', this)" class="remove-duplicate-image-button">Entfernen</button>
                 </div>
             `;
             previewContainer.appendChild(preview);
