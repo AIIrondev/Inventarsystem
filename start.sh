@@ -104,14 +104,14 @@ check_and_install() {
                     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
     
                     # Add repository using Jammy instead of Noble
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/6.0 multiverse" | \
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 else
                     # For older Ubuntu versions
                     echo "Using repository for $UBUNTU_CODENAME"
                     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
-    
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/6.0 multiverse" | \
+
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 fi
                 
