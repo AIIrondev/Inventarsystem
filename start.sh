@@ -98,20 +98,20 @@ check_and_install() {
 
                 if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
                     echo "Detected Ubuntu 24.04 (Noble)"
-                    echo "Using Ubuntu 22.04 (Jammy) repository for MongoDB 6.0"
+                    echo "Using Ubuntu 22.04 (Noble) repository for MongoDB 6.0"
     
                     # Modern way to add repository keys with explicit file
                     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
     
                     # Add repository using Jammy instead of Noble
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 else
                     # For older Ubuntu versions
                     echo "Using repository for $UBUNTU_CODENAME"
                     wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
     
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | \
+                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/6.0 multiverse" | \
                     sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
                 fi
                 
