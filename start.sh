@@ -3,6 +3,9 @@
 # Get the local network IP address
 NETWORK_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
 
+# Detect OS (Ubuntu Server or Linux Mint) to tailor package setup
+OS_ID=$(awk -F= '/^ID=/{print $2}' /etc/os-release | tr -d '"')
+
 # Set project root directory
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" || {
     echo "Failed to determine project root directory. Exiting."
@@ -91,32 +94,58 @@ check_and_install() {
                 echo "=== Updating system packages ==="
                 sudo apt update || { echo "Failed to update package lists"; exit 1; }
 
-                # Add MongoDB repository for Ubuntu 24.04
+                # Add MongoDB repository depending on OS (Ubuntu Server or Linux Mint)
                 echo "=== Adding MongoDB repository ==="
-                UBUNTU_VERSION=$(lsb_release -rs)
-                UBUNTU_CODENAME=$(lsb_release -cs)
-
-                if [[ "$UBUNTU_VERSION" == "24.04" || "$UBUNTU_CODENAME" == "noble" ]]; then
-                    echo "Detected Ubuntu 24.04 (Noble)"
-                    echo "Using Ubuntu 22.04 (Noble) repository for MongoDB 6.0"
-    
-                    # Modern way to add repository keys with explicit file
-                    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
-    
-                    # Add repository using Jammy instead of Noble
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
-                    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
-                else
-                    # For older Ubuntu versions
-                    echo "Using repository for $UBUNTU_CODENAME"
-                    wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-6.0.gpg
-
-                    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu $UBUNTU_CODENAME/mongodb-org/6.0 multiverse" | \
-                    sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+                # Prefer Ubuntu base codename from /etc/os-release when available
+                UBUNTU_BASE_CODENAME=$(awk -F= '/^UBUNTU_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
+                if [ -z "$UBUNTU_BASE_CODENAME" ]; then
+                    UBUNTU_BASE_CODENAME=$(lsb_release -cs 2>/dev/null || awk -F= '/^VERSION_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
                 fi
+
+                if [ "$OS_ID" = "linuxmint" ]; then
+                    # Map Linux Mint codename to Ubuntu base codename when needed
+                    MINT_CODENAME=$(lsb_release -cs 2>/dev/null || awk -F= '/^VERSION_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
+                    if [ -z "$UBUNTU_BASE_CODENAME" ] || [ "$UBUNTU_BASE_CODENAME" = "$MINT_CODENAME" ]; then
+                        case "$MINT_CODENAME" in
+                            xia) UBUNTU_BASE_CODENAME="noble" ;;
+                            vanessa|vera|victoria) UBUNTU_BASE_CODENAME="jammy" ;;
+                            ulyana|ulyssa|uma|una) UBUNTU_BASE_CODENAME="focal" ;;
+                        esac
+                    fi
+                    echo "Detected Linux Mint ($MINT_CODENAME) → using Ubuntu base '$UBUNTU_BASE_CODENAME'"
+                elif [ "$OS_ID" = "ubuntu" ];
+                then
+                    echo "Detected Ubuntu ($UBUNTU_BASE_CODENAME)"
+                else
+                    echo "Non-Ubuntu/Mint OS detected ($OS_ID). Skipping MongoDB apt setup."
+                    return 1
+                fi
+
+                # Select MongoDB series per Ubuntu base codename
+                case "$UBUNTU_BASE_CODENAME" in
+                    noble|jammy)
+                        MONGO_SERIES="7.0" ;;
+                    focal)
+                        MONGO_SERIES="6.0" ;;
+                    *)
+                        echo "Unknown Ubuntu codename '$UBUNTU_BASE_CODENAME', defaulting to 7.0"
+                        MONGO_SERIES="7.0" ;;
+                esac
+
+                # Use jammy repo path for noble until MongoDB publishes noble (avoid 404)
+                MONGO_APT_CODENAME="$UBUNTU_BASE_CODENAME"
+                if [ "$UBUNTU_BASE_CODENAME" = "noble" ]; then
+                    MONGO_APT_CODENAME="jammy"
+                    echo "Using jammy repo path for MongoDB on noble"
+                fi
+
+                # Install repo key and list using series and apt codename
+                wget -qO - https://www.mongodb.org/static/pgp/server-${MONGO_SERIES}.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg
+                echo "deb [signed-by=/usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu ${MONGO_APT_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" | \
+                    sudo tee /etc/apt/sources.list.d/mongodb-org-${MONGO_SERIES}.list
                 
                 # Install MongoDB
-                # sudo apt-get update
+                sudo apt-get update || return 1
                 sudo apt-get install -y mongodb-org || return 1
                 ;;
             *)
@@ -368,7 +397,14 @@ echo "========================================================"
 
 # Fix directory permissions for Nginx to access static files
 echo "Setting proper permissions for static file access..."
-sudo chmod 755 /home/$(whoami)
+# Determine the real user and home (avoid /home/root when run with sudo)
+REAL_USER=${SUDO_USER:-$(whoami)}
+USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+if [ -d "$USER_HOME" ]; then
+    sudo chmod 755 "$USER_HOME"
+else
+    echo "Note: User home directory not found for $REAL_USER ($USER_HOME). Skipping chmod."
+fi
 sudo chmod 755 $PROJECT_ROOT/Web/static || {
     echo "ERROR: Failed to set permissions for static files. Exiting."
     exit 1
