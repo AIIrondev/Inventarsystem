@@ -1,59 +1,71 @@
-#!/bin/bash
+update_from_git() {
+    log_message "Updating from git repository..."
 
-# Configuration
-PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
-BACKUP_BASE_DIR="/var/backups"
-LOG_FILE="$PROJECT_DIR/logs/daily_update.log"
+    # Navigate to project directory
+    cd "$PROJECT_DIR" || {
+        log_message "ERROR: Could not navigate to project directory"
+        return 1
+    }
 
-# Parse command line arguments
-RESTART_SERVER=false
-COMPRESSION_LEVEL=9  # Default to maximum compression
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --restart-server)
-            RESTART_SERVER=true
-            shift
-            ;;
-        --compression-level=*)
-            COMPRESSION_LEVEL="${1#*=}"
-            # Validate compression level (0-9, where 0 is no compression)
-            if ! [[ "$COMPRESSION_LEVEL" =~ ^[0-9]$ ]]; then
-                echo "Invalid compression level. Must be 0-9."
-                echo "Usage: $0 [--restart-server] [--compression-level=0-9]"
-                exit 1
-            fi
-            shift
-            ;;
-        --help)
-            echo "Usage: $0 [--restart-server] [--compression-level=0-9]"
-            echo "Options:"
-            echo "  --restart-server        Restart the server after the update"
-            echo "  --compression-level=N   Set compression level (0-9, default is 9)"
-            exit 0
-            ;;
-        *)
-            echo "Unknown parameter: $1"
-            echo "Usage: $0 [--restart-server] [--compression-level=0-9]"
-            exit 1
-            ;;
-    esac
-done
-
-# Create logs directory if it doesn't exist
-mkdir -p "$PROJECT_DIR/logs"
-# Ensure proper permissions for logs directory
-if [ -d "$PROJECT_DIR/logs" ]; then
-    chmod -R 777 "$PROJECT_DIR/logs" 2>/dev/null || {
-        echo "WARNING: Failed to set permissions on logs directory. Trying with sudo..."
-        sudo chmod -R 777 "$PROJECT_DIR/logs" 2>/dev/null || {
-            echo "WARNING: Failed to set permissions on logs directory even with sudo."
+    # Set git repository as safe directory before pulling
+    git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+        log_message "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
+        sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+            log_message "WARNING: Failed to set repository as safe directory. Git operations may fail."
         }
     }
-fi
 
-# Set git repository as safe directory to prevent "dubious ownership" errors
-git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
+    # Fix ownership if needed
+    current_owner=$(stat -c '%U' "$PROJECT_DIR")
+    if [ "$current_owner" != "$(whoami)" ]; then
+        log_message "Fixing repository ownership..."
+        sudo chown -R $(whoami) "$PROJECT_DIR" 2>/dev/null || {
+            log_message "WARNING: Failed to fix ownership. Git operations may fail."
+        }
+    fi
+
+    # If a version lock exists, ensure manage-version.sh is present (self-healing)
+    if [ -f "$PROJECT_DIR/.version-lock" ]; then
+        if [ ! -x "$PROJECT_DIR/manage-version.sh" ]; then
+            log_message "WARNING: .version-lock present but manage-version.sh missing. Attempting to restore from origin/main..."
+            # Try to fetch the tool from origin/main (or a known good commit)
+            git fetch origin main || true
+            git show origin/main:manage-version.sh > "$PROJECT_DIR/manage-version.sh" 2>/dev/null && \
+                chmod +x "$PROJECT_DIR/manage-version.sh"
+            if [ ! -x "$PROJECT_DIR/manage-version.sh" ]; then
+                log_message "ERROR: Could not restore manage-version.sh from origin/main. Proceeding with normal update."
+            else
+                log_message "Restored manage-version.sh from origin/main."
+            fi
+        fi
+        if [ -x "$PROJECT_DIR/manage-version.sh" ]; then
+            log_message "Version lock detected (.version-lock). Applying pinned version..."
+            "$PROJECT_DIR/manage-version.sh" apply || {
+                log_message "ERROR: Failed to apply version lock"
+                return 1
+            }
+            log_message "Pinned version applied successfully"
+            return 0
+        else
+            log_message "WARNING: .version-lock present but manage-version.sh not found; proceeding with normal update"
+        fi
+    fi
+
+    # Ensure refs/tags are up to date before pull
+    git fetch --all --tags --prune || {
+        log_message "ERROR: Git fetch failed"
+        return 1
+    }
+
+    # Pull latest changes on current branch
+    git pull --ff-only || {
+        log_message "ERROR: Git pull failed"
+        return 1
+    }
+
+    log_message "Git update completed successfully"
+    return 0
+}
     echo "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
     sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
         echo "WARNING: Failed to set repository as safe directory. Git operations may fail."
