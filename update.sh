@@ -1,3 +1,21 @@
+#!/bin/bash
+# Daily updater for Inventarsystem
+
+# Configuration
+PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
+BACKUP_BASE_DIR="/var/backups"
+LOG_FILE="$PROJECT_DIR/logs/update.log"
+# Compression level for tar.gz backups (0 to disable compression)
+COMPRESSION_LEVEL=${COMPRESSION_LEVEL:-1}
+# Whether to reboot server after update (set RESTART_SERVER=true to enable)
+RESTART_SERVER=${RESTART_SERVER:-false}
+# Marker to detect cron; leave empty by default
+CRONARG=${CRONARG:-}
+
+# Ensure logs directory exists with permissive perms for various users/cron
+mkdir -p "$PROJECT_DIR/logs"
+chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+
 update_from_git() {
     log_message "Updating from git repository..."
 
@@ -66,11 +84,7 @@ update_from_git() {
     log_message "Git update completed successfully"
     return 0
 }
-    echo "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
-    sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
-        echo "WARNING: Failed to set repository as safe directory. Git operations may fail."
-    }
-}
+
 
 # Function to log messages
 log_message() {
@@ -276,63 +290,6 @@ create_backup() {
     return 0
 }
 
-# Function to update from git
-update_from_git() {
-    log_message "Updating from git repository..."
-    
-    # Navigate to project directory
-    cd "$PROJECT_DIR" || {
-        log_message "ERROR: Could not navigate to project directory"
-        return 1
-    }
-    
-    # Set git repository as safe directory before pulling
-    git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
-        log_message "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
-        sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
-            log_message "WARNING: Failed to set repository as safe directory. Git operations may fail."
-        }
-    }
-    
-    # Fix ownership if needed
-    current_owner=$(stat -c '%U' "$PROJECT_DIR")
-    if [ "$current_owner" != "$(whoami)" ]; then
-        log_message "Fixing repository ownership..."
-        sudo chown -R $(whoami) "$PROJECT_DIR" 2>/dev/null || {
-            log_message "WARNING: Failed to fix ownership. Git operations may fail."
-        }
-    fi
-    
-    # If a version lock exists, apply it and skip pulling latest
-    if [ -f "$PROJECT_DIR/.version-lock" ]; then
-        if [ -x "$PROJECT_DIR/manage-version.sh" ]; then
-            log_message "Version lock detected (.version-lock). Applying pinned version..."
-            "$PROJECT_DIR/manage-version.sh" apply || {
-                log_message "ERROR: Failed to apply version lock"
-                return 1
-            }
-            log_message "Pinned version applied successfully"
-            return 0
-        else
-            log_message "WARNING: .version-lock present but manage-version.sh not found; proceeding with normal update"
-        fi
-    fi
-
-    # Ensure refs/tags are up to date before pull
-    git fetch --all --tags --prune || {
-        log_message "ERROR: Git fetch failed"
-        return 1
-    }
-
-    # Pull latest changes on current branch
-    git pull --ff-only || {
-        log_message "ERROR: Git pull failed"
-        return 1
-    }
-    
-    log_message "Git update completed successfully"
-    return 0
-}
 
 # Function to restart services
 restart_services() {
