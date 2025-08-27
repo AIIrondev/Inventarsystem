@@ -291,8 +291,29 @@ update_from_git() {
         }
     fi
     
-    # Pull latest changes
-    git pull || {
+    # If a version lock exists, apply it and skip pulling latest
+    if [ -f "$PROJECT_DIR/.version-lock" ]; then
+        if [ -x "$PROJECT_DIR/manage-version.sh" ]; then
+            log_message "Version lock detected (.version-lock). Applying pinned version..."
+            "$PROJECT_DIR/manage-version.sh" apply || {
+                log_message "ERROR: Failed to apply version lock"
+                return 1
+            }
+            log_message "Pinned version applied successfully"
+            return 0
+        else
+            log_message "WARNING: .version-lock present but manage-version.sh not found; proceeding with normal update"
+        fi
+    fi
+
+    # Ensure refs/tags are up to date before pull
+    git fetch --all --tags --prune || {
+        log_message "ERROR: Git fetch failed"
+        return 1
+    }
+
+    # Pull latest changes on current branch
+    git pull --ff-only || {
         log_message "ERROR: Git pull failed"
         return 1
     }

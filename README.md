@@ -6,6 +6,7 @@
 
 Ein webbasiertes Inventarverwaltungssystem, das es Benutzern ermöglicht, Gegenstände zu verfolgen, auszuleihen, zu reservieren und zurückzugeben. Das System verfügt über administrative Funktionen, Bildverwaltung, Buchungskalender und eine filterbasierte Artikelsuche.
 
+
 ## Systemübersicht und Wartung
 
 Das Inventarsystem bietet folgende Wartungsskripte:
@@ -15,6 +16,7 @@ Das Inventarsystem bietet folgende Wartungsskripte:
 - `start.sh`, `stop.sh`, `restart.sh` - Dienste steuern
 - `Backup-DB.py` - Manuelles Backup der Datenbank erstellen
 - `restore.sh` - Vorhandenes Backup wiederherstellen
+- `manage-version.sh` - **Versionsverwaltung: gezielt auf bestimmte Versionen (Tags, Commits, Branches) wechseln, Downgrade/Upgrade, Versionen pinnen und Status anzeigen**
 
 ## Funktionen
 
@@ -495,6 +497,65 @@ Bei Zugriffsfehlern:
    # Tägliches Backup um 3:00 Uhr morgens hinzufügen
    0 3 * * * cd /pfad/zum/Inventarsystem && ./update.sh --backup-only >> logs/backup.log 2>&1
    ```
+
+### Versionen gezielt steuern mit `manage-version.sh`
+
+Mit dem Skript `manage-version.sh` können Sie die aktuell eingesetzte Version des Inventarsystems exakt kontrollieren, auf ältere Versionen zurückgehen (Downgrade), gezielt auf einen bestimmten Commit/Tag/Branch wechseln oder die Version dauerhaft pinnen. Dies gibt Ihnen maximale Kontrolle über Updates und Rollbacks.
+
+**Typische Anwendungsfälle:**
+- Downgrade auf eine frühere Version bei Problemen mit einem Update
+- Testen neuer Features auf einem separaten Branch/Tag
+- Dauerhaftes Festhalten an einer stabilen Version (Version pinnen)
+- Rückkehr zur aktuellen Hauptversion (main)
+
+**Verwendung:**
+
+```bash
+# Dauerhaft auf eine bestimmte Version (Tag, Commit oder Branch) wechseln und Dienste neu starten
+./manage-version.sh pin v2.5.17 --restart
+
+# Einmalig auf eine Version wechseln (ohne zu pinnen)
+./manage-version.sh use 1a2b3c4 --restart
+
+# Aktuelle Version und Pin-Status anzeigen
+./manage-version.sh status
+
+# Version-Pin entfernen und wieder auf die aktuelle Hauptversion (main) gehen
+./manage-version.sh clear --restart
+
+# Verfügbare Tags oder Commits anzeigen
+./manage-version.sh list --tags
+./manage-version.sh list --commits
+
+# Aktuell gesetzten Pin erneut anwenden (z.B. nach lokalen Änderungen)
+./manage-version.sh apply --restart
+```
+
+**Hinweise:**
+- Die aktuell gepinnte Version wird in der Datei `.version-lock` gespeichert.
+- Sie können als `<ref>` einen Tag-Namen, Branch-Namen oder Commit-Hash angeben.
+- Mit `--restart` werden nach dem Wechsel automatisch die Dienste neu gestartet.
+- Mit `--force` werden lokale Änderungen verworfen (Achtung: nicht gespeichert!).
+- Das Skript arbeitet unabhängig von `update.sh` und kann jederzeit verwendet werden.
+
+**Beispiele:**
+
+```bash
+# Auf einen bestimmten Commit zurückgehen (Downgrade):
+./manage-version.sh pin 1a2b3c4 --restart
+
+# Auf einen bestimmten Release-Tag wechseln:
+./manage-version.sh pin v2.5.16 --restart
+
+# Nur für einen Testlauf auf einen Feature-Branch wechseln:
+./manage-version.sh use feature/neues-feature --restart
+
+# Wieder auf die aktuelle Hauptversion (main) gehen:
+./manage-version.sh clear --restart
+```
+
+**Tipp:**
+Wenn Sie dauerhaft auf eine bestimmte Version festpinnen, werden Updates per `update.sh` nicht automatisch auf die neueste Version wechseln, solange der Pin aktiv ist. Entfernen Sie den Pin mit `./manage-version.sh clear`, um wieder Updates zu erhalten.
 
 ## Systemanforderungen
 - Moderner Webbrowser (Chrome, Firefox, Safari, Edge)
