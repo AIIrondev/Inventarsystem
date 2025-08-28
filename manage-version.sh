@@ -17,12 +17,15 @@ LOG_DIR="$PROJECT_DIR/logs"
 VM_LOG="$LOG_DIR/version_manager.log"
 
 # Directories/files to preserve across version switches
-PRESERVE_PATHS=(
-  "$PROJECT_DIR/Images"
-  "$PROJECT_DIR/logs"
-  "$PROJECT_DIR/Web/uploads"
-  "$PROJECT_DIR/Web/thumbnails"
-  "$PROJECT_DIR/Web/QRCodes"
+# Data paths we want to restore from backup after a version switch
+DATA_PATHS=(
+  "certs"
+  "Images"
+  "logs"
+  "Web/uploads"
+  "Web/thumbnails"
+  "Web/QRCodes"
+  "Web/previews"
 )
 
 # Ensure log directory exists
@@ -81,6 +84,8 @@ restart_if_requested() {
 }
 
 # Create a full backup before switching versions (files + DB CSVs)
+LAST_BACKUP_ARCHIVE=""
+LAST_BACKUP_DIRNAME=""
 create_pre_switch_backup() {
   local ts backup_name backup_dir backup_archive
   ts=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -119,40 +124,46 @@ create_pre_switch_backup() {
     sudo rm -rf "$backup_dir" || true
     # Set readable permissions
     sudo chmod 644 "$backup_archive" || true
+    # Export for subsequent restore step
+    LAST_BACKUP_ARCHIVE="$backup_archive"
+    LAST_BACKUP_DIRNAME="$backup_name"
   else
     err "Failed to create compressed backup archive"
     return 1
   fi
 }
 
-# Preserve selected data directories across version changes
-PRESERVE_TMP=""
-preserve_paths() {
-  PRESERVE_TMP=$(mktemp -d /tmp/inventarsystem_preserve_XXXXXX)
-  log "Preserving data paths to $PRESERVE_TMP"
-  for p in "${PRESERVE_PATHS[@]}"; do
-    if [ -e "$p" ]; then
-      rel=${p#"$PROJECT_DIR/"}
-      dest="$PRESERVE_TMP/$rel"
-      mkdir -p "$(dirname "$dest")"
-      rsync -a "$p" "$dest" >> "$VM_LOG" 2>&1 || log "Warning: failed to preserve $p"
-    fi
-  done
-}
-
-restore_paths() {
-  if [ -z "$PRESERVE_TMP" ] || [ ! -d "$PRESERVE_TMP" ]; then
-    log "No preserved data to restore"
+# Restore key data from the backup archive into current working tree
+restore_from_backup_archive() {
+  if [ -z "$LAST_BACKUP_ARCHIVE" ] || [ ! -f "$LAST_BACKUP_ARCHIVE" ]; then
+    log "No backup archive available to restore data from; skipping data restore"
     return 0
   fi
-  log "Restoring preserved data from $PRESERVE_TMP"
-  rsync -a "$PRESERVE_TMP/" "$PROJECT_DIR/" >> "$VM_LOG" 2>&1 || log "Warning: restore encountered issues"
+  local tmpdir
+  tmpdir=$(mktemp -d /tmp/inventarsystem_restore_XXXXXX)
+  log "Extracting backup archive $LAST_BACKUP_ARCHIVE to $tmpdir"
+  if ! sudo tar -xzf "$LAST_BACKUP_ARCHIVE" -C "$tmpdir"; then
+    err "Failed to extract backup archive; skipping data restore"
+    rm -rf "$tmpdir" || true
+    return 1
+  fi
+  local src_root="$tmpdir/$LAST_BACKUP_DIRNAME"
+  # Some backups might extract without top-level dir; fallback
+  if [ ! -d "$src_root" ]; then
+    src_root="$tmpdir"
+  fi
+  log "Restoring data directories from backup..."
+  for rel in "${DATA_PATHS[@]}"; do
+    if [ -e "$src_root/$rel" ]; then
+      mkdir -p "$PROJECT_DIR/$(dirname "$rel")" 2>/dev/null || true
+      rsync -a "$src_root/$rel" "$PROJECT_DIR/$(dirname "$rel")/" >> "$VM_LOG" 2>&1 || log "Warning: failed to restore $rel"
+      log "Restored: $rel"
+    else
+      log "Not in backup (skipped): $rel"
+    fi
+  done
+  rm -rf "$tmpdir" || true
 }
-
-cleanup_preserve() {
-  [ -n "$PRESERVE_TMP" ] && [ -d "$PRESERVE_TMP" ] && rm -rf "$PRESERVE_TMP" || true
-}
-trap cleanup_preserve EXIT
 
 # Ensure permissions on critical data directories
 ensure_permissions() {
@@ -162,6 +173,10 @@ ensure_permissions() {
   for d in "$PROJECT_DIR/Web/uploads" "$PROJECT_DIR/Web/thumbnails" "$PROJECT_DIR/Web/QRCodes" "$PROJECT_DIR/Web/previews" "$PROJECT_DIR/Images"; do
     [ -d "$d" ] && chmod -R 755 "$d" 2>/dev/null || true
   done
+  # SSL cert perms (key must be 600)
+  if [ -f "$PROJECT_DIR/certs/inventarsystem.key" ]; then
+    chmod 600 "$PROJECT_DIR/certs/inventarsystem.key" 2>/dev/null || true
+  fi
 }
 
 checkout_ref() {
@@ -234,13 +249,11 @@ cmd_pin() {
   ensure_git_ready
   # Always produce a backup before switching
   create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
-  # Preserve data paths (images, logs, uploads, etc.)
-  preserve_paths
   ensure_clean_or_force
   echo "$ref" > "$LOCK_FILE"
   checkout_ref "$ref"
-  # Restore preserved data
-  restore_paths
+  # Restore data from the backup archive
+  restore_from_backup_archive
   ensure_permissions
   log "Pinned to: $ref (commit $(git rev-parse --short HEAD))"
   restart_if_requested
@@ -250,10 +263,9 @@ cmd_use() {
   local ref="$1"
   ensure_git_ready
   create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
-  preserve_paths
   ensure_clean_or_force
   checkout_ref "$ref"
-  restore_paths
+  restore_from_backup_archive
   ensure_permissions
   log "Using (one-time): $ref (commit $(git rev-parse --short HEAD))"
   restart_if_requested
@@ -262,10 +274,9 @@ cmd_use() {
 cmd_clear() {
   ensure_git_ready
   create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
-  preserve_paths
   [ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
   deploy_main_latest
-  restore_paths
+  restore_from_backup_archive
   ensure_permissions
   log "Cleared version lock; now on main @ $(git rev-parse --short HEAD)"
   restart_if_requested
@@ -274,7 +285,6 @@ cmd_clear() {
 cmd_apply() {
   ensure_git_ready
   create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
-  preserve_paths
   if [ -f "$LOCK_FILE" ]; then
     ensure_clean_or_force
     local ref
@@ -285,7 +295,7 @@ cmd_apply() {
     log "No lock present; keeping main"
     deploy_main_latest
   fi
-  restore_paths
+  restore_from_backup_archive
   ensure_permissions
   restart_if_requested
 }
