@@ -537,6 +537,7 @@ Mit dem Skript `manage-version.sh` können Sie die aktuell eingesetzte Version d
 - Mit `--restart` werden nach dem Wechsel automatisch die Dienste neu gestartet.
 - Mit `--force` werden lokale Änderungen verworfen (Achtung: nicht gespeichert!).
 - Das Skript arbeitet unabhängig von `update.sh` und kann jederzeit verwendet werden.
+ - Sicherheit: Beim Wechseln der Versionen erstellt das Skript automatisch ein vollständiges Backup unter `/var/backups` und bewahrt wichtige Datenverzeichnisse (z. B. `Images/`, `logs/`, `Web/uploads/`, `Web/thumbnails/`, `Web/QRCodes/`) über den Versionswechsel hinweg und stellt sie danach wieder her.
 
 **Beispiele:**
 

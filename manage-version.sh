@@ -12,9 +12,25 @@ cd "$PROJECT_DIR"
 LOCK_FILE="$PROJECT_DIR/.version-lock"
 RESTART=false
 FORCE=false
+BACKUP_BASE_DIR="/var/backups"
+LOG_DIR="$PROJECT_DIR/logs"
+VM_LOG="$LOG_DIR/version_manager.log"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-err() { echo "ERROR: $*" >&2; }
+# Directories/files to preserve across version switches
+PRESERVE_PATHS=(
+  "$PROJECT_DIR/Images"
+  "$PROJECT_DIR/logs"
+  "$PROJECT_DIR/Web/uploads"
+  "$PROJECT_DIR/Web/thumbnails"
+  "$PROJECT_DIR/Web/QRCodes"
+)
+
+# Ensure log directory exists
+mkdir -p "$LOG_DIR" >/dev/null 2>&1 || true
+chmod 777 "$LOG_DIR" >/dev/null 2>&1 || true
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$VM_LOG"; }
+err() { echo "ERROR: $*" | tee -a "$VM_LOG" >&2; }
 
 usage() {
   cat <<USAGE
@@ -62,6 +78,90 @@ restart_if_requested() {
       log "restart.sh not found or not executable; skipping restart"
     fi
   fi
+}
+
+# Create a full backup before switching versions (files + DB CSVs)
+create_pre_switch_backup() {
+  local ts backup_name backup_dir backup_archive
+  ts=$(date +"%Y-%m-%d_%H-%M-%S")
+  backup_name="Inventarsystem-pre-switch-$ts"
+  backup_dir="$BACKUP_BASE_DIR/$backup_name"
+  backup_archive="$BACKUP_BASE_DIR/$backup_name.tar.gz"
+
+  log "Creating pre-switch backup at $backup_archive"
+  sudo mkdir -p "$backup_dir" || { err "Failed to create backup directory"; return 1; }
+
+  # Copy project files (exclude .venv to reduce size, keep .git for reference)
+  log "Copying project files to backup directory..."
+  sudo rsync -a --delete \
+    --exclude='.venv' \
+    --exclude='__pycache__' \
+    --exclude='*.pyc' \
+    "$PROJECT_DIR/" "$backup_dir/" || log "Warning: rsync file copy encountered issues"
+
+  # Database CSV backup using existing helper
+  log "Backing up MongoDB to CSVs..."
+  sudo mkdir -p "$backup_dir/mongodb_backup" || true
+  if [ -x "$PROJECT_DIR/run-backup.sh" ]; then
+    if sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$backup_dir/mongodb_backup" >> "$VM_LOG" 2>&1; then
+      log "Database backup completed"
+    else
+      err "Database backup failed; continuing with file backup only"
+    fi
+  else
+    log "run-backup.sh not found; skipping DB backup"
+  fi
+
+  # Compress backup
+  log "Compressing backup archive..."
+  if sudo tar -czf "$backup_archive" -C "$BACKUP_BASE_DIR" "$backup_name"; then
+    log "Backup archived to $backup_archive"
+    sudo rm -rf "$backup_dir" || true
+    # Set readable permissions
+    sudo chmod 644 "$backup_archive" || true
+  else
+    err "Failed to create compressed backup archive"
+    return 1
+  fi
+}
+
+# Preserve selected data directories across version changes
+PRESERVE_TMP=""
+preserve_paths() {
+  PRESERVE_TMP=$(mktemp -d /tmp/inventarsystem_preserve_XXXXXX)
+  log "Preserving data paths to $PRESERVE_TMP"
+  for p in "${PRESERVE_PATHS[@]}"; do
+    if [ -e "$p" ]; then
+      rel=${p#"$PROJECT_DIR/"}
+      dest="$PRESERVE_TMP/$rel"
+      mkdir -p "$(dirname "$dest")"
+      rsync -a "$p" "$dest" >> "$VM_LOG" 2>&1 || log "Warning: failed to preserve $p"
+    fi
+  done
+}
+
+restore_paths() {
+  if [ -z "$PRESERVE_TMP" ] || [ ! -d "$PRESERVE_TMP" ]; then
+    log "No preserved data to restore"
+    return 0
+  fi
+  log "Restoring preserved data from $PRESERVE_TMP"
+  rsync -a "$PRESERVE_TMP/" "$PROJECT_DIR/" >> "$VM_LOG" 2>&1 || log "Warning: restore encountered issues"
+}
+
+cleanup_preserve() {
+  [ -n "$PRESERVE_TMP" ] && [ -d "$PRESERVE_TMP" ] && rm -rf "$PRESERVE_TMP" || true
+}
+trap cleanup_preserve EXIT
+
+# Ensure permissions on critical data directories
+ensure_permissions() {
+  # Logs should be writable
+  mkdir -p "$PROJECT_DIR/logs" && chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+  # Web data directories readable/executable by server
+  for d in "$PROJECT_DIR/Web/uploads" "$PROJECT_DIR/Web/thumbnails" "$PROJECT_DIR/Web/QRCodes" "$PROJECT_DIR/Web/previews" "$PROJECT_DIR/Images"; do
+    [ -d "$d" ] && chmod -R 755 "$d" 2>/dev/null || true
+  done
 }
 
 checkout_ref() {
@@ -132,9 +232,16 @@ cmd_list() {
 cmd_pin() {
   local ref="$1"
   ensure_git_ready
+  # Always produce a backup before switching
+  create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
+  # Preserve data paths (images, logs, uploads, etc.)
+  preserve_paths
   ensure_clean_or_force
   echo "$ref" > "$LOCK_FILE"
   checkout_ref "$ref"
+  # Restore preserved data
+  restore_paths
+  ensure_permissions
   log "Pinned to: $ref (commit $(git rev-parse --short HEAD))"
   restart_if_requested
 }
@@ -142,22 +249,32 @@ cmd_pin() {
 cmd_use() {
   local ref="$1"
   ensure_git_ready
+  create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
+  preserve_paths
   ensure_clean_or_force
   checkout_ref "$ref"
+  restore_paths
+  ensure_permissions
   log "Using (one-time): $ref (commit $(git rev-parse --short HEAD))"
   restart_if_requested
 }
 
 cmd_clear() {
   ensure_git_ready
+  create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
+  preserve_paths
   [ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
   deploy_main_latest
+  restore_paths
+  ensure_permissions
   log "Cleared version lock; now on main @ $(git rev-parse --short HEAD)"
   restart_if_requested
 }
 
 cmd_apply() {
   ensure_git_ready
+  create_pre_switch_backup || log "Backup step had issues; proceeding with caution"
+  preserve_paths
   if [ -f "$LOCK_FILE" ]; then
     ensure_clean_or_force
     local ref
@@ -168,6 +285,8 @@ cmd_apply() {
     log "No lock present; keeping main"
     deploy_main_latest
   fi
+  restore_paths
+  ensure_permissions
   restart_if_requested
 }
 
