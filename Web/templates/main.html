@@ -333,10 +333,7 @@
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
         </div>
-        <div class="navigation-buttons">
-            <button class="prev-button" onclick="scrollPrev()">&#10094;</button>
-            <button class="next-button" onclick="scrollNext()">&#10095;</button>
-        </div>
+        
     </div>
     </div>
     <div id="item-modal" class="item-modal">
@@ -421,96 +418,81 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
-    // Video file detection function
-    function isVideoFile(filename) {
-        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
-        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-        return videoExtensions.includes(extension);
-    }
-
-    // Function to handle PNG to JPG conversion in image paths
-    function getImageSrc(imagePath) {
-        // If path already has a protocol or starts with a slash, it's a complete path
-        const isComplete = imagePath.startsWith('/') || imagePath.startsWith('http');
-        
-        // Base URL for uploads
-        const baseUrl = "{{ url_for('uploaded_file', filename='') }}";
-        
-        // Construct the initial URL
-        let url = isComplete ? imagePath : baseUrl + imagePath;
-        
-        // Check if this is a PNG file that might have been converted to JPG
-        if (url.toLowerCase().endsWith('.png')) {
-            // Create a JPG alternative URL
-            const jpgUrl = url.substring(0, url.length - 4) + '.jpg';
-            
-            // Create an image element to test if the JPG exists
-            const img = new Image();
-            img.src = jpgUrl;
-            
-            // Return both URLs as an object - the system will try the JPG first, then PNG as fallback
-            return {
-                primary: jpgUrl,
-                fallback: url
-            };
-        }
-        
-        // For all other file types, return the original URL
-        return {
-            primary: url,
-            fallback: "{{ url_for('static', filename='img/no-image.png') }}"
-        };
-    }
-
-    // Initialize QR Code scanner and global variables
-    let html5QrcodeScanner = null;
+    // Global state
+    const highlightItemId = (window.serverVars && window.serverVars.highlightItemId && window.serverVars.highlightItemId !== 'null')
+        ? window.serverVars.highlightItemId
+        : null;
     let codeSearchTerm = '';
-    let currentUsername = '';
-    
-    // Get the highlight item ID from the pre-processed server variables
-    let highlightItemId = window.serverVars.highlightItemId;
-    
-    // Simplified no-op version of debug function for production
-    function debugLog() {
-        // No-op in production
-        return;
-    }
-    
-    document.getElementById('scanButton').addEventListener('click', function() {
+
+    // QR scanner toggle setup
+    document.addEventListener('DOMContentLoaded', function() {
+        const scanButton = document.getElementById('scanButton');
         const qrReader = document.getElementById('qr-reader');
-        
-        if (qrReader.style.display === 'none') {
-            qrReader.style.display = 'block';
-            
-            html5QrcodeScanner = new Html5QrcodeScanner(
-                "qr-reader", { fps: 10, qrbox: 250 }
-            );
-            
-            html5QrcodeScanner.render((decodedText) => {
-                html5QrcodeScanner.clear();
-                qrReader.style.display = 'none';
+        let html5QrcodeScanner = null;
+
+        if (!scanButton || !qrReader) return;
+
+        scanButton.addEventListener('click', function() {
+            if (qrReader.style.display !== 'block') {
+                qrReader.style.display = 'block';
                 
-                // Instead of navigating to the URL, put the scanned code in the search box
-                const searchInput = document.getElementById('code-search');
-                if (searchInput) {
-                    searchInput.value = decodedText;
-                    // Trigger search automatically
-                    searchByCode();
+                html5QrcodeScanner = new Html5QrcodeScanner(
+                    'qr-reader', { fps: 10, qrbox: 250 }
+                );
+                
+                html5QrcodeScanner.render((decodedText) => {
+                    html5QrcodeScanner.clear();
+                    qrReader.style.display = 'none';
+                    
+                    // Put scanned code into the search box and trigger search
+                    const searchInput = document.getElementById('code-search');
+                    if (searchInput) {
+                        searchInput.value = decodedText;
+                        searchByCode();
+                    }
+                    
+                    // Reset the button text
+                    scanButton.textContent = 'Barcode scannen';
+                });
+                
+                this.textContent = 'Barcode Scanner schließen';
+            } else {
+                if (html5QrcodeScanner) {
+                    html5QrcodeScanner.clear();
                 }
-                
-                // Reset the button text
-                document.getElementById('scanButton').textContent = 'Barcode scannen';
-            });
-            
-            this.textContent = 'Barcode Scanner schließen';
-        } else {
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
+                qrReader.style.display = 'none';
+                this.textContent = 'Barcode scannen';
             }
-            qrReader.style.display = 'none';
-            this.textContent = 'Barcode scannen';
-        }
+        });
     });
+
+    // Return preferred primary and fallback image URLs based on extension
+    // - Prefer JPG as primary when original is PNG (fallback to PNG)
+    // - If already JPG/JPEG, fallback tries PNG
+    // - Otherwise, primary and fallback are the same
+    function getImageSrc(url) {
+        try {
+            if (!url || typeof url !== 'string') {
+                return { primary: url, fallback: url };
+            }
+            // Preserve query/hash when swapping extensions
+            const [pathPart, suffix] = url.split(/([?#].*)/);
+            const tail = suffix || '';
+            const lower = pathPart.toLowerCase();
+            if (lower.endsWith('.png')) {
+                const jpg = pathPart.replace(/\.png$/i, '.jpg') + tail;
+                return { primary: jpg, fallback: url };
+            }
+            if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+                const png = pathPart.replace(/\.(jpg|jpeg)$/i, '.png') + tail;
+                return { primary: url, fallback: png };
+            }
+            return { primary: url, fallback: url };
+        } catch (e) {
+            console.warn('getImageSrc failed for', url, e);
+            return { primary: url, fallback: url };
+        }
+    }
 
     function saveFilterState() {
         localStorage.setItem('inventarSystemFilters', JSON.stringify(activeFilters));
@@ -785,14 +767,12 @@
                                 <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <div class="image-container">
                                     ${imagesHtml}
-                                    <button class="prev-image-button" onclick="prevImage(event)">&#10094;</button>
-                                    <button class="next-image-button" onclick="nextImage(event)">&#10095;</button>
                                 </div>
                                 ${borrowerBadge}
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
-                                ${item.Verfuegbar ? 
+                                ${item.Verfuegbar && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
@@ -801,7 +781,7 @@
                                         <button class="ausleihen" type="submit">Zurückgeben</button>
                                     </form>`
                                 :
-                                    `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                                    `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
                                 <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
                             </div>
@@ -1185,7 +1165,7 @@
             </div>
             
             <div class="modal-actions">
-                ${item.Verfuegbar ? 
+                ${item.Verfuegbar && !item.BlockedNow ? 
                     `<form method="POST" action="/ausleihen/${item._id}">
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
@@ -1193,7 +1173,7 @@
                     `<form method="POST" action="/zurueckgeben/${item._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`
-                    : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                    : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                 }
                 <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
             </div>
@@ -1226,126 +1206,34 @@
         };
     }
 
-    // Add this helper function for modal image navigation
+    // Modal image navigation for detailed view
     function changeModalImage(direction) {
-        const currentIndex = window.currentModalImageIndex;
-        const total = window.totalModalImages;
-        
+        const total = window.totalModalImages || 0;
         if (total <= 1) return;
-        
+
+        const currentIndex = window.currentModalImageIndex || 0;
         // Remove active class from current image
         const currentImage = document.getElementById(`modal-image-${currentIndex}`);
         if (currentImage) {
             currentImage.classList.remove('active-image');
-            
-            // If it's a video, pause it when navigating away
-            if (currentImage.tagName === 'VIDEO' && !currentImage.paused) {
-                try {
-                    currentImage.pause();
-                } catch (e) {
-                    console.error("Could not pause video:", e);
-                }
+            if (currentImage.tagName === 'VIDEO') {
+                try { currentImage.pause(); } catch (e) {}
             }
         }
-        
-        // Calculate new index with wrapping
+
+        // Compute new index with wrap-around
         let newIndex = (currentIndex + direction) % total;
         if (newIndex < 0) newIndex = total - 1;
-        
-        // Add active class to new image
+
+        // Activate new image
         const newImage = document.getElementById(`modal-image-${newIndex}`);
-        if (newImage) {
-            newImage.classList.add('active-image');
-        }
-        
+        if (newImage) newImage.classList.add('active-image');
+
         // Update counter
         const counter = document.querySelector('.image-counter');
         if (counter) counter.textContent = `${newIndex + 1}/${total}`;
-        
-        // Update current index
+
         window.currentModalImageIndex = newIndex;
-    }
-    
-    // Add missing scroll functions
-    function scrollPrev() {
-        const container = document.querySelector('#items-container');
-        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20; // Match the gap in CSS
-        
-        // Scroll one card width to the left + gap
-        container.scrollBy({
-            left: -1 * (cardWidth + gap),
-            behavior: 'smooth'
-        });
-    }
-
-    function scrollNext() {
-        const container = document.querySelector('#items-container');
-        const cardWidth = container.querySelector('.item-card')?.offsetWidth || 300;
-        const gap = 20; // Match the gap in CSS
-        
-        // Scroll one card width to the right + gap
-        container.scrollBy({
-            left: cardWidth + gap,
-            behavior: 'smooth'
-        });
-    }
-
-    // Add functions for image navigation in item cards
-    function prevImage(event) {
-        event.stopPropagation();
-        const card = event.target.closest('.item-card');
-        const images = card.querySelectorAll('.item-image');
-        const videoContainers = card.querySelectorAll('.video-container');
-        
-        let currentIndex = -1;
-        images.forEach((img, idx) => {
-            if (img.classList.contains('active-image')) {
-                currentIndex = idx;
-            }
-        });
-        
-        if (currentIndex > 0) {
-            images[currentIndex].classList.remove('active-image');
-            images[currentIndex - 1].classList.add('active-image');
-            
-            // Handle video containers if present
-            if (videoContainers.length > 0) {
-                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
-                const containerPrev = card.querySelector(`.video-container[data-index="${currentIndex - 1}"]`);
-                
-                if (containerCurrent) containerCurrent.classList.remove('active-container');
-                if (containerPrev) containerPrev.classList.add('active-container');
-            }
-        }
-    }
-
-    function nextImage(event) {
-        event.stopPropagation();
-        const card = event.target.closest('.item-card');
-        const images = card.querySelectorAll('.item-image');
-        const videoContainers = card.querySelectorAll('.video-container');
-        
-        let currentIndex = -1;
-        images.forEach((img, idx) => {
-            if (img.classList.contains('active-image')) {
-                currentIndex = idx;
-            }
-        });
-        
-        if (currentIndex < images.length - 1) {
-            images[currentIndex].classList.remove('active-image');
-            images[currentIndex + 1].classList.add('active-image');
-            
-            // Handle video containers if present
-            if (videoContainers.length > 0) {
-                const containerCurrent = card.querySelector(`.video-container[data-index="${currentIndex}"]`);
-                const containerNext = card.querySelector(`.video-container[data-index="${currentIndex + 1}"]`);
-                
-                if (containerCurrent) containerCurrent.classList.remove('active-container');
-                if (containerNext) containerNext.classList.add('active-container');
-            }
-        }
     }
 
     // Add this function to ensure proper image display on mobile and desktop
@@ -2279,55 +2167,7 @@
         display: block;
     }
 
-    /* Image navigation buttons */
-    .prev-image-button, .next-image-button {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        border: none;
-        padding: 10px;
-        cursor: pointer;
-        border-radius: 3px;
-        font-size: 16px;
-        z-index: 2;
-    }
-
-    .prev-image-button {
-        left: 10px;
-    }
-
-    .next-image-button {
-        right: 10px;
-    }
-
-    .prev-image-button:hover, .next-image-button:hover {
-        background-color: rgba(0, 0, 0, 0.9);
-    }
-
-    /* Navigation buttons */
-    .navigation-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-        margin-top: 20px;
-    }
-
-    .navigation-buttons .prev-button,
-    .navigation-buttons .next-button {
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        cursor: pointer;
-        padding: 10px;
-        border-radius: 5px;
-    }
-
-    .navigation-buttons .prev-button:hover,
-    .navigation-buttons .next-button:hover {
-        background-color: #0056b3;
-    }
+    /* Image navigation buttons removed */
 
     /* Modal styles */
     .item-modal {
@@ -2921,8 +2761,7 @@
     }
     
     .search-button, .scan-button, .filter-toggle, .clear-filter, 
-    .add-new-btn, .popup-close-button, .prev-image-button, .next-image-button,
-    .navigation-buttons .prev-button, .navigation-buttons .next-button {
+    .add-new-btn, .popup-close-button {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -2933,5 +2772,149 @@
         font-weight: 500;
         box-sizing: border-box;
     }
+
+    /* Align visuals with admin page styles */
+    /* Ensure only the active image is shown on cards */
+    .item-image.active-image { 
+        display: block !important; 
+        opacity: 1 !important; 
+        z-index: 5; 
+    }
+    .item-image:not(.active-image) { 
+        display: none !important; 
+    }
+    .video-container.active-container { 
+        display: block !important; 
+    }
+    .video-container:not(.active-container) { 
+        display: none !important; 
+    }
+
+    /* Video preview play overlay on thumbnails */
+    .video-preview-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    /* Modal image display and navigation */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    .modal-image.active-image {
+        display: block !important;
+    }
+    /* Modal image display and navigation */
+    .modal-image {
+        display: none;
+        max-width: 100%;
+        max-height: 70vh;
+        margin: 0 auto;
+    }
+    .modal-image.active-image {
+        display: block !important;
+    }
+    .modal-image-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        font-size: 18px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+    }
+    .modal-image-nav:hover { background-color: rgba(0, 0, 0, 0.9); }
+    .modal-prev-image { left: 10px; }
+    .modal-next-image { right: 10px; }
+    .image-counter {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+
+    /* Borrower and appointment info panels in modal */
+    .borrower-info-panel {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .borrower-info-panel h4 { color: #856404; margin: 0 0 10px 0; font-size: 1.1rem; }
+    .borrower-name, .borrow-time { margin: 5px 0; color: #856404; font-weight: 500; }
+
+    .appointment-info-panel {
+        background-color: #e1f5fe;
+        border: 1px solid #81d4fa;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .appointment-info-panel h4 { color: #0277bd; margin: 0 0 10px 0; font-size: 1.1rem; }
+    .appointment-date, .appointment-time, .appointment-user { margin: 5px 0; color: #0277bd; font-weight: 500; }
+
+    /* Match admin button styling for borrow */
+    .ausleihen {
+        background-color: #9dff00 !important;
+        color: #ffffff !important;
+        border: 2px solid #007bff !important;
+    }
+    .ausleihen:hover {
+        background-color: #91ff00 !important;
+        border-color: #004085 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+    }
+    .ausleihen:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    }
+
+    /* Match admin schedule button styling */
+    .schedule-button {
+        background-color: #17a2b8 !important;
+        color: #ffffff !important;
+        border: 2px solid #17a2b8 !important;
+    }
+    .schedule-button:hover {
+        background-color: #138496 !important;
+        border-color: #117a8b !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+        color: #ffffff !important;
+        text-decoration: none;
+    }
+    .schedule-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+    }
+
+    /* Align modal actions layout to admin */
+    .modal-actions { align-items: stretch; }
+    .modal-actions form { margin: 0; flex: 0 0 auto; }
 </style>
 {% endblock %}

@@ -40,6 +40,7 @@ from datetime import timezone
 import os
 import json
 import shutil
+import settings as cfg
 
 # Add this helper function after imports
 def ensure_timezone_aware(dt):
@@ -125,8 +126,8 @@ def create_backup_database():
     """
     try:
         # Verbindung zur Datenbank herstellen
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Backup-Verzeichnis erstellen, falls es nicht existiert
@@ -199,8 +200,8 @@ def add_ausleihung(item_id, user, start_date, end_date=None, notes="", status="a
         ObjectId: ID of the new borrowing record or None if failed
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         ausleihung = {
@@ -249,8 +250,8 @@ def update_ausleihung(id, item_id=None, user_id=None, start=None, end=None, note
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Build update data with only the fields that are provided
@@ -308,9 +309,9 @@ def complete_ausleihung(id, end_time=None):
     try:
         if end_time is None:
             end_time = datetime.datetime.now()
-            
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         item = db['items']
         
@@ -349,8 +350,8 @@ def cancel_ausleihung(id):
         bool: True bei Erfolg, sonst False
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
 
         # Mark the booking as cancelled
@@ -381,8 +382,8 @@ def remove_ausleihung(id):
         bool: True bei Erfolg, sonst False
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         result = ausleihungen.delete_one({'_id': ObjectId(id)})
         client.close()
@@ -405,8 +406,8 @@ def get_ausleihung(id):
         dict: Der Ausleihungsdatensatz oder None, wenn nicht gefunden
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         ausleihung = ausleihungen.find_one({'_id': ObjectId(id)})
         client.close()
@@ -430,8 +431,8 @@ def get_ausleihungen(status=None, start=None, end=None, date_filter='overlap'):
         list: Liste von Ausleihungsdatensätzen
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         collection = db['ausleihungen']
         
         # Query erstellen
@@ -563,8 +564,8 @@ def get_ausleihung_by_user(user_id, status=None, use_client_side_verification=Tr
         list: Liste von Ausleihungsdatensätzen des Benutzers
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         query = {'User': user_id}
@@ -645,8 +646,8 @@ def get_ausleihung_by_item(item_id, status=None, include_history=False):
         dict or None: Ausleihung record or None if not found
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Build query
@@ -707,9 +708,8 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
         if end_date and hasattr(end_date, 'tzinfo') and end_date.tzinfo:
             end_date = end_date.replace(tzinfo=None)
         
-        
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Get the date component for filtering
@@ -814,8 +814,8 @@ def check_booking_period_range_conflict(item_id, start_date, end_date, period=No
         if end_date and hasattr(end_date, 'tzinfo') and end_date.tzinfo:
             end_date = end_date.replace(tzinfo=None)
         
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Get the date component for filtering
@@ -916,8 +916,8 @@ def get_ausleihungen_starting_now(current_time):
         # Get today's date for date comparison
         today = current_time.date()
         
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Build a query to find planned bookings that:
@@ -967,8 +967,8 @@ def get_ausleihungen_ending_now(current_time):
         list: Liste von Ausleihungen, die jetzt enden sollen
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Create a wider time window (15 minutes before to catch any missed endings)
@@ -1023,8 +1023,8 @@ def activate_ausleihung(id):
         bool: True bei Erfolg, sonst False
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Zuerst prüfen, ob die Ausleihe existiert und den Status 'planned' hat
@@ -1083,8 +1083,8 @@ def get_completed_bookings(start=None, end=None):
 def mark_booking_active(booking_id, ausleihung_id=None):
     """Kompatibilitätsfunktion - markiert eine Ausleihe als aktiv und verknüpft optional eine Ausleihungs-ID"""
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         
         # Basisupdate-Daten mit Status-Änderung
@@ -1145,8 +1145,8 @@ def reset_item_completely(item_id):
         dict: Erfolg-/Fehlerstatus mit Details
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items_collection = db['items']
         ausleihungen_collection = db['ausleihungen']
         

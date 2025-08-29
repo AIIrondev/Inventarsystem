@@ -2518,7 +2518,7 @@
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
-                                ${item.Verfuegbar ? 
+                                ${item.Verfuegbar && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
@@ -2527,7 +2527,7 @@
                                         <button class="ausleihen" type="submit">Zurückgeben</button>
                                     </form>`
                                 :
-                                    `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
+                                    `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
                                 <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
                                     <button class="delete-button">Löschen</button>

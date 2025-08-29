@@ -60,133 +60,37 @@ from PIL import Image, ImageOps
 import mimetypes
 import subprocess
 
-# Set base directory for absolute path references
+# Set base directory and centralized settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import settings as cfg
 
 
-# Initialize Flask application
 app = Flask(__name__, static_folder='static')  # Correctly set static folder
-app.secret_key = 'Hsse783942h2342f342342i34hwebf8'  # For production, use a secure key!
-app.debug = False  # Debug disabled in production
-app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
-app.config['THUMBNAIL_FOLDER'] = os.path.join(BASE_DIR, 'thumbnails')
-app.config['PREVIEW_FOLDER'] = os.path.join(BASE_DIR, 'previews')
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v', '3gp'}
-QR_CODE_FOLDER = os.path.join(BASE_DIR, 'QRCodes')
-app.config['QR_CODE_FOLDER'] = QR_CODE_FOLDER
+app.secret_key = cfg.SECRET_KEY
+app.debug = cfg.DEBUG
+app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
+app.config['THUMBNAIL_FOLDER'] = cfg.THUMBNAIL_FOLDER
+app.config['PREVIEW_FOLDER'] = cfg.PREVIEW_FOLDER
+app.config['ALLOWED_EXTENSIONS'] = set(cfg.ALLOWED_EXTENSIONS)
+app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER
 
 # Thumbnail sizes
-THUMBNAIL_SIZE = (150, 150)  # Small thumbnails for card view
-PREVIEW_SIZE = (400, 400)    # Medium previews for modal/detail view
+THUMBNAIL_SIZE = cfg.THUMBNAIL_SIZE
+PREVIEW_SIZE = cfg.PREVIEW_SIZE
 
-__version__ = '1.2.4'  # Version of the application
-Host = '0.0.0.0'
-Port = 8080
+__version__ = cfg.APP_VERSION
+Host = cfg.HOST
+Port = cfg.PORT
 
-# Default MongoDB settings
-MONGODB_HOST = 'localhost'
-MONGODB_PORT = 27017
-MONGODB_DB = 'Inventarsystem'
-SCHEDULER_INTERVAL = 1  # minutes
-SSL_CERT = 'ssl_certs/inventarsystem.crt'
-SSL_KEY = 'ssl_certs/inventarsystem.key'
+MONGODB_HOST = cfg.MONGODB_HOST
+MONGODB_PORT = cfg.MONGODB_PORT
+MONGODB_DB = cfg.MONGODB_DB
+SCHEDULER_INTERVAL = cfg.SCHEDULER_INTERVAL_MIN
+SSL_CERT = cfg.SSL_CERT
+SSL_KEY = cfg.SSL_KEY
 
 
-# Import config
-try:
-    with open(os.path.join(BASE_DIR, '..', 'config.json'), 'r') as f:
-        conf = json.load(f)
-    
-    # Check if config file has the required keys
-    required_keys = ['dbg', 'key', 'ver', 'host', 'port']
-    for key in required_keys:
-        if key not in conf:
-            print(f"Warning: Missing required key in config: {key}. Using default value.")
-    
-    # Set application variables from config or use defaults
-    __version__ = conf.get('ver', '1.2.4')
-    app.debug = conf.get('dbg', False)
-    app.secret_key = str(conf.get('key', 'Hsse783942h2342f342342i34hwebf8'))  # Convert to string
-    Host = conf.get('host', '0.0.0.0')
-    Port = conf.get('port', 443)
-    
-    # Get school periods from config or use defaults
-    SCHOOL_PERIODS = conf.get('schoolPeriods', {
-        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
-        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
-        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
-        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
-        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
-        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
-        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
-        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
-        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
-        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
-    })
-    
-    # Get additional configurable settings
-    # MongoDB settings
-    mongodb_settings = conf.get('mongodb', {})
-    MONGODB_HOST = mongodb_settings.get('host', 'localhost')
-    MONGODB_PORT = mongodb_settings.get('port', 27017)
-    MONGODB_DB = mongodb_settings.get('db', 'Inventarsystem')
-    
-    # File extensions
-    extensions = conf.get('allowed_extensions', ['png', 'jpg', 'jpeg', 'gif'])
-    app.config['ALLOWED_EXTENSIONS'] = set(extensions)
-    
-    # Scheduler settings
-    scheduler_settings = conf.get('scheduler', {})
-    SCHEDULER_INTERVAL = scheduler_settings.get('interval_minutes', 1)
-    
-    # SSL settings
-    ssl_settings = conf.get('ssl', {})
-    SSL_CERT = ssl_settings.get('cert', 'ssl_certs/cert.pem')
-    SSL_KEY = ssl_settings.get('key', 'ssl_certs/key.pem')
-    
-except FileNotFoundError:
-    print("Config file not found. Using default values.")
-    # Default configuration
-    __version__ = '1.2.4'
-    app.debug = False
-    app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
-    Host = '0.0.0.0'
-    Port = 443
-    # Default school periods
-    SCHOOL_PERIODS = {
-        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
-        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
-        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
-        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
-        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
-        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
-        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
-        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
-        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
-        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
-    }
-    
-except json.JSONDecodeError:
-    print("Error: Config file contains invalid JSON. Using default values.")
-    # Default configuration
-    __version__ = '1.2.4'
-    app.debug = False
-    app.secret_key = 'Hsse783942h2342f342342i34hwebf8'
-    Host = '0.0.0.0'
-    Port = 443
-    # Default school periods
-    SCHOOL_PERIODS = {
-        "1": { "start": "08:00", "end": "08:45", "label": "1. Stunde (08:00 - 08:45)" },
-        "2": { "start": "08:45", "end": "09:30", "label": "2. Stunde (08:45 - 09:30)" },
-        "3": { "start": "09:45", "end": "10:30", "label": "3. Stunde (09:45 - 10:30)" },
-        "4": { "start": "10:30", "end": "11:15", "label": "4. Stunde (10:30 - 11:15)" },
-        "5": { "start": "11:30", "end": "12:15", "label": "5. Stunde (11:30 - 12:15)" },
-        "6": { "start": "12:15", "end": "13:00", "label": "6. Stunde (12:15 - 13:00)" },
-        "7": { "start": "13:30", "end": "14:15", "label": "7. Stunde (13:30 - 14:15)" },
-        "8": { "start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)" },
-        "9": { "start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)" },
-        "10": { "start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)" }
-    }
+SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
@@ -209,7 +113,7 @@ if not os.path.exists(app.config['QR_CODE_FOLDER']):
     os.makedirs(app.config['QR_CODE_FOLDER'])
 
 # Create backup directories
-BACKUP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backups')
+BACKUP_FOLDER = cfg.BACKUP_FOLDER
 if not os.path.exists(BACKUP_FOLDER):
     os.makedirs(BACKUP_FOLDER)
 
@@ -234,41 +138,39 @@ def update_appointment_statuses():
     - Geplante Termine, die aktiviert werden sollten
     - Aktive Termine, die beendet werden sollten
     """
+    current_time = datetime.datetime.now()
+    # Prepare logging early so it's available in exception paths
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    log_file = os.path.join(log_dir, 'scheduler.log')
+
     try:
-        current_time = datetime.datetime.now()
-        
-        # Log to file for debugging
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        
-        log_file = os.path.join(log_dir, 'scheduler.log')
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(f"[{current_time}] Starte automatische Statusaktualisierung...\n")
-        
+
         print(f"[{current_time}] Starte automatische Statusaktualisierung...")
-        
+
         # Hole alle Termine mit Status 'planned' oder 'active'
-        from pymongo import MongoClient
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
         ausleihungen = db['ausleihungen']
-        
+
         # Finde alle Termine, die status updates benötigen
         appointments_to_check = list(ausleihungen.find({
             'Status': {'$in': ['planned', 'active']}
         }))
-        
+
         updated_count = 0
         activated_count = 0
         completed_count = 0
-        
+
         for appointment in appointments_to_check:
             old_status = appointment.get('Status')
-            
+
             # Aktuellen Status bestimmen
             new_status = au.get_current_status(appointment, log_changes=True, user='scheduler')
-            
+
             # Wenn sich der Status geändert hat, aktualisiere in der Datenbank
             if new_status != old_status:
                 result = ausleihungen.update_one(
@@ -278,21 +180,21 @@ def update_appointment_statuses():
                         'LastUpdated': current_time
                     }}
                 )
-                
+
                 if result.modified_count > 0:
                     updated_count += 1
                     if new_status == 'active':
                         activated_count += 1
                     elif new_status == 'completed':
                         completed_count += 1
-                    
+
                     log_msg = f"  - Termin {appointment['_id']}: {old_status} → {new_status}"
                     print(log_msg)
                     with open(log_file, 'a', encoding='utf-8') as f:
                         f.write(f"[{current_time}] {log_msg}\n")
-        
+
         client.close()
-        
+
         if updated_count > 0:
             result_msg = f"Statusaktualisierung abgeschlossen: {updated_count} Termine aktualisiert"
             detail_msg = f"  - {activated_count} aktiviert, {completed_count} abgeschlossen"
@@ -306,27 +208,30 @@ def update_appointment_statuses():
             print(f"[{current_time}] {result_msg}")
             with open(log_file, 'a', encoding='utf-8') as f:
                 f.write(f"[{current_time}] {result_msg}\n")
-            
+
     except Exception as e:
         error_msg = f"Fehler bei der automatischen Statusaktualisierung: {str(e)}"
         print(f"[{datetime.datetime.now()}] {error_msg}")
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(f"[{datetime.datetime.now()}] {error_msg}\n")
+        try:
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{datetime.datetime.now()}] {error_msg}\n")
+        except Exception:
+            pass
         import traceback
         traceback.print_exc()
 
 # Schedule jobs
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=create_daily_backup, trigger="interval", hours=24)
-# Add minute-based status updates for the Terminplaner
-scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=1)
-scheduler.start()
+if cfg.SCHEDULER_ENABLED:
+    scheduler.add_job(func=create_daily_backup, trigger="interval", hours=cfg.BACKUP_INTERVAL_HOURS)
+    scheduler.add_job(func=update_appointment_statuses, trigger="interval", minutes=cfg.SCHEDULER_INTERVAL_MIN)
+    scheduler.start()
 
 # Register shutdown handler to stop scheduler when app is terminated
 import atexit
-atexit.register(lambda: scheduler.shutdown())
+atexit.register(lambda: scheduler.shutdown() if cfg.SCHEDULER_ENABLED else None)
 
-def allowed_file(filename, file_content=None, max_size_mb=10):
+def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     """
     Check if a file has an allowed extension and valid content.
     
@@ -496,14 +401,14 @@ def uploaded_file(filename):
         flask.Response: The requested file or placeholder image if not found
     """
     try:
-        # Check if file exists
-        if os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], filename)):
-            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-        else:
-            # Check production path if development path doesn't exist
-            prod_path = "/var/Inventarsystem/Web/uploads"
-            if os.path.exists(os.path.join(prod_path, filename)):
-                return send_from_directory(prod_path, filename)
+        # Check production path first (deployed environment)
+        prod_path = "/var/Inventarsystem/Web/uploads"
+        dev_path = app.config['UPLOAD_FOLDER']
+        if os.path.exists(os.path.join(prod_path, filename)):
+            return send_from_directory(prod_path, filename)
+        # Then check development path
+        if os.path.exists(os.path.join(dev_path, filename)):
+            return send_from_directory(dev_path, filename)
             
             # Use a placeholder image if file not found - first try SVG, then PNG
             svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
@@ -533,14 +438,13 @@ def thumbnail_file(filename):
         flask.Response: The requested thumbnail file or placeholder image if not found
     """
     try:
-        # Check if file exists
-        if os.path.exists(os.path.join(app.config['THUMBNAIL_FOLDER'], filename)):
-            return send_from_directory(app.config['THUMBNAIL_FOLDER'], filename)
-        else:
-            # Check production path if development path doesn't exist
-            prod_path = "/var/Inventarsystem/Web/thumbnails"
-            if os.path.exists(os.path.join(prod_path, filename)):
-                return send_from_directory(prod_path, filename)
+        # Check production path first
+        prod_path = "/var/Inventarsystem/Web/thumbnails"
+        dev_path = app.config['THUMBNAIL_FOLDER']
+        if os.path.exists(os.path.join(prod_path, filename)):
+            return send_from_directory(prod_path, filename)
+        if os.path.exists(os.path.join(dev_path, filename)):
+            return send_from_directory(dev_path, filename)
             
             # Use a placeholder image if file not found - first try SVG, then PNG
             svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
@@ -569,14 +473,13 @@ def preview_file(filename):
         flask.Response: The requested preview file or placeholder image if not found
     """
     try:
-        # Check if file exists
-        if os.path.exists(os.path.join(app.config['PREVIEW_FOLDER'], filename)):
-            return send_from_directory(app.config['PREVIEW_FOLDER'], filename)
-        else:
-            # Check production path if development path doesn't exist
-            prod_path = "/var/Inventarsystem/Web/previews"
-            if os.path.exists(os.path.join(prod_path, filename)):
-                return send_from_directory(prod_path, filename)
+        # Check production path first
+        prod_path = "/var/Inventarsystem/Web/previews"
+        dev_path = app.config['PREVIEW_FOLDER']
+        if os.path.exists(os.path.join(prod_path, filename)):
+            return send_from_directory(prod_path, filename)
+        if os.path.exists(os.path.join(dev_path, filename)):
+            return send_from_directory(dev_path, filename)
             
             # Use a placeholder image if file not found - first try SVG, then PNG
             svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
@@ -605,14 +508,13 @@ def qrcode_file(filename):
         flask.Response: The requested QR code file or placeholder image if not found
     """
     try:
-        # Check if file exists
-        if os.path.exists(os.path.join(app.config['QR_CODE_FOLDER'], filename)):
-            return send_from_directory(app.config['QR_CODE_FOLDER'], filename)
-        else:
-            # Check production path if development path doesn't exist
-            prod_path = "/var/Inventarsystem/Web/QRCodes"
-            if os.path.exists(os.path.join(prod_path, filename)):
-                return send_from_directory(prod_path, filename)
+        # Check production path first
+        prod_path = "/var/Inventarsystem/Web/QRCodes"
+        dev_path = app.config['QR_CODE_FOLDER']
+        if os.path.exists(os.path.join(prod_path, filename)):
+            return send_from_directory(prod_path, filename)
+        if os.path.exists(os.path.join(dev_path, filename)):
+            return send_from_directory(dev_path, filename)
             
             # Use a placeholder image if file not found - first try SVG, then PNG
             svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
@@ -986,8 +888,10 @@ def get_items():
     
     # Preload planned appointments once to avoid N+1 queries
     planned_appointments_by_item = {}
+    planned_overlap_now_count_by_item = {}
     try:
         planned_list = au.get_planned_ausleihungen()
+        now_dt = datetime.datetime.now()
         for appt in planned_list:
             appt_item = str(appt.get('Item')) if appt.get('Item') is not None else None
             if not appt_item:
@@ -997,8 +901,8 @@ def get_items():
             if parent_id not in planned_appointments_by_item:
                 planned_appointments_by_item[parent_id] = []
             # Build lightweight appointment shape expected by the UI
+            start_dt = appt.get('Start')
             try:
-                start_dt = appt.get('Start')
                 date_str = start_dt.isoformat() if hasattr(start_dt, 'isoformat') else str(start_dt)
             except Exception:
                 date_str = None
@@ -1011,6 +915,21 @@ def get_items():
                 # End period isn't stored in ausleihungen; default to start_period for single-slot display
                 'end_period': start_period,
             })
+            # Track overlap with current time window for blocking
+            try:
+                appt_start = appt.get('Start')
+                appt_end = appt.get('End')
+                if not appt_end and period_val is not None and start_dt is not None:
+                    times = get_period_times(start_dt, int(period_val))
+                    if times:
+                        appt_start = times.get('start') or appt_start
+                        appt_end = times.get('end')
+                if appt_start and not appt_end:
+                    appt_end = appt_start + datetime.timedelta(hours=1)
+                if appt_start and appt_end and appt_start <= now_dt < appt_end:
+                    planned_overlap_now_count_by_item[parent_id] = planned_overlap_now_count_by_item.get(parent_id, 0) + 1
+            except Exception:
+                pass
     except Exception as e:
         print(f"Error preloading planned appointments: {e}")
     
@@ -1024,7 +943,7 @@ def get_items():
             for image_filename in item['Images']:
                 thumbnail_info = get_thumbnail_info(image_filename)
                 item['ThumbnailInfo'].append(thumbnail_info)
-        
+
         # Add exemplar availability info
         if 'Exemplare' in item and item['Exemplare'] > 1:
             # Get exemplar status if available
@@ -1044,7 +963,12 @@ def get_items():
             # If some exemplars are available, mark the item as available
             if available_count > 0:
                 item['Verfuegbar'] = True
-        
+            # Consider planned overlaps that block exemplars right now
+            planned_now = planned_overlap_now_count_by_item.get(item_id, 0)
+            effective_available = max(0, available_count - planned_now)
+            item['AvailableExemplareNow'] = effective_available
+            item['BlockedNow'] = effective_available <= 0
+
         # Add borrower information if item is borrowed
         if not item.get('Verfuegbar', True):
             # Try to get detailed borrowing info
@@ -1068,7 +992,7 @@ def get_items():
                     'username': item['User'],
                     'borrowTime': 'Unbekannt'
                 }
-        
+
         # Attach upcoming appointment info for UI badge
         try:
             appointments = []
@@ -1084,13 +1008,14 @@ def get_items():
                         # Normalize to naive for comparison with naive now_dt
                         date_val = date_val.replace(tzinfo=None)
                     if date_val and date_val >= now_dt.replace(hour=0, minute=0, second=0, microsecond=0):
-                        # If appointment_id exists, verify status in DB is not cancelled
+                        # If appointment_id exists, verify status in DB is still 'planned'
                         appt_id = nxt.get('appointment_id')
                         status_ok = True
                         if appt_id:
                             try:
                                 appt_doc = au.get_ausleihung(appt_id)
-                                if not appt_doc or appt_doc.get('Status') == 'cancelled':
+                                # Only keep label if still planned and in future
+                                if (not appt_doc) or (appt_doc.get('Status') != 'planned'):
                                     status_ok = False
                             except Exception:
                                 status_ok = False
@@ -1126,6 +1051,9 @@ def get_items():
             # Only set if we have entries
             if appointments:
                 item['appointments'] = appointments
+            # For single-instance items, compute BlockedNow from planned overlap
+            if item.get('Exemplare', 1) <= 1:
+                item['BlockedNow'] = planned_overlap_now_count_by_item.get(item_id, 0) > 0
         except Exception as e:
             print(f"Error attaching appointments for item {item_id}: {e}")
     
@@ -1398,7 +1326,7 @@ def upload_item():
         
         try:
             # Comprehensive file validation with detailed logging
-            is_allowed, error_message = allowed_file(image.filename, image, max_size_mb=15)
+            is_allowed, error_message = allowed_file(image.filename, image, max_size_mb=cfg.IMAGE_MAX_UPLOAD_MB)
             
             if not is_allowed:
                 app.logger.warning(f"{image_log_prefix} Validation failed: {error_message}")
@@ -2308,6 +2236,45 @@ def ausleihen(id):
         flash('Item not found', 'error')
         return redirect(url_for('home'))
     
+    # Before borrowing, block if there's a conflicting planned booking
+    try:
+        now = datetime.datetime.now()
+        # Fetch planned bookings for this item from DB
+        planned = au.get_planned_ausleihungen()
+        # Count relevant upcoming planned bookings for today or ongoing
+        upcoming_planned_today = []
+        for appt in planned:
+            appt_item = str(appt.get('Item')) if appt.get('Item') is not None else None
+            if appt_item != id:
+                continue
+            appt_start = appt.get('Start')
+            appt_end = appt.get('End') or appt_start
+            if not appt_start:
+                continue
+            # Consider conflict if appointment ends in the future and is today
+            try:
+                if appt_end >= now and appt_start.date() == now.date():
+                    upcoming_planned_today.append(appt)
+            except Exception:
+                # Fallback simple check
+                if appt_start.date() == now.date():
+                    upcoming_planned_today.append(appt)
+        if upcoming_planned_today:
+            # For single-instance items, block outright; for multi-exemplar, allow only if capacity suffices
+            item_doc = it.get_item(id)
+            total_exemplare = item_doc.get('Exemplare', 1) if item_doc else 1
+            if total_exemplare <= 1:
+                flash('Dieses Objekt hat heute eine geplante Reservierung und kann aktuell nicht ausgeliehen werden.', 'error')
+                return redirect(url_for('home'))
+            else:
+                # If planned count equals or exceeds remaining capacity, block
+                current_borrowed = len(item_doc.get('ExemplareStatus', [])) if item_doc else 0
+                if current_borrowed + len(upcoming_planned_today) >= total_exemplare:
+                    flash('Alle Exemplare sind aufgrund geplanter Reservierungen heute belegt.', 'error')
+                    return redirect(url_for('home'))
+    except Exception as e:
+        print(f"Warning: could not enforce planned booking guard: {e}")
+
     # Get number of exemplars to borrow (default to 1)
     exemplare_count = request.form.get('exemplare_count', 1)
     try:
@@ -2415,8 +2382,8 @@ def zurueckgeben(id):
         print("Code 1172: Item is not available, proceeding with return")
         try:
             # Get ALL active borrowing records for this item and complete them
-            client = MongoClient('localhost', 27017)
-            db = client['Inventarsystem']
+            client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+            db = client[MONGODB_DB]
             ausleihungen = db['ausleihungen']
             
             # Find all active records for this item
@@ -4036,8 +4003,17 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
                 y = (size[1] - img.size[1]) // 2
                 
                 thumb.paste(img, (x, y))
-                
+
                 # Ensure the thumbnail path ends with .jpg
+                if not thumbnail_path.lower().endswith('.jpg'):
+                    thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
+
+                # Ensure target directory exists
+                os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
+
+                # Save with optimization
+                thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+                return True
         except Exception as img_err:
             # Special handling for corrupted PNGs
             if is_png and log_prefix:
@@ -4071,7 +4047,7 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
                 raise
             if not thumbnail_path.lower().endswith('.jpg'):
                 thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
-                
+            os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
             # Save with optimization
             thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
             return True
@@ -4150,19 +4126,48 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         os.makedirs(directory, exist_ok=True)
     
     original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    # Fallback to production path if dev path missing
+    if not os.path.exists(original_path):
+        prod_upload = "/var/Inventarsystem/Web/uploads"
+        alt_path = os.path.join(prod_upload, filename)
+        if os.path.exists(alt_path):
+            original_path = alt_path
     
     # Generate file paths
-    name_part = os.path.splitext(filename)[0]
-    converted_filename = f"{name_part}.jpg"
+    name_part, ext = os.path.splitext(filename)
+    ext = ext.lower()
+    is_jpg_ext = ext in ('.jpg', '.jpeg')
+    # If already a JPG, keep filename to avoid same-file writes
+    converted_filename = filename if is_jpg_ext else f"{name_part}.jpg"
     converted_path = os.path.join(app.config['UPLOAD_FOLDER'], converted_filename)
     thumbnail_filename = f"{name_part}_thumb.jpg"
     preview_filename = f"{name_part}_preview.jpg"
     
     thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
     preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    # Fallback to production directories if dev ones missing
+    if not os.path.exists(thumbnail_path):
+        prod_thumbs = "/var/Inventarsystem/Web/thumbnails"
+        alt_thumb = os.path.join(prod_thumbs, thumbnail_filename)
+        if os.path.exists(alt_thumb):
+            thumbnail_path = alt_thumb
+    if not os.path.exists(preview_path):
+        prod_previews = "/var/Inventarsystem/Web/previews"
+        alt_prev = os.path.join(prod_previews, preview_filename)
+        if os.path.exists(alt_prev):
+            preview_path = alt_prev
+    # Fallbacks for production directories if needed
+    if not os.path.exists(os.path.dirname(thumbnail_path)):
+        prod_thumbs = "/var/Inventarsystem/Web/thumbnails"
+        if os.path.exists(prod_thumbs):
+            thumbnail_path = os.path.join(prod_thumbs, thumbnail_filename)
+    if not os.path.exists(os.path.dirname(preview_path)):
+        prod_previews = "/var/Inventarsystem/Web/previews"
+        if os.path.exists(prod_previews):
+            preview_path = os.path.join(prod_previews, preview_filename)
     
     result = {
-        'original': converted_filename,  # Use the JPG version as the original
+        'original': converted_filename,  # Use JPG name; if already JPG, this equals input
         'thumbnail': None,
         'preview': None,
         'is_image': False,
@@ -4178,6 +4183,15 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
         if not os.path.exists(placeholder_path):
             placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+        # Also check production static dir
+        if not os.path.exists(placeholder_path):
+            prod_static = "/var/Inventarsystem/Web/static/img"
+            fallback_svg = os.path.join(prod_static, 'no-image.svg')
+            fallback_png = os.path.join(prod_static, 'no-image.png')
+            if os.path.exists(fallback_svg):
+                placeholder_path = fallback_svg
+            elif os.path.exists(fallback_png):
+                placeholder_path = fallback_png
             
         if os.path.exists(placeholder_path):
             app.logger.info(f"{log_prefix} Using placeholder image instead")
@@ -4242,7 +4256,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         original_size = os.path.getsize(original_path)
         app.logger.info(f"{log_prefix} Original size: {original_size/1024:.1f}KB")
         
-        # Try to open and process the image
+    # Try to open and process the image
         try:
             with Image.open(original_path) as img:
                 # Special handling for PNG
@@ -4444,8 +4458,13 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                             app.logger.info(f"{debug_msg} Direct PNG to JPG conversion successful")
                     else:
                         # Standard save for non-PNG images
-                        img.save(converted_path, 'JPEG', quality=quality, optimize=True)
-                        app.logger.info(f"{log_prefix} Saved optimized JPG: {converted_path}")
+                        if not is_jpg_ext:
+                            # Only create a new JPG if source wasn't already JPG
+                            img.save(converted_path, 'JPEG', quality=quality, optimize=True)
+                            app.logger.info(f"{log_prefix} Saved optimized JPG: {converted_path}")
+                        else:
+                            # Already a JPG: don't overwrite original; we'll use it for thumbs
+                            app.logger.info(f"{log_prefix} Original is already JPG; skip in-place re-save")
                         
                 except Exception as save_err:
                     app.logger.error(f"{log_prefix} Failed to save optimized JPG: {str(save_err)}")
@@ -4473,28 +4492,32 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                             app.logger.error(f"{debug_msg} All PNG conversion methods failed: {str(final_err)}")
                             # Give up and let the code continue to next error handling step
                     
-                    # Try with default quality as fallback
+                    # Try with default quality as fallback (only when not already JPG)
                     try:
-                        app.logger.info(f"{log_prefix} Attempting save with default quality")
-                        img.save(converted_path, 'JPEG', quality=85)
-                        app.logger.info(f"{log_prefix} Saved JPG with default quality")
+                        if not is_jpg_ext:
+                            app.logger.info(f"{log_prefix} Attempting save with default quality")
+                            img.save(converted_path, 'JPEG', quality=85)
+                            app.logger.info(f"{log_prefix} Saved JPG with default quality")
+                        else:
+                            app.logger.info(f"{log_prefix} Skipping fallback save; original is JPG and won't be overwritten")
                     except Exception as default_save_err:
                         if is_png:
                             debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
                             app.logger.error(f"{debug_msg} PNG fallback save also failed: {str(default_save_err)}")
                         
-                        # If JPG conversion fails entirely, copy original
-                        shutil.copy2(original_path, converted_path)
-                        app.logger.warning(f"{log_prefix} Used original file without optimization")
+                        # If JPG conversion fails entirely and different path, copy original
+                        if not is_jpg_ext and os.path.abspath(original_path) != os.path.abspath(converted_path):
+                            shutil.copy2(original_path, converted_path)
+                            app.logger.warning(f"{log_prefix} Used original file without optimization")
                     
                     # Compare file sizes
-                    if os.path.exists(converted_path):
+                    if not is_jpg_ext and os.path.exists(converted_path):
                         new_size = os.path.getsize(converted_path)
                         reduction = (1 - (new_size / original_size)) * 100 if original_size > 0 else 0
                         app.logger.info(f"{log_prefix} Size reduction: {original_size/1024:.1f}KB -> {new_size/1024:.1f}KB ({reduction:.1f}%)")
                     
                     # Remove the original non-JPG file if it was converted or resized
-                    if os.path.exists(converted_path) and (not filename.lower().endswith('.jpg') or resized):
+                    if not is_jpg_ext and os.path.exists(converted_path) and (not filename.lower().endswith('.jpg') or resized):
                         try:
                             os.remove(original_path)
                             app.logger.info(f"{log_prefix} Removed original file after conversion")
@@ -4509,14 +4532,15 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                         app.logger.warning(f"{log_prefix} Used original file as fallback")
                 
                 # Use the converted file for thumbnails if it exists
-                if os.path.exists(converted_path):
+                # If we produced a converted JPG (non-JPG source), use it as the basis for thumbs
+                if not is_jpg_ext and os.path.exists(converted_path):
                     original_path = converted_path
         
         except Exception as e:
             app.logger.error(f"{log_prefix} Failed to process image: {str(e)}")
             traceback.print_exc()
             # Just copy the original file as is
-            if os.path.exists(original_path) and not os.path.exists(converted_path):
+            if not is_jpg_ext and os.path.exists(original_path) and not os.path.exists(converted_path):
                 try:
                     shutil.copy2(original_path, converted_path)
                     app.logger.warning(f"{log_prefix} Used original file after processing error")
@@ -4668,6 +4692,7 @@ def get_thumbnail_info(filename):
             print(f"Error generating thumbnails for {filename}: {str(e)}")
     
     # Make sure we're using the actual filename as it exists on disk
+    # Build URLs based on the filename; routes handle prod/dev paths
     actual_thumbnail_url = f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None
     actual_preview_url = f"/previews/{preview_filename}" if has_preview else None
     
@@ -4783,7 +4808,7 @@ def log_mobile_issue():
         
         # Store in database for analytics
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
-        db = client['Inventarsystem']
+        db = client[MONGODB_DB]
         logs_collection = db['system_logs']
         logs_collection.insert_one(log_entry)
         client.close()

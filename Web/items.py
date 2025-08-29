@@ -36,6 +36,7 @@ Collection Structure:
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import datetime
+import settings as cfg
 
 
 # === ITEM MANAGEMENT ===
@@ -61,14 +62,14 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
         ObjectId: ID of the new item or None if failed
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
-        
+
         # Set default values for optional parameters
         if images is None:
             images = []
-            
+
         item = {
             'Name': name,
             'Ort': ort,
@@ -86,7 +87,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
         }
         result = items.insert_one(item)
         item_id = result.inserted_id
-        
+
         client.close()
         return item_id
     except Exception as e:
@@ -105,8 +106,8 @@ def remove_item(id):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         result = items.delete_one({'_id': ObjectId(id)})
         client.close()
@@ -139,14 +140,14 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
-        
+
         # Set default values for optional parameters
         if images is None:
             images = []
-            
+
         update_data = {
             'Name': name,
             'Ort': ort,
@@ -161,12 +162,12 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
             'Code_4': code_4,
             'LastUpdated': datetime.datetime.now()
         }
-        
+
         result = items.update_one(
             {'_id': ObjectId(id)},
             {'$set': update_data}
         )
-        
+
         client.close()
         return result.modified_count > 0
     except Exception as e:
@@ -187,26 +188,26 @@ def update_item_status(id, verfuegbar, user=None):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
-        
+
         update_data = {
             'Verfuegbar': verfuegbar,
             'LastUpdated': datetime.datetime.now()
         }
-        
+
         if user is not None:
             update_data['User'] = user
         elif verfuegbar:
             # If item is being marked as available, clear the user field
             update_data['$unset'] = {'User': ""}
-            
+
         result = items.update_one(
             {'_id': ObjectId(id)},
             {'$set': update_data}
         )
-        
+
         client.close()
         return result.modified_count > 0
     except Exception as e:
@@ -226,20 +227,20 @@ def update_item_exemplare_status(id, exemplare_status):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
-        
+
         update_data = {
             'ExemplareStatus': exemplare_status,
             'LastUpdated': datetime.datetime.now()
         }
-        
+
         result = items.update_one(
             {'_id': ObjectId(id)},
             {'$set': update_data}
         )
-        
+
         client.close()
         return result.modified_count > 0
     except Exception as e:
@@ -262,8 +263,8 @@ def is_code_unique(code_4, exclude_id=None):
         # Empty codes are not considered unique
         return False
         
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     items = db['items']
     
     # Build query to find items with this code
@@ -290,8 +291,8 @@ def get_items():
         list: List of all inventory item documents with string IDs
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         items_return = items.find()
         items_list = []
@@ -313,8 +314,8 @@ def get_available_items():
         list: List of available inventory item documents with string IDs
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         items_return = items.find({'Verfuegbar': True})
         items_list = []
@@ -336,8 +337,8 @@ def get_borrowed_items():
         list: List of borrowed inventory item documents with string IDs
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         items_return = items.find({'Verfuegbar': False})
         items_list = []
@@ -362,8 +363,8 @@ def get_item(id):
         dict: The inventory item document or None if not found
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         item = items.find_one({'_id': ObjectId(id)})
         client.close()
@@ -384,8 +385,8 @@ def get_item_by_name(name):
         dict: The inventory item document or None if not found
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         item = items.find_one({'Name': name})
         client.close()
@@ -406,8 +407,8 @@ def get_items_by_filter(filter_value):
         list: List of items matching the filter in primary, secondary, or tertiary category
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         
         # Use $or to find matches in any filter field
@@ -440,8 +441,8 @@ def get_filters():
         list: Combined list of all primary, secondary and tertiary filter values
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         filters = items.distinct('Filter')
         filters2 = items.distinct('Filter2')
@@ -471,8 +472,8 @@ def get_primary_filters():
         list: List of all primary filter values
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         filters = [f for f in items.distinct('Filter') if f]
         client.close()
@@ -490,8 +491,8 @@ def get_secondary_filters():
         list: List of all secondary filter values
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         filters = [f for f in items.distinct('Filter2') if f]
         client.close()
@@ -509,8 +510,8 @@ def get_tertiary_filters():
         list: List of all tertiary filter values
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         filters = [f for f in items.distinct('Filter3') if f]
         client.close()
@@ -531,8 +532,8 @@ def get_item_by_code_4(code_4):
         list: List of items matching the code
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         results = list(items.find({"Code_4": code_4}))
         
@@ -561,8 +562,8 @@ def unstuck_item(id):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         ausleihungen = db['ausleihungen']
         result = ausleihungen.delete_many({'Item': id})
         
@@ -596,8 +597,8 @@ def get_predefined_filter_values(filter_num):
     Returns:
         list: List of predefined filter values
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     
     # Use a dedicated collection for filter presets
     filter_presets = db['filter_presets']
@@ -612,8 +613,8 @@ def get_predefined_filter_values(filter_num):
         return sorted(filter_doc['values'])
     else:
         # Create empty document if it doesn't exist
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         filter_presets = db['filter_presets']
         filter_presets.update_one(
             {'filter_num': filter_num},
@@ -634,8 +635,8 @@ def add_predefined_filter_value(filter_num, value):
     Returns:
         bool: True if value was added, False if it already existed
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     filter_presets = db['filter_presets']
     
     # Check if value already exists
@@ -670,8 +671,8 @@ def remove_predefined_filter_value(filter_num, value):
     Returns:
         bool: True if value was removed, False otherwise
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     filter_presets = db['filter_presets']
     
     # Remove the value from the filter
@@ -694,8 +695,8 @@ def get_predefined_locations():
         list: List of predefined location strings
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         
         # Check if settings collection exists, create if not
         if 'settings' not in db.list_collection_names():
@@ -741,8 +742,8 @@ def add_predefined_location(location):
         return False
         
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         settings_collection = db['settings']
         
         # Check if settings document exists, create if not
@@ -791,8 +792,8 @@ def remove_predefined_location(location):
         return False
         
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         settings_collection = db['settings']
         
         result = settings_collection.update_one(
@@ -826,8 +827,8 @@ def update_item_next_appointment(item_id, appointment_data):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         
         # Format the appointment data for storage
@@ -875,8 +876,8 @@ def clear_item_next_appointment(item_id):
         bool: True if successful, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         
         result = items.update_one(
@@ -899,8 +900,8 @@ def get_items_with_appointments():
         list: List of items with NextAppointment field
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         
         items_return = items.find({'NextAppointment': {'$exists': True}})
@@ -925,8 +926,8 @@ def get_current_status(item_id):
         dict: Current status of the item or None if not found
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         items = db['items']
         
         item = items.find_one({'_id': ObjectId(item_id)}, {'Verfuegbar': 1, 'User': 1})
