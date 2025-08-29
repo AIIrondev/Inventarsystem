@@ -352,8 +352,8 @@ def cancel_ausleihung(id):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         ausleihungen = db['ausleihungen']
-        item = db['items']
-        
+
+        # Mark the booking as cancelled
         result = ausleihungen.update_one(
             {'_id': ObjectId(id)},
             {'$set': {
@@ -361,14 +361,7 @@ def cancel_ausleihung(id):
                 'LastUpdated': datetime.datetime.now()
             }}
         )
-        
-        item.update_one(
-            {'_id': ObjectId(id)},
-            {'$set': {
-                'Verfuegbar': True,
-                'LastUpdated': datetime.datetime.now()
-            }}
-        )
+
         client.close()
         return result.modified_count > 0
     except Exception as e:

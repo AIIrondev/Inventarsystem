@@ -984,6 +984,36 @@ def get_items():
     except Exception as e:
         print(f"Error fetching active borrowings: {e}")
     
+    # Preload planned appointments once to avoid N+1 queries
+    planned_appointments_by_item = {}
+    try:
+        planned_list = au.get_planned_ausleihungen()
+        for appt in planned_list:
+            appt_item = str(appt.get('Item')) if appt.get('Item') is not None else None
+            if not appt_item:
+                continue
+            # If this is an exemplar, map to the parent item id (format: parentId_exemplarNo)
+            parent_id = appt_item.split('_')[0] if '_' in appt_item else appt_item
+            if parent_id not in planned_appointments_by_item:
+                planned_appointments_by_item[parent_id] = []
+            # Build lightweight appointment shape expected by the UI
+            try:
+                start_dt = appt.get('Start')
+                date_str = start_dt.isoformat() if hasattr(start_dt, 'isoformat') else str(start_dt)
+            except Exception:
+                date_str = None
+            period_val = appt.get('Period')
+            # Frontend formatter maps string keys like '1'...'10'
+            start_period = str(period_val) if period_val is not None else None
+            planned_appointments_by_item[parent_id].append({
+                'date': date_str,
+                'start_period': start_period,
+                # End period isn't stored in ausleihungen; default to start_period for single-slot display
+                'end_period': start_period,
+            })
+    except Exception as e:
+        print(f"Error preloading planned appointments: {e}")
+    
     # Process items
     for item in items:
         item_id = str(item['_id'])
@@ -1038,6 +1068,66 @@ def get_items():
                     'username': item['User'],
                     'borrowTime': 'Unbekannt'
                 }
+        
+        # Attach upcoming appointment info for UI badge
+        try:
+            appointments = []
+            # Prefer NextAppointment (has both start and end period)
+            nxt = item.get('NextAppointment')
+            use_next = False
+            if nxt and nxt.get('date'):
+                try:
+                    date_val = nxt.get('date')
+                    # If in the past, we won't show it
+                    now_dt = datetime.datetime.now()
+                    if hasattr(date_val, 'tzinfo') and date_val.tzinfo:
+                        # Normalize to naive for comparison with naive now_dt
+                        date_val = date_val.replace(tzinfo=None)
+                    if date_val and date_val >= now_dt.replace(hour=0, minute=0, second=0, microsecond=0):
+                        # If appointment_id exists, verify status in DB is not cancelled
+                        appt_id = nxt.get('appointment_id')
+                        status_ok = True
+                        if appt_id:
+                            try:
+                                appt_doc = au.get_ausleihung(appt_id)
+                                if not appt_doc or appt_doc.get('Status') == 'cancelled':
+                                    status_ok = False
+                            except Exception:
+                                status_ok = False
+                        if status_ok:
+                            date_str = date_val.isoformat() if hasattr(date_val, 'isoformat') else str(date_val)
+                            start_p = nxt.get('start_period')
+                            end_p = nxt.get('end_period', start_p)
+                            start_p_str = str(start_p) if start_p is not None else None
+                            end_p_str = str(end_p) if end_p is not None else start_p_str
+                            appointments.append({
+                                'date': date_str,
+                                'start_period': start_p_str,
+                                'end_period': end_p_str,
+                            })
+                            use_next = True
+                        else:
+                            # Clear stale/cancelled NextAppointment
+                            try:
+                                it.clear_item_next_appointment(item_id)
+                            except Exception:
+                                pass
+                    else:
+                        # Past appointment -> clear
+                        try:
+                            it.clear_item_next_appointment(item_id)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            # Fallback: include planned ausleihungen if any exist for the item
+            if not use_next and item_id in planned_appointments_by_item:
+                appointments.extend(planned_appointments_by_item[item_id])
+            # Only set if we have entries
+            if appointments:
+                item['appointments'] = appointments
+        except Exception as e:
+            print(f"Error attaching appointments for item {item_id}: {e}")
     
     # Filter items if needed
     if available_only:
@@ -2941,6 +3031,11 @@ def logs():
            
 
             username = ausleihung.get('User', 'Unknown User')
+            # Determine (verified) status for display
+            try:
+                display_status = au.get_current_status(ausleihung)
+            except Exception:
+                display_status = ausleihung.get('Status', 'unknown')
             
             # Format dates for display
             start_date = ausleihung.get('Start')
@@ -2968,6 +3063,7 @@ def logs():
                 'Start': start_date,
                 'End': end_date,
                 'Duration': duration,
+                'Status': display_status,
                 'id': str(ausleihung['_id'])
             })
         except Exception as e:
@@ -3741,6 +3837,18 @@ def cancel_ausleihung_route(id):
         if au.cancel_ausleihung(id):
             print(f"Successfully canceled ausleihung with ID: {id}")
             flash('Ausleihung wurde erfolgreich storniert', 'success')
+            # Also clear NextAppointment on the related item if it matches this appointment
+            try:
+                item_id = str(ausleihung.get('Item')) if ausleihung.get('Item') is not None else None
+                if item_id:
+                    item_doc = it.get_item(item_id)
+                    if item_doc:
+                        next_appt = item_doc.get('NextAppointment', {})
+                        if next_appt and str(next_appt.get('appointment_id')) == str(id):
+                            cleared = it.clear_item_next_appointment(item_id)
+                            print(f"Cleared NextAppointment for item {item_id}: {cleared}")
+            except Exception as clear_err:
+                print(f"Warning: could not clear NextAppointment for cancelled ausleihung {id}: {clear_err}")
         else:
             print(f"Failed to cancel ausleihung with ID: {id}")
             flash('Fehler beim Stornieren der Ausleihung', 'error')

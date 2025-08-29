@@ -39,8 +39,9 @@
                 <tr>
                     <th onclick="sortTable(0)">Item Name ↕</th>
                     <th onclick="sortTable(1)">Benutzer ↕</th>
-                    <th onclick="sortTable(2)">Ausgeliehen am ↕</th>
-                    <th onclick="sortTable(3)">Zurückgegeben am ↕</th>
+                    <th onclick="sortTable(2)">Status ↕</th>
+                    <th onclick="sortTable(3)">Ausgeliehen am ↕</th>
+                    <th onclick="sortTable(4)">Zurückgegeben am ↕</th>
                     <th>Dauer</th>
                 </tr>
             </thead>
@@ -49,6 +50,9 @@
                 <tr>
                     <td>{{ item.Item }}</td>
                     <td>{{ item.User }}</td>
+                    <td>
+                        <span class="status-badge status-{{ item.Status }}">{{ item.Status }}</span>
+                    </td>
                     <td>{{ item.Start }}</td>
                     <td>{{ item.End }}</td>
                     <td>{{ item.Duration }}</td>
@@ -88,14 +92,14 @@
                 show = textMatch;
             }
             
-            // Date range filtering
+            // Date range filtering (uses Start in column 3 and End in column 4)
             if (show && startDate) {
-                const rowDate = new Date(cells[2].textContent);
+                const rowDate = new Date(cells[3].textContent);
                 show = rowDate >= new Date(startDate);
             }
             
             if (show && endDate) {
-                const rowDate = new Date(cells[3].textContent);
+                const rowDate = new Date(cells[4].textContent);
                 show = rowDate <= new Date(endDate);
             }
             
@@ -118,8 +122,8 @@
                 const x = rows[i].getElementsByTagName('td')[n];
                 const y = rows[i + 1].getElementsByTagName('td')[n];
                 
-                // Check if date column for proper date comparison
-                if (n === 2 || n === 3) {
+                // Check if date column for proper date comparison (Start=3, End=4)
+                if (n === 3 || n === 4) {
                     const dateX = new Date(x.innerHTML);
                     const dateY = new Date(y.innerHTML);
                     
@@ -228,6 +232,19 @@
         border: 1px solid #ddd;
         border-radius: 4px;
     }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+        color: #fff;
+    }
+    .status-planned { background-color: #6c757d; }
+    .status-active { background-color: #17a2b8; }
+    .status-completed { background-color: #28a745; }
+    .status-cancelled { background-color: #dc3545; }
     
     .table-container {
         overflow-x: auto;
