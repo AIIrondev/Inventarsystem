@@ -857,34 +857,37 @@ def check_booking_period_range_conflict(item_id, start_date, end_date, period=No
                 existing_date = booking_start.date()
                 if existing_date == booking_date:
                     booking_period = booking.get('Period')
+                    # Normalize to int if possible
+                    try:
+                        booking_period_int = int(booking_period) if booking_period is not None else None
+                    except Exception:
+                        booking_period_int = None
                     
                     # If this booking has any period in our range, it's a conflict
-                    if booking_period is not None and booking_period in periods_to_check:
-                        print(f"CONFLICT: Same day, overlapping period. Booking period: {booking_period}")
+                    if booking_period_int is not None and booking_period_int in periods_to_check:
+                        print(f"CONFLICT: Same day, overlapping period. Booking period: {booking_period_int}")
                         client.close()
                         return True
-        
-        # Time-based check for conflicts (same as before)
-        else:
-            for booking in all_bookings:
-                booking_start = booking.get('Start')
-                booking_end = booking.get('End')
-                
-                if not booking_start:
-                    continue
-                
-                # Set default end time if not specified
-                if not booking_end:
-                    booking_end = booking_start + datetime.timedelta(hours=1)
-                
-                # Check for overlap
-                if ((start_date >= booking_start and start_date < booking_end) or
-                    (end_date > booking_start and end_date <= booking_end) or
-                    (start_date <= booking_start and end_date >= booking_end) or
-                    (start_date >= booking_start and end_date <= booking_end)):
-                    print(f"CONFLICT: Time overlap. New: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
-                    client.close()
-                    return True
+        # Always also check time overlaps against any existing bookings (incl. those without Period)
+        for booking in all_bookings:
+            booking_start = booking.get('Start')
+            booking_end = booking.get('End')
+            
+            if not booking_start:
+                continue
+            
+            # Set default end time if not specified
+            if not booking_end:
+                booking_end = booking_start + datetime.timedelta(hours=1)
+            
+            # Check for overlap of [start_date, end_date] with [booking_start, booking_end]
+            if ((start_date >= booking_start and start_date < booking_end) or
+                (end_date > booking_start and end_date <= booking_end) or
+                (start_date <= booking_start and end_date >= booking_end) or
+                (start_date >= booking_start and end_date <= booking_end)):
+                print(f"CONFLICT: Time overlap. New: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
+                client.close()
+                return True
         
         print("No conflicts found!")
         client.close()

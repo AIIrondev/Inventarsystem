@@ -3632,9 +3632,15 @@ def schedule_appointment():
         start_datetime = period_times_start['start']
         end_datetime = period_times_end['end']
         
-        # Check for conflicts
+        # Check for conflicts (use full period-range aware check)
         try:
-            has_conflict = au.check_booking_conflict(item_id, start_datetime, end_datetime, period=start_period_num)
+            has_conflict = au.check_booking_period_range_conflict(
+                item_id,
+                start_datetime,
+                end_datetime,
+                period=start_period_num,
+                period_end=end_period_num
+            )
             if has_conflict:
                 return jsonify({'success': False, 'message': 'Appointment conflicts with existing booking'}), 409
         except Exception as e:
