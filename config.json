@@ -19,8 +19,8 @@
 
     "ssl": {
         "enabled": false,
-        "cert": "Web/ssl_certs/cert.pem",
-        "key": "Web/ssl_certs/key.pem"
+        "cert": "Web/certs/cert.pem",
+        "key": "Web/certs/key.pem"
     },
 
     "images": {
