@@ -981,7 +981,6 @@ Verfügbare Optionen:
 - `--fix-pymongo`: Nur pymongo/bson-Konflikte beheben
 - `--auto`: Automatischer Modus - erkennt und behebt Probleme ohne Benutzerinteraktion
 - `--setup-cron`: Richtet einen Cron-Job für tägliche automatische Prüfung und Reparatur ein
-- `--email=ADRESSE`: Sendet einen Bericht per E-Mail an die angegebene Adresse
 - `--help`: Hilfe anzeigen
 
 **Beispiel für eine reine Diagnose ohne Änderungen:**
@@ -994,10 +993,9 @@ sudo ./fix-all.sh --check-only
 sudo ./fix-all.sh --setup-cron
 ```
 
-**Automatische Diagnose und Reparatur mit E-Mail-Benachrichtigung:**
-```bash
-sudo ./fix-all.sh --auto --email=admin@example.com
-```
+Berichte und Logs:
+- Nach jedem Lauf werden detaillierte Berichte lokal unter `logs/auto_fix_report.log` gespeichert.
+- Laufzeit-Ausgaben erscheinen zusätzlich in der Konsole und in `logs/fix_all.log`.
 
 Das Skript führt automatisch eine intelligente Diagnose des Systems durch und behebt gezielt nur die gefundenen Probleme. Es überprüft:
 1. Berechtigungen für kritische Verzeichnisse
@@ -1021,10 +1019,9 @@ Das System kann so konfiguriert werden, dass es täglich automatisch nach Proble
    - Gefundene Probleme automatisch behebt
    - Einen detaillierten Bericht in `logs/auto_fix_report.log` speichert
    
-2. **E-Mail-Benachrichtigungen aktivieren**:
-   ```bash
-   sudo ./fix-all.sh --auto --email=ihre@email.com
-   ```
+2. Status/Protokolle einsehen:
+   - Laufberichte: `logs/auto_fix_report.log`
+   - Detail-Logs: `logs/fix_all.log`
    
    Nach jeder automatischen Reparatur wird ein Bericht an die angegebene E-Mail-Adresse gesendet.
 

@@ -23,7 +23,6 @@ FIX_PYMONGO=true
 FIX_PNG_TO_JPG=true
 AUTO_MODE=false
 SETUP_CRON=false
-EMAIL_REPORT=""
 
 for arg in "$@"; do
     case $arg in
@@ -74,7 +73,7 @@ for arg in "$@"; do
             shift
             ;;
         --email=*)
-            EMAIL_REPORT="${arg#*=}"
+            echo "Hinweis: Die E-Mail-Funktion wurde entfernt. Option \"$arg\" wird ignoriert." 
             shift
             ;;
         --help)
@@ -91,7 +90,6 @@ for arg in "$@"; do
             echo "  --no-fix-png-jpg  PNG-zu-JPG Konvertierung überspringen"
             echo "  --auto            Automatischer Modus - erkennt und behebt Probleme ohne Benutzerinteraktion"
             echo "  --setup-cron      Richtet einen Cron-Job für regelmäßige Prüfungen ein"
-            echo "  --email=ADRESSE   Sendet einen Bericht per E-Mail an die angegebene Adresse"
             echo "  --help            Diese Hilfe anzeigen"
             echo ""
             echo "Features:"
@@ -154,18 +152,7 @@ setup_cron_job() {
     return 0
 }
 
-# Function to send email report
-send_email_report() {
-    local report_content="$1"
-    local subject="Inventarsystem - Automatischer Reparaturbericht"
-    
-    if [ -z "$EMAIL_REPORT" ] || ! command -v mail &> /dev/null; then
-        return 1
-    fi
-    
-    echo -e "$report_content" | mail -s "$subject" "$EMAIL_REPORT"
-    return $?
-}
+# Email-Versand entfernt: Berichte werden stattdessen in die Konsole und nach logs/auto_fix_report.log geschrieben
 
 # Function to handle automatic mode
 handle_auto_mode() {
@@ -189,8 +176,10 @@ handle_auto_mode() {
     
     # Check virtual environment
     report+="\nPrüfung: Virtuelle Python-Umgebung\n"
+    set +e
     check_venv_health
     local venv_status=$?
+    set -e
     
     if [ $venv_status -ne 0 ]; then
         has_problems=1
@@ -201,8 +190,10 @@ handle_auto_mode() {
     
     # Check for pymongo/bson conflict
     report+="\nPrüfung: PyMongo/BSON-Konflikte\n"
+    set +e
     check_pymongo_bson_conflict
     local pymongo_status=$?
+    set -e
     
     if [ $pymongo_status -ne 0 ] && [ $pymongo_status -ne 2 ]; then
         has_problems=1
@@ -215,8 +206,10 @@ handle_auto_mode() {
     
     # Check system services
     report+="\nPrüfung: Systemdienste\n"
+    set +e
     check_services
     local services_status=$?
+    set -e
     
     if [ $services_status -ne 0 ] && [ $services_status -ne 2 ]; then
         has_problems=1
@@ -230,21 +223,17 @@ handle_auto_mode() {
     # If no problems or in check-only mode, just return
     if [ $has_problems -eq 0 ]; then
         report+="\nErgebnis: Alle Systeme funktionieren korrekt. Keine Reparaturen notwendig.\n"
+        # Print report to console and write to file
+        echo -e "$report"
         echo -e "$report" >> "$SCRIPT_DIR/logs/auto_fix_report.log"
-        
-        if [ -n "$EMAIL_REPORT" ]; then
-            send_email_report "$report"
-        fi
         return 0
     fi
     
     if [ "$CHECK_ONLY" = true ]; then
         report+="\nErgebnis: Probleme gefunden, aber nur Prüfung durchgeführt (--check-only).\n"
+        # Print report to console and write to file
+        echo -e "$report"
         echo -e "$report" >> "$SCRIPT_DIR/logs/auto_fix_report.log"
-        
-        if [ -n "$EMAIL_REPORT" ]; then
-            send_email_report "$report"
-        fi
         return 1
     fi
     
@@ -257,11 +246,9 @@ handle_auto_mode() {
         report+="\nReparaturen wurden durchgeführt. Details im Log: $LOG_FILE\n"
     fi
     
+    # Print report to console and write to file
+    echo -e "$report"
     echo -e "$report" >> "$SCRIPT_DIR/logs/auto_fix_report.log"
-    
-    if [ -n "$EMAIL_REPORT" ]; then
-        send_email_report "$report"
-    fi
     
     return 0
 }
@@ -641,18 +628,24 @@ check_directory_permissions "$SCRIPT_DIR/mongodb_backup" "777" "recursive" 2>/de
 
 # Check virtual environment
 log_message "Überprüfe virtuelle Python-Umgebung..."
+set +e
 check_venv_health
 VENV_STATUS=$?
+set -e
 
 # Check for pymongo/bson conflict
 log_message "Überprüfe auf pymongo/bson-Konflikte..."
+set +e
 check_pymongo_bson_conflict
 PYMONGO_STATUS=$?
+set -e
 
 # Check system services
 log_message "Überprüfe Systemdienste..."
+set +e
 check_services
 SERVICES_STATUS=$?
+set -e
 
 # Display diagnosis results
 log_section "DIAGNOSEERGEBNISSE"
@@ -709,15 +702,18 @@ if [ "$AUTO_MODE" = true ]; then
     log_message "Automatischer Reparaturmodus ist aktiviert"
     log_message "Überprüfe und behebe Probleme ohne Benutzerinteraktion..."
     
-    # Let the auto mode handler determine if fixes are needed
+    # Let the auto mode handler determine if fixes are needed, but don't abort on non-zero due to set -e
+    set +e
     handle_auto_mode
+    HM_STATUS=$?
+    set -e
     
     # If auto mode with check-only, exit here
     if [ "$CHECK_ONLY" = true ]; then
         log_section "AUTOMATISCHE PRÜFUNG ABGESCHLOSSEN"
         log_message "Keine Änderungen wurden durchgeführt (--check-only ist aktiviert)"
         log_message "Prüfbericht wurde in logs/auto_fix_report.log gespeichert"
-        exit 0
+        exit $HM_STATUS
     fi
 fi
 
@@ -1022,16 +1018,22 @@ check_directory_permissions "$SCRIPT_DIR/Web/QRCodes" "777" "recursive" 2>/dev/n
 check_directory_permissions "$SCRIPT_DIR/mongodb_backup" "777" "recursive" 2>/dev/null || PERM_STATUS_AFTER=1
 
 # Check virtual environment
+set +e
 check_venv_health
 VENV_STATUS_AFTER=$?
+set -e
 
 # Check for pymongo/bson conflict
+set +e
 check_pymongo_bson_conflict
 PYMONGO_STATUS_AFTER=$?
+set -e
 
 # Check system services
+set +e
 check_services
 SERVICES_STATUS_AFTER=$?
+set -e
 
 # Report fixed and remaining issues
 if [ $PERM_STATUS_AFTER -eq 0 ] && [ $PERM_STATUS -ne 0 ]; then
