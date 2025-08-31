@@ -2169,6 +2169,12 @@
 
     /* Image navigation buttons removed */
 
+    /* Video preview styling within cards (parity with admin) */
+    .item-card video.item-image {
+        background-color: #000;
+        position: relative;
+    }
+
     /* Modal styles */
     .item-modal {
         display: none;
@@ -2819,6 +2825,11 @@
     .modal-image.active-image {
         display: block !important;
     }
+    /* Ensure videos in modal scale correctly */
+    video.modal-image {
+        width: 100%;
+        height: auto;
+    }
     /* Modal image display and navigation */
     .modal-image {
         display: none;
@@ -2856,6 +2867,17 @@
         font-size: 0.9rem;
     }
 
+    /* Modal image container visual parity with admin */
+    .modal-image-container {
+        position: relative;
+        text-align: center;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow: hidden;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+
     /* Borrower and appointment info panels in modal */
     .borrower-info-panel {
         background-color: #fff3cd;
@@ -2876,6 +2898,22 @@
     }
     .appointment-info-panel h4 { color: #0277bd; margin: 0 0 10px 0; font-size: 1.1rem; }
     .appointment-date, .appointment-time, .appointment-user { margin: 5px 0; color: #0277bd; font-weight: 500; }
+
+    /* Modal Details Styling (text formatting) */
+    .modal-details { margin: 20px 0; }
+    .detail-group { display: flex; margin-bottom: 10px; align-items: flex-start; }
+    .detail-group.full-width { flex-direction: column; margin-bottom: 15px; }
+    .detail-label { font-weight: bold; color: #495057; min-width: 150px; margin-right: 10px; }
+    .detail-value { color: #212529; flex: 1; word-wrap: break-word; }
+    .detail-group.full-width .detail-label { margin-bottom: 5px; }
+    .detail-group.full-width .detail-value {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        white-space: pre-wrap;
+    }
+    .status-borrowed { color: #dc3545; font-weight: bold; }
 
     /* Match admin button styling for borrow */
     .ausleihen {
