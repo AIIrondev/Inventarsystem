@@ -60,431 +60,251 @@ source "$VENV_DIR/bin/activate" || {
 }
 
 # Upgrade pip in virtual environment
-echo "Upgrading pip in virtual environment..."
-if ! pip install --upgrade pip; then
-    echo "Warning: Failed to upgrade pip. This might be due to permission issues."
-    echo "To fix permission issues, run: sudo ./fix-all.sh --fix-permissions"
-    echo "Then try running restart.sh again."
+#!/bin/bash
+set -euo pipefail
+
+# Discover local IP (fallback to localhost)
+NETWORK_IP=$(ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127\.0\.0\.1' | head -n 1 || true)
+if [ -z "${NETWORK_IP:-}" ]; then NETWORK_IP="localhost"; fi
+
+# Detect OS ID (best-effort)
+OS_ID=$(awk -F= '/^ID=/{print $2}' /etc/os-release | tr -d '"' || echo "linux")
+
+# Project paths
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )" || { echo "Cannot resolve PROJECT_ROOT"; exit 1; }
+VENV_DIR="$PROJECT_ROOT/.venv"
+CERT_DIR="$PROJECT_ROOT/certs"
+LOG_DIR="$PROJECT_ROOT/logs"
+
+echo "========================================================"
+echo " Inventarsystem – setup and start (project: $PROJECT_ROOT)"
+echo "========================================================"
+
+# Helpers
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+apt_install() { sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; }
+
+# Ensure directories and permissions
+sudo mkdir -p "$LOG_DIR" "$CERT_DIR"
+sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$LOG_DIR" "$CERT_DIR"
+sudo chmod 755 "$LOG_DIR" "$CERT_DIR"
+touch "$LOG_DIR/access.log" "$LOG_DIR/error.log" "$LOG_DIR/scheduler.log"
+chmod 644 "$LOG_DIR"/*.log || true
+
+echo "========================================================"
+echo " Checking/creating Python virtual environment"
+echo "========================================================"
+
+if ! have_cmd python3; then
+    echo "Installing python3..."
+    apt_install python3 || { echo "Failed to install python3"; exit 1; }
+fi
+if ! python3 -m venv --help >/dev/null 2>&1; then
+    echo "Installing python3-venv..."
+    apt_install python3-venv || { echo "Failed to install python3-venv"; exit 1; }
 fi
 
-# Function to check and install package
-check_and_install() {
-    echo "Checking for $1..."
-    if ! command -v $1 &> /dev/null; then
-        echo "Installing $1..."
-        case $1 in
-            nginx)
-		# sudo apt-get update
-                sudo apt-get install -y nginx || return 1
-                ;;
-            gunicorn)
-                pip install gunicorn || return 1
-                ;;
-            openssl)
-                # sudo apt-get update
-                sudo apt-get install -y openssl || return 1
-                ;;
-            mongod)
-                # Clean up any existing MongoDB repos to avoid conflicts
-                echo "=== Cleaning up existing MongoDB repositories ==="
-                sudo rm -f /etc/apt/sources.list.d/mongodb*.list
-                sudo apt-key del 7F0CEB10 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5 20691EEC35216C63CAF66CE1656408E390CFB1F5 4B7C549A058F8B6B 2069827F925C2E182330D4D4B5BEA7232F5C6971 E162F504A20CDF15827F718D4B7C549A058F8B6B 9DA31620334BD75D9DCB49F368818C72E52529D4 F5679A222C647C87527C2F8CB00A0BD1E2C63C11 2023-02-15 > /dev/null 2>&1 || true
+# (Re)create venv if missing or broken
+if [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo "Creating virtualenv at $VENV_DIR ..."
+    rm -rf "$VENV_DIR" 2>/dev/null || true
+    python3 -m venv "$VENV_DIR"
+fi
 
-                # Update system packages
-                echo "=== Updating system packages ==="
-                sudo apt update || { echo "Failed to update package lists"; exit 1; }
-
-                # Add MongoDB repository depending on OS (Ubuntu Server or Linux Mint)
-                echo "=== Adding MongoDB repository ==="
-                # Prefer Ubuntu base codename from /etc/os-release when available
-                UBUNTU_BASE_CODENAME=$(awk -F= '/^UBUNTU_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
-                if [ -z "$UBUNTU_BASE_CODENAME" ]; then
-                    UBUNTU_BASE_CODENAME=$(lsb_release -cs 2>/dev/null || awk -F= '/^VERSION_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
-                fi
-
-                if [ "$OS_ID" = "linuxmint" ]; then
-                    # Map Linux Mint codename to Ubuntu base codename when needed
-                    MINT_CODENAME=$(lsb_release -cs 2>/dev/null || awk -F= '/^VERSION_CODENAME=/{print $2}' /etc/os-release | tr -d '"')
-                    if [ -z "$UBUNTU_BASE_CODENAME" ] || [ "$UBUNTU_BASE_CODENAME" = "$MINT_CODENAME" ]; then
-                        case "$MINT_CODENAME" in
-                            xia) UBUNTU_BASE_CODENAME="noble" ;;
-                            vanessa|vera|victoria) UBUNTU_BASE_CODENAME="jammy" ;;
-                            ulyana|ulyssa|uma|una) UBUNTU_BASE_CODENAME="focal" ;;
-                        esac
-                    fi
-                    echo "Detected Linux Mint ($MINT_CODENAME) → using Ubuntu base '$UBUNTU_BASE_CODENAME'"
-                elif [ "$OS_ID" = "ubuntu" ];
-                then
-                    echo "Detected Ubuntu ($UBUNTU_BASE_CODENAME)"
-                else
-                    echo "Non-Ubuntu/Mint OS detected ($OS_ID). Skipping MongoDB apt setup."
-                    return 1
-                fi
-
-                # Select MongoDB series per Ubuntu base codename
-                case "$UBUNTU_BASE_CODENAME" in
-                    noble|jammy)
-                        MONGO_SERIES="7.0" ;;
-                    focal)
-                        MONGO_SERIES="6.0" ;;
-                    *)
-                        echo "Unknown Ubuntu codename '$UBUNTU_BASE_CODENAME', defaulting to 7.0"
-                        MONGO_SERIES="7.0" ;;
-                esac
-
-                # Use jammy repo path for noble until MongoDB publishes noble (avoid 404)
-                MONGO_APT_CODENAME="$UBUNTU_BASE_CODENAME"
-                if [ "$UBUNTU_BASE_CODENAME" = "noble" ]; then
-                    MONGO_APT_CODENAME="jammy"
-                    echo "Using jammy repo path for MongoDB on noble"
-                fi
-
-                # Install repo key and list using series and apt codename
-                wget -qO - https://www.mongodb.org/static/pgp/server-${MONGO_SERIES}.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg
-                echo "deb [signed-by=/usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg arch=amd64,arm64] https://repo.mongodb.org/apt/ubuntu ${MONGO_APT_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" | \
-                    sudo tee /etc/apt/sources.list.d/mongodb-org-${MONGO_SERIES}.list
-                
-                # Install MongoDB
-                sudo apt-get update || return 1
-                sudo apt-get install -y mongodb-org || return 1
-                ;;
-            *)
-                echo "Unknown package: $1"
-                return 1
-                ;;
-        esac
-    fi
-    echo "✓ $1 is installed"
-    return 0
-}
+source "$VENV_DIR/bin/activate"
+python -m pip install --upgrade pip wheel setuptools || true
 
 echo "========================================================"
-echo "           CHECKING REQUIRED APPLICATIONS               "
+echo " Installing Python dependencies"
 echo "========================================================"
-
-# Check all required applications
-check_and_install nginx || { echo "Failed to install nginx. Exiting."; exit 1; }
-check_and_install gunicorn || { echo "Failed to install gunicorn. Exiting."; exit 1; }
-check_and_install openssl || { echo "Failed to install openssl. Exiting."; exit 1; }
-check_and_install mongod || echo "MongoDB installation incomplete. Continuing anyway..."
-
-# Create Nginx configuration with HTTPS
-cd $PROJECT_ROOT
-
-echo "========================================================"
-echo "           INSTALLING PYTHON DEPENDENCIES               "
-echo "========================================================"
-
-# Prepare Python environment
-# Create a temporary requirements file without bson
+cd "$PROJECT_ROOT"
 if [ -f requirements.txt ]; then
-    echo "Creating modified requirements file..."
-    grep -v "^bson" requirements.txt > requirements_modified.txt
-    
-    # Install Python requirements except PyMongo (we'll install a specific version later)
-    echo "Installing Python dependencies..."
-    grep -v "^pymongo" requirements_modified.txt > requirements_no_mongo.txt
-    pip install -r requirements_no_mongo.txt || {
-        echo "Warning: Some Python dependencies may not be installed correctly."
-    }
-    rm requirements_no_mongo.txt requirements_modified.txt
+    tmp_req1="$(mktemp)"; tmp_req2="$(mktemp)"
+    grep -vE '^\s*bson(==|>=|<=|\s|$)' requirements.txt > "$tmp_req1" || true
+    grep -vE '^\s*pymongo(==|>=|<=|\s|$)' "$tmp_req1" > "$tmp_req2" || true
+    python -m pip install -r "$tmp_req2" || { echo "Failed to install base requirements"; exit 1; }
+    rm -f "$tmp_req1" "$tmp_req2"
 fi
 
-# Fix PyMongo/Bson compatibility issue
-echo "Fixing PyMongo/Bson compatibility issue..."
-pip uninstall -y bson pymongo
-if ! pip install pymongo==4.6.3; then
-    echo "Failed to install pymongo. This is likely due to permission issues."
-    echo "To fix permission issues, run: sudo ./fix-all.sh --fix-permissions"
-    echo "Then try running restart.sh again."
-    exit 1
+# Ensure gunicorn installed in venv
+if ! have_cmd gunicorn; then
+    python -m pip install gunicorn
 fi
-echo "PyMongo installed successfully"
+
+# Fix PyMongo/BSON compatibility
+python -m pip uninstall -y bson pymongo >/dev/null 2>&1 || true
+python -m pip install "pymongo==4.6.3"
 
 echo "========================================================"
-echo "              VERIFYING INSTALLATIONS                   "
+echo " Checking system packages (nginx, openssl, ufw)"
 echo "========================================================"
+if ! have_cmd nginx; then apt_install nginx; fi
+if ! have_cmd openssl; then apt_install openssl; fi
+if ! have_cmd ufw; then apt_install ufw || true; fi
 
-# Verify Nginx installation
-nginx -v || {
-    echo "ERROR: Nginx not installed properly."
-    exit 1
-}
-
-# Verify Gunicorn installation
-gunicorn --version || {
-    echo "ERROR: Gunicorn not installed properly."
-    exit 1
-}
-
-# Verify MongoDB service
-if ! systemctl is-active --quiet mongodb && ! systemctl is-active --quiet mongod; then
-    echo "Starting MongoDB service..."
-    # Try different service names
-    MONGODB_STARTED=false
-    for SERVICE in mongodb mongod; do
-        if systemctl list-unit-files | grep -q $SERVICE; then
-            sudo systemctl start $SERVICE
-            if [ $? -eq 0 ]; then
-                echo "Started $SERVICE service"
-                MONGODB_STARTED=true
-                break
-            fi
-        fi
-    done
-    
-    if [ "$MONGODB_STARTED" = false ]; then
-        echo "Warning: Could not start MongoDB service"
-        read -p "Continue without MongoDB? (y/n): " -n 1 -r
-        echo "Warning: The website might not respond to any requests from clients if the database is down"
-        echo 
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "Exiting."
-            exit 1
-        fi
+echo "========================================================"
+echo " Verifying MongoDB service (optional)"
+echo "========================================================"
+MONGODB_SERVICE=""
+for svc in mongod mongodb; do
+    if systemctl list-unit-files | grep -q "^${svc}\.service"; then MONGODB_SERVICE="$svc"; break; fi
+done
+if [ -n "$MONGODB_SERVICE" ]; then
+    if ! systemctl is-active --quiet "$MONGODB_SERVICE"; then
+        echo "Starting MongoDB service: $MONGODB_SERVICE"
+        sudo systemctl start "$MONGODB_SERVICE" || true
     fi
+    if systemctl is-active --quiet "$MONGODB_SERVICE"; then echo "✓ MongoDB is running"; else echo "Note: MongoDB not running (continuing)"; fi
 else
-    echo "✓ MongoDB is running"
+    echo "Note: MongoDB service not detected (mongod/mongodb). Continuing."
 fi
 
-# Verify PyMongo installation is correct
-echo "Verifying PyMongo installation..."
-python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration correct')" || {
-    echo "ERROR: PyMongo still not configured correctly."
-    echo "Trying to fix by uninstalling standalone bson..."
-    pip uninstall -y bson
-    python -c "from pymongo import MongoClient; from bson import SON; print('✓ PyMongo configuration fixed')" || {
-        echo "ERROR: PyMongo configuration still incorrect. Exiting."
-        exit 1
-    }
-}
-
-# Verify Flask application files
-echo "Checking Flask application files..."
+echo "========================================================"
+echo " Checking Flask application files"
+echo "========================================================"
 if [ ! -f "$PROJECT_ROOT/Web/app.py" ]; then
-    echo "ERROR: Main application file Web/app.py not found!"
-    exit 1
+    echo "ERROR: Web/app.py not found at $PROJECT_ROOT/Web/app.py"; exit 1;
 fi
-
-echo "✓ Flask application files found"
+echo "✓ Flask app found"
 
 echo "========================================================"
-echo "           CHECKING FOR SSL CERTIFICATES                "
+echo " SSL certificate setup"
 echo "========================================================"
-
-# Set default certificate paths
 CERT_PATH="${CUSTOM_CERT_PATH:-$CERT_DIR/inventarsystem.crt}"
 KEY_PATH="${CUSTOM_KEY_PATH:-$CERT_DIR/inventarsystem.key}"
 
-# Check if custom certificates are specified and exist
-if [ -n "$CUSTOM_CERT_PATH" ] && [ -n "$CUSTOM_KEY_PATH" ]; then
+if [ -n "${CUSTOM_CERT_PATH:-}" ] && [ -n "${CUSTOM_KEY_PATH:-}" ]; then
     if [ -f "$CUSTOM_CERT_PATH" ] && [ -f "$CUSTOM_KEY_PATH" ]; then
-        echo "Using custom certificates from:"
-        echo "  - Certificate: $CUSTOM_CERT_PATH"
-        echo "  - Key: $CUSTOM_KEY_PATH"
+        CERT_PATH="$CUSTOM_CERT_PATH"; KEY_PATH="$CUSTOM_KEY_PATH"
     else
-        echo "WARNING: Specified custom certificates not found!"
-        echo "  - Certificate: $CUSTOM_CERT_PATH"
-        echo "  - Key: $CUSTOM_KEY_PATH"
-        echo "Falling back to default certificate location."
-        CERT_PATH="$CERT_DIR/inventarsystem.crt"
-        KEY_PATH="$CERT_DIR/inventarsystem.key"
+        echo "Custom cert paths invalid, falling back to $CERT_DIR"
     fi
 fi
 
-# Generate SSL certificates if they don't exist
-if [ ! -f $CERT_PATH ] || [ ! -f $KEY_PATH ]; then
-    echo "Generating SSL certificates..."
-    # First ensure the directory is writable by the current user
-    sudo chown -R $(whoami) $CERT_DIR
-    
-    # Generate certificates
+if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
+    echo "Generating self-signed certificate into $CERT_DIR ..."
+    sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$CERT_DIR"
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout $CERT_DIR/inventarsystem.key -out $CERT_DIR/inventarsystem.crt \
-        -subj "/C=DE/ST=State/L=City/O=Inventarsystem/CN=$NETWORK_IP" || {
-            echo "ERROR: Failed to generate SSL certificates"
-            exit 1
+        -keyout "$CERT_DIR/inventarsystem.key" -out "$CERT_DIR/inventarsystem.crt" \
+        -subj "/C=DE/ST=NA/L=NA/O=Inventarsystem/OU=IT/CN=$NETWORK_IP" >/dev/null 2>&1
+    chmod 600 "$CERT_DIR/inventarsystem.key"
+    CERT_PATH="$CERT_DIR/inventarsystem.crt"; KEY_PATH="$CERT_DIR/inventarsystem.key"
+fi
+echo "✓ SSL cert: $CERT_PATH"
+
+echo "========================================================"
+echo " Writing systemd unit for Gunicorn"
+echo "========================================================"
+cat <<EOF | sudo tee /etc/systemd/system/inventarsystem-gunicorn.service >/dev/null
+[Unit]
+Description=Inventarsystem Gunicorn daemon
+After=network.target${MONGODB_SERVICE:+ ${MONGODB_SERVICE}.service}
+${MONGODB_SERVICE:+Requires=${MONGODB_SERVICE}.service}
+
+[Service]
+User=${SUDO_USER:-$USER}
+Group=$(id -gn ${SUDO_USER:-$USER})
+WorkingDirectory=$PROJECT_ROOT/Web
+Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$VENV_DIR/bin/gunicorn app:app \
+    --bind unix:/tmp/inventarsystem.sock \
+    --workers 1 \
+    --access-logfile $LOG_DIR/access.log \
+    --error-logfile $LOG_DIR/error.log
+Restart=always
+RestartSec=5
+SyslogIdentifier=inventarsystem-gunicorn
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "========================================================"
+echo " Writing Nginx config"
+echo "========================================================"
+SERVER_NAME="$NETWORK_IP"
+cat <<EOF | sudo tee /etc/nginx/sites-available/inventarsystem >/dev/null
+server {
+        listen 80;
+        server_name ${SERVER_NAME};
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+        listen 443 ssl;
+        server_name ${SERVER_NAME};
+
+        client_max_body_size 50M;
+
+        ssl_certificate     ${CERT_PATH};
+        ssl_certificate_key ${KEY_PATH};
+
+        # Serve static files directly
+        location /static/ {
+                alias $PROJECT_ROOT/Web/static/;
+                access_log off;
+                expires 30d;
         }
-    
-    # Fix permissions
-    chmod 600 $CERT_DIR/inventarsystem.key
-    
-    # Set paths to the newly generated certificates
-    CERT_PATH="$CERT_DIR/inventarsystem.crt"
-    KEY_PATH="$CERT_DIR/inventarsystem.key"
-    
-    # Verify certificates exist
-    if [ -f $CERT_PATH ] && [ -f $KEY_PATH ]; then
-        echo "✓ SSL certificates generated"
-    else
-        echo "ERROR: SSL certificates were not created properly"
-        exit 1
-    fi
-else
-    echo "✓ SSL certificates already exist"
-    # Ensure key has appropriate permissions
-    chmod 600 $KEY_PATH
-fi
 
-# Set environment variables
-export FLASK_ENV=production
-export FLASK_APP=Web/app.py
-
-echo "========================================================"
-echo "           CONFIGURING SYSTEMD SERVICES                 "
-echo "========================================================"
-
-echo "Fixing systemd service configuration..."
-
-# Detect which MongoDB service is actually available on this system
-MONGODB_SERVICE=""
-for SERVICE in mongodb mongod; do
-    if systemctl list-unit-files | grep -q $SERVICE; then
-        MONGODB_SERVICE="$SERVICE"
-        echo "✓ Detected MongoDB service: $MONGODB_SERVICE.service"
-        break
-    fi
-done
-
-if [ -z "$MONGODB_SERVICE" ]; then
-    echo "Warning: Could not detect MongoDB service. Configuring services without MongoDB dependency."
-    
-    # Create the gunicorn service file without MongoDB dependency
-    sudo tee /etc/systemd/system/inventarsystem-gunicorn.service > /dev/null << EOF
-[Unit]
-Description=Inventarsystem Gunicorn daemon
-After=network.target
-
-[Service]
-User=$(whoami)
-Group=$(id -gn)
-WorkingDirectory=$PROJECT_ROOT/Web
-Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=$VENV_DIR/bin/gunicorn app:app --bind unix:/tmp/inventarsystem.sock --workers 1 --access-logfile $PROJECT_ROOT/logs/access.log --error-logfile $PROJECT_ROOT/logs/error.log
-Restart=always
-RestartSec=5
-SyslogIdentifier=inventarsystem-gunicorn
-
-[Install]
-WantedBy=multi-user.target
-EOF
-else
-    # Create the gunicorn service file with correct MongoDB service
-    sudo tee /etc/systemd/system/inventarsystem-gunicorn.service > /dev/null << EOF
-[Unit]
-Description=Inventarsystem Gunicorn daemon
-After=network.target $MONGODB_SERVICE.service
-Requires=$MONGODB_SERVICE.service
-
-[Service]
-User=$(whoami)
-Group=$(id -gn)
-WorkingDirectory=$PROJECT_ROOT/Web
-Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=$VENV_DIR/bin/gunicorn app:app --bind unix:/tmp/inventarsystem.sock --workers 1 --access-logfile $PROJECT_ROOT/logs/access.log --error-logfile $PROJECT_ROOT/logs/error.log
-Restart=always
-RestartSec=5
-SyslogIdentifier=inventarsystem-gunicorn
-
-[Install]
-WantedBy=multi-user.target
-EOF
-fi
-
-echo "========================================================"
-echo "           CONFIGURING NGINX SERVER                     "
-echo "========================================================"
-
-# Fix directory permissions for Nginx to access static files
-echo "Setting proper permissions for static file access..."
-# Determine the real user and home (avoid /home/root when run with sudo)
-REAL_USER=${SUDO_USER:-$(whoami)}
-USER_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
-if [ -d "$USER_HOME" ]; then
-    sudo chmod 755 "$USER_HOME"
-else
-    echo "Note: User home directory not found for $REAL_USER ($USER_HOME). Skipping chmod."
-fi
-sudo chmod 755 $PROJECT_ROOT/Web/static || {
-    echo "ERROR: Failed to set permissions for static files. Exiting."
-    exit 1
-}
-
-# Create Nginx server configuration file
-sudo tee /etc/nginx/sites-available/inventarsystem > /dev/null << EOF
-server {
-    listen 80;
-    server_name $NETWORK_IP;
-    
-    # Redirect all HTTP requests to HTTPS
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name $NETWORK_IP;
-    
-    # Add this line to increase the upload limit to 50MB
-    client_max_body_size 50M;
-    
-    # SSL configuration
-    ssl_certificate $CERT_PATH;
-    ssl_certificate_key $KEY_PATH;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers 'EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH';
-    
-    # Proxy settings
-    location / {
-        proxy_pass http://unix:/tmp/inventarsystem.sock;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Static files
-    location /static {
-        alias $PROJECT_ROOT/Web/static;
-        add_header 'Access-Control-Allow-Origin' '*';
-        expires 30d;
-        access_log off;
-        autoindex off;
-        try_files \$uri \$uri/ =404;
-    }
-    
-    # Explicitly handle CSS files
-    location ~ ^/static/css/(.+\.css)$ {
-        alias $PROJECT_ROOT/Web/static/css/\$1;
-        add_header Content-Type text/css;
-        expires 30d;
-        access_log off;
-    }
-    
-    # Explicitly handle favicon.ico
-    location = /favicon.ico {
-        alias $PROJECT_ROOT/Web/static/favicon.ico;
-        access_log off;
-        expires 30d;
-    }
+        location / {
+                include proxy_params;
+                proxy_pass http://unix:/tmp/inventarsystem.sock;
+                proxy_read_timeout 300;
+        }
 }
 EOF
 
-# Remove default site if it exists
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/sites-enabled/default || true
+sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/inventarsystem
 
-# Enable the Inventarsystem site
-sudo ln -sf /etc/nginx/sites-available/inventarsystem /etc/nginx/sites-enabled/
-
-# Test Nginx configuration
 echo "Testing Nginx configuration..."
-sudo nginx -t || {
-    echo "ERROR: Nginx configuration test failed. Check the error message above."
-    exit 1
-}
+sudo nginx -t
 
+echo "========================================================"
+echo " Enabling services"
+echo "========================================================"
+sudo mkdir -p /tmp && sudo chmod 1777 /tmp
+sudo systemctl daemon-reload
+sudo systemctl enable inventarsystem-gunicorn.service
+
+USE_WRAPPER=false
+if [ -f "/etc/systemd/system/inventarsystem-nginx.service" ]; then
+    USE_WRAPPER=true
+fi
+
+echo "Starting Gunicorn..."
+sudo systemctl restart inventarsystem-gunicorn.service
+
+if [ "$USE_WRAPPER" = true ]; then
+    echo "Detected inventarsystem-nginx.service; using wrapper service for nginx"
+    sudo systemctl enable inventarsystem-nginx.service || true
+    # Avoid conflicts with native nginx service
+    sudo systemctl disable --now nginx || true
+    echo "Reloading Nginx (wrapper)..."
+    sudo systemctl reload inventarsystem-nginx.service || sudo systemctl restart inventarsystem-nginx.service
+else
+    sudo systemctl enable nginx || true
+    echo "Reloading Nginx..."
+    sudo systemctl reload nginx || sudo systemctl restart nginx
+fi
+
+echo "========================================================"
+echo " Firewall (ufw) rules"
+echo "========================================================"
+if have_cmd ufw; then
+    sudo ufw --force enable || true
+    sudo ufw allow 22/tcp || true
+    sudo ufw allow 443/tcp || true
+fi
+
+echo "========================================================"
+echo " Access Information"
+echo "========================================================"
+echo "Web Interface: https://${NETWORK_IP}"
+echo "Gunicorn socket: /tmp/inventarsystem.sock"
+echo "Logs: $LOG_DIR (access.log, error.log)"
+echo "MongoDB (optional): mongodb://localhost:27017"
+echo "========================================================"
 echo "✓ Nginx configuration created and tested"
 
 # Create the nginx service file
