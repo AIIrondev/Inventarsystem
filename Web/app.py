@@ -402,7 +402,7 @@ def uploaded_file(filename):
     """
     try:
         # Check production path first (deployed environment)
-        prod_path = "/var/Inventarsystem/Web/uploads"
+        prod_path = "/opt/Inventarsystem/Web/uploads"
         dev_path = app.config['UPLOAD_FOLDER']
         if os.path.exists(os.path.join(prod_path, filename)):
             return send_from_directory(prod_path, filename)
@@ -410,17 +410,17 @@ def uploaded_file(filename):
         if os.path.exists(os.path.join(dev_path, filename)):
             return send_from_directory(dev_path, filename)
             
-            # Use a placeholder image if file not found - first try SVG, then PNG
-            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
-            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
-            
-            if os.path.exists(svg_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.svg')
-            elif os.path.exists(png_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.png')
-            
-            # Default placeholder from static folder
-            return send_from_directory(app.static_folder, 'favicon.ico')
+        # Use a placeholder image if file not found - first try SVG, then PNG
+        svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+        png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+        
+        if os.path.exists(svg_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+        elif os.path.exists(png_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+        
+        # Default placeholder from static folder
+        return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving file {filename}: {str(e)}")
         return Response("Image not found", status=404)
@@ -446,16 +446,16 @@ def thumbnail_file(filename):
         if os.path.exists(os.path.join(dev_path, filename)):
             return send_from_directory(dev_path, filename)
             
-            # Use a placeholder image if file not found - first try SVG, then PNG
-            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
-            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
-            
-            if os.path.exists(svg_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.svg')
-            elif os.path.exists(png_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.png')
-            else:
-                return send_from_directory(app.static_folder, 'favicon.ico')
+        # Use a placeholder image if file not found - first try SVG, then PNG
+        svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+        png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+        
+        if os.path.exists(svg_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+        elif os.path.exists(png_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+        else:
+            return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving thumbnail {filename}: {str(e)}")
         return Response("Thumbnail not found", status=404)
@@ -481,16 +481,16 @@ def preview_file(filename):
         if os.path.exists(os.path.join(dev_path, filename)):
             return send_from_directory(dev_path, filename)
             
-            # Use a placeholder image if file not found - first try SVG, then PNG
-            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
-            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
-            
-            if os.path.exists(svg_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.svg')
-            elif os.path.exists(png_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.png')
-            else:
-                return send_from_directory(app.static_folder, 'favicon.ico')
+        # Use a placeholder image if file not found - first try SVG, then PNG
+        svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+        png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+        
+        if os.path.exists(svg_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.svg')
+        elif os.path.exists(png_placeholder_path):
+            return send_from_directory(app.static_folder, 'img/no-image.png')
+        else:
+            return send_from_directory(app.static_folder, 'favicon.ico')
     except Exception as e:
         print(f"Error serving preview {filename}: {str(e)}")
         return Response("Preview not found", status=404)

@@ -39,6 +39,9 @@ if [ -n "$GUNICORN_PIDS" ]; then
     echo "✓ Remaining Gunicorn processes terminated"
 fi
 
+sudo systemctl stop mongod
+
+
 # Check for nginx processes (but don't stop the main nginx daemon if it's running other sites)
 echo "Note: Not stopping the main Nginx daemon, as it might be serving other websites."
 
