@@ -350,7 +350,6 @@ check_and_install() {
 
 
                 sudo apt-get install -y mongodb-org || return 1
-                sudo systemctl start mongod
 
                 ;;
 
@@ -392,6 +391,8 @@ check_and_install openssl || { echo "Failed to install openssl. Exiting."; exit 
 
 
 check_and_install mongod || echo "MongoDB installation incomplete. Continuing anyway..."
+
+sudo systemctl start mongod
 
 echo "========================================================"
 echo " Installing Python dependencies"

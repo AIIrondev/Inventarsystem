@@ -50,8 +50,9 @@ import time
 import traceback
 import re
 import io
-import qrcode
-from qrcode.constants import ERROR_CORRECT_L
+# QR Code functionality deactivated
+# import qrcode
+# from qrcode.constants import ERROR_CORRECT_L
 import threading
 import sys
 import shutil
@@ -72,7 +73,7 @@ app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
 app.config['THUMBNAIL_FOLDER'] = cfg.THUMBNAIL_FOLDER
 app.config['PREVIEW_FOLDER'] = cfg.PREVIEW_FOLDER
 app.config['ALLOWED_EXTENSIONS'] = set(cfg.ALLOWED_EXTENSIONS)
-app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER
+# app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
 
 # Thumbnail sizes
 THUMBNAIL_SIZE = cfg.THUMBNAIL_SIZE
@@ -109,8 +110,9 @@ if not os.path.exists(app.config['THUMBNAIL_FOLDER']):
     os.makedirs(app.config['THUMBNAIL_FOLDER'])
 if not os.path.exists(app.config['PREVIEW_FOLDER']):
     os.makedirs(app.config['PREVIEW_FOLDER'])
-if not os.path.exists(app.config['QR_CODE_FOLDER']):
-    os.makedirs(app.config['QR_CODE_FOLDER'])
+# QR Code directory creation deactivated
+# if not os.path.exists(app.config['QR_CODE_FOLDER']):
+#     os.makedirs(app.config['QR_CODE_FOLDER'])
 
 # Create backup directories
 BACKUP_FOLDER = cfg.BACKUP_FOLDER
@@ -496,39 +498,39 @@ def preview_file(filename):
         return Response("Preview not found", status=404)
 
 
-@app.route('/QRCodes/<filename>')
-def qrcode_file(filename):
-    """
-    Serve QR code files from the QRCodes directory.
-    
-    Args:
-        filename (str): Name of the QR code file to serve
-        
-    Returns:
-        flask.Response: The requested QR code file or placeholder image if not found
-    """
-    try:
-        # Check production path first
-        prod_path = "/var/Inventarsystem/Web/QRCodes"
-        dev_path = app.config['QR_CODE_FOLDER']
-        if os.path.exists(os.path.join(prod_path, filename)):
-            return send_from_directory(prod_path, filename)
-        if os.path.exists(os.path.join(dev_path, filename)):
-            return send_from_directory(dev_path, filename)
-            
-            # Use a placeholder image if file not found - first try SVG, then PNG
-            svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
-            png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
-            
-            if os.path.exists(svg_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.svg')
-            elif os.path.exists(png_placeholder_path):
-                return send_from_directory(app.static_folder, 'img/no-image.png')
-            else:
-                return send_from_directory(app.static_folder, 'favicon.ico')
-    except Exception as e:
-        print(f"Error serving QR code {filename}: {str(e)}")
-        return Response("QR code not found", status=404)
+# @app.route('/QRCodes/<filename>')
+# def qrcode_file(filename):
+#     """
+#     Serve QR code files from the QRCodes directory.
+#     
+#     Args:
+#         filename (str): Name of the QR code file to serve
+#         
+#     Returns:
+#         flask.Response: The requested QR code file or placeholder image if not found
+#     """
+#     try:
+#         # Check production path first
+#         prod_path = "/var/Inventarsystem/Web/QRCodes"
+#         dev_path = app.config['QR_CODE_FOLDER']
+#         if os.path.exists(os.path.join(prod_path, filename)):
+#             return send_from_directory(prod_path, filename)
+#         if os.path.exists(os.path.join(dev_path, filename)):
+#             return send_from_directory(dev_path, filename)
+#             
+#             # Use a placeholder image if file not found - first try SVG, then PNG
+#             svg_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.svg')
+#             png_placeholder_path = os.path.join(app.static_folder, 'img', 'no-image.png')
+#             
+#             if os.path.exists(svg_placeholder_path):
+#                 return send_from_directory(app.static_folder, 'img/no-image.svg')
+#             elif os.path.exists(png_placeholder_path):
+#                 return send_from_directory(app.static_folder, 'img/no-image.png')
+#             else:
+#                 return send_from_directory(app.static_folder, 'favicon.ico')
+#     except Exception as e:
+#         print(f"Error serving QR code {filename}: {str(e)}")
+#         return Response("QR code not found", status=404)
 
 
 @app.route('/<path:filename>')
@@ -549,7 +551,7 @@ def catch_all_files(filename):
             app.config['UPLOAD_FOLDER'],
             app.config['THUMBNAIL_FOLDER'],
             app.config['PREVIEW_FOLDER'],
-            app.config['QR_CODE_FOLDER'],
+            # app.config['QR_CODE_FOLDER'],  # QR Code serving deactivated
             os.path.join(BASE_DIR, 'static')
         ]
         
@@ -565,7 +567,7 @@ def catch_all_files(filename):
                 "/var/Inventarsystem/Web/uploads",
                 "/var/Inventarsystem/Web/thumbnails",
                 "/var/Inventarsystem/Web/previews",
-                "/var/Inventarsystem/Web/QRCodes",
+                # "/var/Inventarsystem/Web/QRCodes",  # QR Code serving deactivated
                 "/var/Inventarsystem/Web/static"
             ]
             
@@ -1920,8 +1922,8 @@ def upload_item():
                         code_4[0] if code_4 else None)
     
     if item_id:
-        # Create QR code for the item
-        create_qr_code(str(item_id))
+    # Create QR code for the item (deactivated)
+    # create_qr_code(str(item_id))
         success_msg = 'Element wurde erfolgreich hinzugefügt'
         
         if is_mobile:
@@ -2493,59 +2495,59 @@ def get_ausleihung_by_item_route(id):
     }, 200  # Return 200 instead of 404 to allow processing of the error message
 
 
-def create_qr_code(id):
-    """
-    Generate a QR code for an item.
-    The QR code contains a URL that points to the item details.
-    
-    Args:
-        id (str): ID of the item to generate QR code for
-        
-    Returns:
-        str: Filename of the generated QR code, or None if item not found
-    """
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=ERROR_CORRECT_L,  # Use imported constant
-        box_size=10,
-        border=4,
-    )
-    
-    # Parse and reconstruct the URL properly
-    parsed_url = urlparse(request.url_root)
-    
-    # Force HTTPS if needed
-    scheme = 'https' if parsed_url.scheme == 'http' else parsed_url.scheme
-    
-    # Properly reconstruct the base URL
-    base_url = urlunparse((scheme, parsed_url.netloc, '', '', '', ''))
-    
-    # URL that will open this item directly
-    item_url = f"{base_url}:{Port}/item/{id}"
-    qr.add_data(item_url)
-    qr.make(fit=True)
-
-    item = it.get_item(id)
-    if not item:
-        return None
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Create a unique filename using UUID
-    unique_id = str(uuid.uuid4())
-    timestamp = time.strftime("%Y%m%d%H%M%S")
-    
-    # Still include the original name for readability but ensure uniqueness with UUID
-    safe_name = secure_filename(item['Name'])
-    filename = f"{safe_name}_{unique_id}_{timestamp}.png"
-    qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
-
-    
-    # Fix the file handling - save to file object, not string
-    with open(qr_path, 'wb') as f:
-        img.save(f)
-    
-    return filename
+# def create_qr_code(id):
+#     """
+#     Generate a QR code for an item.
+#     The QR code contains a URL that points to the item details.
+#     
+#     Args:
+#         id (str): ID of the item to generate QR code for
+#         
+#     Returns:
+#         str: Filename of the generated QR code, or None if item not found
+#     """
+#     qr = qrcode.QRCode(
+#         version=1,
+#         error_correction=ERROR_CORRECT_L,  # Use imported constant
+#         box_size=10,
+#         border=4,
+#     )
+#     
+#     # Parse and reconstruct the URL properly
+#     parsed_url = urlparse(request.url_root)
+#     
+#     # Force HTTPS if needed
+#     scheme = 'https' if parsed_url.scheme == 'http' else parsed_url.scheme
+#     
+#     # Properly reconstruct the base URL
+#     base_url = urlunparse((scheme, parsed_url.netloc, '', '', '', ''))
+#     
+#     # URL that will open this item directly
+#     item_url = f"{base_url}:{Port}/item/{id}"
+#     qr.add_data(item_url)
+#     qr.make(fit=True)
+#
+#     item = it.get_item(id)
+#     if not item:
+#         return None
+#     
+#     img = qr.make_image(fill_color="black", back_color="white")
+#     
+#     # Create a unique filename using UUID
+#     unique_id = str(uuid.uuid4())
+#     timestamp = time.strftime("%Y%m%d%H%M%S")
+#     
+#     # Still include the original name for readability but ensure uniqueness with UUID
+#     safe_name = secure_filename(item['Name'])
+#     filename = f"{safe_name}_{unique_id}_{timestamp}.png"
+#     qr_path = os.path.join(app.config['QR_CODE_FOLDER'], filename)
+#
+#     
+#     # Fix the file handling - save to file object, not string
+#     with open(qr_path, 'wb') as f:
+#         img.save(f)
+#     
+#     return filename
 
 # Fix fromisoformat None value checks
 @app.route('/plan_booking', methods=['POST'])
