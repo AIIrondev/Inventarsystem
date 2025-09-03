@@ -18,7 +18,7 @@
     },
 
     "ssl": {
-        "enabled": false,
+        "enabled": true,
         "cert": "Web/certs/cert.pem",
         "key": "Web/certs/key.pem"
     },
@@ -28,11 +28,11 @@
         "preview_size": [400, 400]
     },
 
-        "upload": {
-            "max_size_mb": 10,
-            "image_max_size_mb": 15,
-            "video_max_size_mb": 100
-        },
+    "upload": {
+        "max_size_mb": 10,
+        "image_max_size_mb": 15,
+        "video_max_size_mb": 100
+    },
 
     "paths": {
         "backups": "backups",
