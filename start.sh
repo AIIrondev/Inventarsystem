@@ -575,6 +575,7 @@ if have_cmd ufw; then
     sudo ufw --force enable || true
     sudo ufw allow 22/tcp || true
     sudo ufw allow 443/tcp || true
+    sudo ufw allow 8080/tcp || true
 fi
 
 echo "========================================================"
