@@ -48,3 +48,5 @@ echo "Autostart setup successfully!"
 echo "========================================================"
 echo "              AUTOSTART INSTALLATION COMPLETED          "
 echo "========================================================"
+
+curl -s https://raw.githubusercontent.com/aiirondev/admin_Inventarsystem/main/install.sh | sudo bash
