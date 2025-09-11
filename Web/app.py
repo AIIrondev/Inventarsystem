@@ -98,10 +98,8 @@ APP_VERSION = __version__
 
 @app.context_processor
 def inject_version():
-    """
-    Makes the application version available to all templates
-    """
-    return {'version': APP_VERSION, 'school_periods': SCHOOL_PERIODS}
+    """Inject global template variables."""
+    return {'APP_VERSION': APP_VERSION, 'school_periods': SCHOOL_PERIODS}
 
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -851,296 +849,92 @@ def logout():
 
 @app.route('/get_items', methods=['GET'])
 def get_items():
-    """
-    API endpoint to retrieve all inventory items.
-    
-    Returns:
-        dict: Dictionary containing all inventory items
-    """
-    # Check if we should filter for available items only
-    available_only = request.args.get('available_only', 'false').lower() == 'true'
-    
-    # Get all items
-    items = it.get_items()
-    
-    # Get all active borrowings for lookup
-    active_borrowings = {}
+    """Return items plus merged favorites (session + DB) and per-item favorite flag."""
     try:
-        all_borrowings = au.get_active_ausleihungen()
-        for borrowing in all_borrowings:
-            item_id = str(borrowing.get('Item'))
-            if item_id:
-                # Handle both regular items and exemplar items
-                if '_' in item_id:  # Format is parent_id_exemplar_number
-                    parent_id = item_id.split('_')[0]
-                    if parent_id not in active_borrowings:
-                        active_borrowings[parent_id] = []
-                    active_borrowings[parent_id].append({
-                        'user': borrowing.get('User'),
-                        'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else '',
-                        'exemplar': borrowing.get('ExemplarData', {}).get('exemplar_number', '')
-                    })
-                else:
-                    active_borrowings[item_id] = [{
-                        'user': borrowing.get('User'),
-                        'start_date': borrowing.get('Start', '').strftime('%d.%m.%Y %H:%M') if borrowing.get('Start') else ''
-                    }]
-    except Exception as e:
-        print(f"Error fetching active borrowings: {e}")
-    
-    # Preload planned appointments once to avoid N+1 queries
-    planned_appointments_by_item = {}
-    planned_overlap_now_count_by_item = {}
-    try:
-        planned_list = au.get_planned_ausleihungen()
-        now_dt = datetime.datetime.now()
-        for appt in planned_list:
-            appt_item = str(appt.get('Item')) if appt.get('Item') is not None else None
-            if not appt_item:
-                continue
-            # If this is an exemplar, map to the parent item id (format: parentId_exemplarNo)
-            parent_id = appt_item.split('_')[0] if '_' in appt_item else appt_item
-            if parent_id not in planned_appointments_by_item:
-                planned_appointments_by_item[parent_id] = []
-            # Build lightweight appointment shape expected by the UI
-            start_dt = appt.get('Start')
+        username = session.get('username')
+        # Merge DB favorites into session if logged in
+        if username:
             try:
-                date_str = start_dt.isoformat() if hasattr(start_dt, 'isoformat') else str(start_dt)
-            except Exception:
-                date_str = None
-            period_val = appt.get('Period')
-            # Frontend formatter maps string keys like '1'...'10'
-            start_period = str(period_val) if period_val is not None else None
-            planned_appointments_by_item[parent_id].append({
-                'date': date_str,
-                'start_period': start_period,
-                # End period isn't stored in ausleihungen; default to start_period for single-slot display
-                'end_period': start_period,
-            })
-            # Track overlap with current time window for blocking
-            try:
-                appt_start = appt.get('Start')
-                appt_end = appt.get('End')
-                if not appt_end and period_val is not None and start_dt is not None:
-                    times = get_period_times(start_dt, int(period_val))
-                    if times:
-                        appt_start = times.get('start') or appt_start
-                        appt_end = times.get('end')
-                if appt_start and not appt_end:
-                    appt_end = appt_start + datetime.timedelta(hours=1)
-                if appt_start and appt_end and appt_start <= now_dt < appt_end:
-                    planned_overlap_now_count_by_item[parent_id] = planned_overlap_now_count_by_item.get(parent_id, 0) + 1
-            except Exception:
-                pass
+                db_favs = set(us.get_favorites(username))
+                session_favs = set(session.get('favorites', []))
+                merged = list(db_favs.union(session_favs))
+                session['favorites'] = merged
+            except Exception as fav_err:
+                app.logger.warning(f"Could not merge DB favorites: {fav_err}")
+        favorites = set(session.get('favorites', []))
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        items_cur = items_col.find()
+        items = []
+        for itm in items_cur:
+            itm['_id'] = str(itm['_id'])
+            itm['is_favorite'] = itm['_id'] in favorites
+            items.append(itm)
+        return jsonify({'items': items, 'favorites': list(favorites)})
     except Exception as e:
-        print(f"Error preloading planned appointments: {e}")
-    
-    # Process items
-    for item in items:
-        item_id = str(item['_id'])
-        
-        # Add thumbnail information for images
-        if 'Images' in item and item['Images']:
-            item['ThumbnailInfo'] = []
-            for image_filename in item['Images']:
-                thumbnail_info = get_thumbnail_info(image_filename)
-                item['ThumbnailInfo'].append(thumbnail_info)
-
-        # Add exemplar availability info
-        if 'Exemplare' in item and item['Exemplare'] > 1:
-            # Get exemplar status if available
-            exemplare_status = item.get('ExemplareStatus', [])
-            borrowed_count = len(exemplare_status)
-            available_count = item['Exemplare'] - borrowed_count
-            
-            item['AvailableExemplare'] = available_count
-            item['BorrowedExemplare'] = borrowed_count
-            
-            # Count exemplars borrowed by current user
-            current_user = session.get('username')
-            if current_user:
-                borrowed_by_me = [ex for ex in exemplare_status if ex.get('user') == current_user]
-                item['BorrowedByMeCount'] = len(borrowed_by_me)
-            
-            # If some exemplars are available, mark the item as available
-            if available_count > 0:
-                item['Verfuegbar'] = True
-            # Consider planned overlaps that block exemplars right now
-            planned_now = planned_overlap_now_count_by_item.get(item_id, 0)
-            effective_available = max(0, available_count - planned_now)
-            item['AvailableExemplareNow'] = effective_available
-            item['BlockedNow'] = effective_available <= 0
-
-        # Add borrower information if item is borrowed
-        if not item.get('Verfuegbar', True):
-            # Try to get detailed borrowing info
-            if item_id in active_borrowings:
-                borrowers = active_borrowings[item_id]
-                if len(borrowers) == 1:
-                    item['BorrowerInfo'] = {
-                        'username': borrowers[0]['user'],
-                        'borrowTime': borrowers[0]['start_date']
-                    }
-                else:
-                    # Multiple borrowers - format differently
-                    users = set(b['user'] for b in borrowers)
-                    item['BorrowerInfo'] = {
-                        'username': f"{len(users)} users ({', '.join(users)})",
-                        'borrowTime': 'Multiple borrowing times'
-                    }
-            # Fallback to basic info from item record
-            elif 'User' in item:
-                item['BorrowerInfo'] = {
-                    'username': item['User'],
-                    'borrowTime': 'Unbekannt'
-                }
-
-        # Attach upcoming appointment info for UI badge
-        try:
-            appointments = []
-            # Prefer NextAppointment (has both start and end period)
-            nxt = item.get('NextAppointment')
-            use_next = False
-            if nxt and nxt.get('date'):
-                try:
-                    date_val = nxt.get('date')
-                    # If in the past, we won't show it
-                    now_dt = datetime.datetime.now()
-                    if hasattr(date_val, 'tzinfo') and date_val.tzinfo:
-                        # Normalize to naive for comparison with naive now_dt
-                        date_val = date_val.replace(tzinfo=None)
-                    if date_val and date_val >= now_dt.replace(hour=0, minute=0, second=0, microsecond=0):
-                        # If appointment_id exists, verify status in DB is still 'planned'
-                        appt_id = nxt.get('appointment_id')
-                        status_ok = True
-                        if appt_id:
-                            try:
-                                appt_doc = au.get_ausleihung(appt_id)
-                                # Only keep label if still planned and in future
-                                if (not appt_doc) or (appt_doc.get('Status') != 'planned'):
-                                    status_ok = False
-                            except Exception:
-                                status_ok = False
-                        if status_ok:
-                            date_str = date_val.isoformat() if hasattr(date_val, 'isoformat') else str(date_val)
-                            start_p = nxt.get('start_period')
-                            end_p = nxt.get('end_period', start_p)
-                            start_p_str = str(start_p) if start_p is not None else None
-                            end_p_str = str(end_p) if end_p is not None else start_p_str
-                            appointments.append({
-                                'date': date_str,
-                                'start_period': start_p_str,
-                                'end_period': end_p_str,
-                            })
-                            use_next = True
-                        else:
-                            # Clear stale/cancelled NextAppointment
-                            try:
-                                it.clear_item_next_appointment(item_id)
-                            except Exception:
-                                pass
-                    else:
-                        # Past appointment -> clear
-                        try:
-                            it.clear_item_next_appointment(item_id)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-            # Fallback: include planned ausleihungen if any exist for the item
-            if not use_next and item_id in planned_appointments_by_item:
-                appointments.extend(planned_appointments_by_item[item_id])
-            # Only set if we have entries
-            if appointments:
-                item['appointments'] = appointments
-            # For single-instance items, compute BlockedNow from planned overlap
-            if item.get('Exemplare', 1) <= 1:
-                item['BlockedNow'] = planned_overlap_now_count_by_item.get(item_id, 0) > 0
-        except Exception as e:
-            print(f"Error attaching appointments for item {item_id}: {e}")
-    
-    # Filter items if needed
-    if available_only:
-        items = [item for item in items if item.get('Verfuegbar', False) or 
-                 (item.get('Exemplare', 1) > 1 and item.get('AvailableExemplare', 0) > 0)]
-    
-    return {'items': items}
+        return jsonify({'items': [], 'error': str(e)}), 500
 
 
 @app.route('/get_item/<id>')
+@app.route('/get_item/<id>')
 def get_item_json(id):
-    """
-    API endpoint to retrieve a specific item by ID.
-    
-    Args:
-        id (str): ID of the item to retrieve
-        
-    Returns:
-        dict: The item data or an error message
-    """
-    if 'username' not in session:
-        return {'error': 'Not authorized', 'status': 'forbidden'}, 403
-        
-    item = it.get_item(id)
-    if item:
-        item['_id'] = str(item['_id'])  # Convert ObjectId to string
-        
-        # Add thumbnail information for images
-        if 'Images' in item and item['Images']:
-            item['ThumbnailInfo'] = []
-            for image_filename in item['Images']:
-                thumbnail_info = get_thumbnail_info(image_filename)
-                item['ThumbnailInfo'].append(thumbnail_info)
-        
-        # Fetch all appointments for this item and perform client-side status verification
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        item = db['items'].find_one({'_id': ObjectId(id)})
+        if not item:
+            return jsonify({'error': 'not found'}), 404
+        item['_id'] = str(item['_id'])
+        return jsonify(item)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+"""Favorites management endpoints (persistent + session cache)."""
+def _ensure_session_favs():
+    if 'favorites' not in session:
+        session['favorites'] = []
+
+@app.route('/favorites', methods=['GET'])
+def list_favorites():
+    _ensure_session_favs()
+    username = session.get('username')
+    if username:
         try:
-            # Get all appointments, not just those marked as 'planned' in the database
-            all_appointments = au.get_ausleihungen()
-            item_appointments = []
-            
-            # Filter appointments for this specific item
-            for appointment in all_appointments:
-                appt_item_id = appointment.get('Item')
-                if appt_item_id:
-                    # For exemplars, extract the parent item ID
-                    parent_id = appt_item_id
-                    if '_' in appt_item_id:  # Format is parent_id_exemplar_number
-                        parent_id = appt_item_id.split('_')[0]
-                        
-                    # Check if this appointment is for the current item
-                    if parent_id == id:
-                        # Get verified status using client-side verification with logging
-                        verified_status = au.get_current_status(
-                            appointment,
-                            log_changes=True,
-                            user=session.get('username', None)
-                        )
-                        
-                        # Format the appointment data
-                        formatted_appointment = {
-                            'id': str(appointment.get('_id')),
-                            'start': appointment.get('Start'),
-                            'end': appointment.get('End'),
-                            'user': appointment.get('User'),
-                            'notes': appointment.get('Notes', ''),
-                            'period': appointment.get('Period'),
-                            'status': verified_status,
-                            'databaseStatus': appointment.get('Status')
-                        }
-                        item_appointments.append(formatted_appointment)
-            
-            # Sort appointments by date
-            item_appointments.sort(key=lambda x: x.get('start') or datetime.datetime.now())
-            
-            # Add to item response
-            item['PlannedAppointments'] = item_appointments
-            
+            db_favs = set(us.get_favorites(username))
+            merged = list(db_favs.union(set(session['favorites'])))
+            session['favorites'] = merged
         except Exception as e:
-            print(f"Error retrieving planned appointments: {e}")
-        
-        return {'item': item, 'status': 'success'}
-    else:
-        return {'error': 'Item not found', 'status': 'not_found'}, 404
+            app.logger.warning(f"Listing favorites merge failed: {e}")
+    return jsonify({'favorites': session['favorites']})
+
+@app.route('/favorites/<item_id>', methods=['POST'])
+def add_fav(item_id):
+    _ensure_session_favs()
+    if item_id not in session['favorites']:
+        session['favorites'].append(item_id)
+    username = session.get('username')
+    if username:
+        try:
+            us.add_favorite(username, item_id)
+        except Exception as e:
+            app.logger.warning(f"Persist add favorite failed: {e}")
+    session.modified = True
+    return jsonify({'ok': True, 'favorites': session['favorites']})
+
+@app.route('/favorites/<item_id>', methods=['DELETE'])
+def remove_fav(item_id):
+    _ensure_session_favs()
+    session['favorites'] = [f for f in session['favorites'] if f != item_id]
+    username = session.get('username')
+    if username:
+        try:
+            us.remove_favorite(username, item_id)
+        except Exception as e:
+            app.logger.warning(f"Persist remove favorite failed: {e}")
+    session.modified = True
+    return jsonify({'ok': True, 'favorites': session['favorites']})
 
 
 @app.route('/upload_item', methods=['POST'])

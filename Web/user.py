@@ -19,6 +19,52 @@ Provides methods for creating, validating, and retrieving user information.
 '''
 from pymongo import MongoClient
 import hashlib
+from bson.objectid import ObjectId
+
+
+# === FAVORITES MANAGEMENT ===
+def get_favorites(username):
+    """Return a list of favorite item ObjectId strings for the user."""
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    users = db['users']
+    user = users.find_one({'Username': username}) or users.find_one({'username': username})
+    client.close()
+    if not user:
+        return []
+    favs = user.get('favorites', [])
+    # Normalize to strings
+    return [str(f) for f in favs if f]
+
+def add_favorite(username, item_id):
+    """Add an item to user's favorites (idempotent)."""
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users.update_one(
+            {'$or': [{'Username': username}, {'username': username}]},
+            {'$addToSet': {'favorites': ObjectId(item_id)}}
+        )
+        client.close()
+        return True
+    except Exception:
+        return False
+
+def remove_favorite(username, item_id):
+    """Remove an item from user's favorites."""
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        users.update_one(
+            {'$or': [{'Username': username}, {'username': username}]},
+            {'$pull': {'favorites': ObjectId(item_id)}}
+        )
+        client.close()
+        return True
+    except Exception:
+        return False
 
 
 

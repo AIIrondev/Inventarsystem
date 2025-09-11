@@ -353,7 +353,6 @@ check_and_install() {
 
                 ;;
 
-
             *)
 
 
@@ -547,9 +546,12 @@ sudo mkdir -p /tmp && sudo chmod 1777 /tmp
 sudo systemctl daemon-reload
 sudo systemctl enable inventarsystem-gunicorn.service
 
-USE_WRAPPER=false
-if [ -f "/etc/systemd/system/inventarsystem-nginx.service" ]; then
-    USE_WRAPPER=true
+# Prefer standard nginx.service; allow opting into a wrapper with USE_NGINX_WRAPPER=true
+USE_WRAPPER="${USE_NGINX_WRAPPER:-false}"
+# If a legacy wrapper exists but wrapper not desired, disable it to avoid conflicts
+if [ "$USE_WRAPPER" != true ] && [ -f "/etc/systemd/system/inventarsystem-nginx.service" ]; then
+    echo "Disabling legacy inventarsystem-nginx.service wrapper"
+    sudo systemctl disable --now inventarsystem-nginx.service || true
 fi
 
 echo "Starting Gunicorn..."
@@ -564,8 +566,20 @@ if [ "$USE_WRAPPER" = true ]; then
     sudo systemctl reload inventarsystem-nginx.service || sudo systemctl restart inventarsystem-nginx.service
 else
     sudo systemctl enable nginx || true
-    echo "Reloading Nginx..."
-    sudo systemctl reload nginx || sudo systemctl restart nginx
+    echo "Starting/Reloading Nginx..."
+    # If an nginx master is already running, prefer a direct reload to avoid bind() conflicts
+    if pgrep -x nginx >/dev/null 2>&1; then
+        # If PID file is present and non-empty, use nginx -s reload; otherwise do a managed restart
+        if [ -s /run/nginx.pid ]; then
+            sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
+        else
+            echo "Nginx PID file missing/empty; performing controlled restart..."
+            sudo systemctl restart nginx || { sudo pkill -TERM nginx || true; sleep 1; sudo systemctl start nginx || true; }
+        fi
+    else
+        # Start the service (or restart as fallback)
+        sudo systemctl start nginx || sudo systemctl restart nginx || true
+    fi
 fi
 
 echo "========================================================"
@@ -588,7 +602,8 @@ echo "MongoDB (optional): mongodb://localhost:27017"
 echo "========================================================"
 echo "✓ Nginx configuration created and tested"
 
-# Create the nginx service file
+if [ "$USE_WRAPPER" = true ]; then
+# Create the nginx service file (optional wrapper)
 sudo tee /etc/systemd/system/inventarsystem-nginx.service > /dev/null << EOF
 [Unit]
 Description=Nginx for Inventarsystem
@@ -633,22 +648,40 @@ sudo systemctl start inventarsystem-gunicorn.service || {
 
 # Then start nginx 
 sudo systemctl start inventarsystem-nginx.service || {
-    echo "ERROR: Failed to start nginx service. Checking status..."
-    sudo systemctl status inventarsystem-nginx.service
+    echo "WARN: Failed to start inventarsystem-nginx.service (may already be running). Checking status..."
+    sudo systemctl status inventarsystem-nginx.service || true
     echo "For more details run: sudo journalctl -xeu inventarsystem-nginx.service"
-    
-    # Try to start standard nginx as fallback
-    echo "Attempting to start standard nginx as fallback..."
-    sudo systemctl start nginx
-    exit 1
+
+    # Try to reload or start standard nginx as a fallback, but don't abort
+    echo "Attempting to (re)load standard nginx as fallback..."
+    if pgrep -x nginx >/dev/null 2>&1; then
+        sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
+    else
+        sudo systemctl start nginx || sudo systemctl restart nginx || true
+    fi
 }
 
 echo "✓ Services configured and started successfully"
 echo "To check status: sudo systemctl status inventarsystem-nginx.service"
 echo "To view logs: sudo journalctl -u inventarsystem-nginx.service -f"
+fi
 
 # Restart Nginx service
-sudo systemctl restart inventarsystem-nginx.service
+if systemctl is-active --quiet inventarsystem-nginx.service; then
+    sudo systemctl restart inventarsystem-nginx.service || true
+else
+    # Fallback to standard nginx if wrapper isn’t active
+    if pgrep -x nginx >/dev/null 2>&1; then
+        if [ -s /run/nginx.pid ]; then
+            sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
+        else
+            echo "Nginx PID file missing/empty; performing controlled restart..."
+            sudo systemctl restart nginx || { sudo pkill -TERM nginx || true; sleep 1; sudo systemctl start nginx || true; }
+        fi
+    else
+        sudo systemctl restart nginx || true
+    fi
+fi
 
 echo "✓ Nginx service restarted"
 
@@ -659,11 +692,11 @@ sudo chmod 1777 /tmp
 # Reload systemd configuration
 sudo systemctl daemon-reload
 
-# Enable and start the services
+# Enable and start the services (standard path)
 sudo systemctl enable inventarsystem-gunicorn.service
-sudo systemctl enable inventarsystem-nginx.service
-sudo systemctl start inventarsystem-gunicorn.service
-sudo systemctl start inventarsystem-nginx.service
+sudo systemctl start inventarsystem-gunicorn.service || true
+sudo systemctl enable nginx || true
+sudo systemctl start nginx || sudo systemctl restart nginx || true
 
 echo " ------------------------------------------"
 echo "             FIREWALL SETUP                "

@@ -1660,10 +1660,46 @@
         white-space: nowrap;
     }
 </style>
+<style>
+        .bookmark-btn { position:absolute; top:8px; right:8px; width:46px; height:46px; background:rgba(255,255,255,.92); border:2px solid #ffc107; border-radius:50%; font-size:1.65rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ffc107; box-shadow:0 2px 6px rgba(0,0,0,.18); transition:background .2s, transform .15s, color .2s; z-index:6; }
+        .bookmark-btn:hover { background:#ffc107; color:#212529; }
+        .bookmark-btn:active { transform:scale(.9); }
+        .bookmark-btn.active { background:#ffc107; color:#212529; }
+        .favorite-item { outline:2px solid #ffc107; }
+        body.favorites-only .item-card:not(.favorite-item){ display:none !important; }
+</style>
+<script>
+let favoritesOnly = false;
+function toggleFavorite(id, btn, card){
+    const method = btn.textContent === '★' ? 'DELETE' : 'POST';
+    fetch(`/favorites/${id}`, {method}).then(r=>r.json()).then(data=>{
+        if(data.ok){
+            const isFav = data.favorites.includes(id);
+            btn.textContent = isFav ? '★' : '☆';
+            if(isFav){ card.classList.add('favorite-item'); } else { card.classList.remove('favorite-item'); }
+            if(favoritesOnly && !isFav){ card.style.display='none'; }
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+    const t = document.getElementById('toggle-favorites-view');
+    if(t){
+        t.addEventListener('click', ()=>{
+            favoritesOnly = !favoritesOnly;
+            document.body.classList.toggle('favorites-only', favoritesOnly);
+            document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+        });
+    }
+});
+</script>
 
 <div class="container">
     <div class="content">
-        <h1>Inventar Objekte</h1>
+        <h1 style="position:relative;">Inventar Objekte
+            <button id="toggle-favorites-view" title="Nur Merkliste anzeigen" style="position:absolute; right:0; top:0; background:none; border:none; font-size:1.4rem; cursor:pointer;">
+                <span id="favorites-view-icon">🔖</span>
+            </button>
+        </h1>
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
@@ -2381,6 +2417,7 @@
                     return nameA.localeCompare(nameB);
                 });
                 
+                const favoriteIds = new Set(data.favorites || []);
                 data.items.forEach(item => {
                     try {
                         const card = document.createElement('div');
@@ -2395,6 +2432,21 @@
                             }, 500);
                         }
                         
+                        // Bookmark icon
+                        const bookmark = document.createElement('button');
+                        bookmark.className = 'bookmark-btn' + (favoriteIds.has(item._id)? ' active':'');
+                        bookmark.type = 'button';
+                        bookmark.title = 'Merken';
+                        bookmark.dataset.favId = item._id;
+                        const favActive = favoriteIds.has(item._id);
+                        bookmark.textContent = favActive ? '★' : '☆';
+                        if (favActive) card.classList.add('favorite-item');
+                        bookmark.addEventListener('click', (ev) => {
+                            ev.stopPropagation();
+                            toggleFavorite(item._id, bookmark, card);
+                        });
+                        card.appendChild(bookmark);
+
                         // Process and store filter values
                         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
                         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);

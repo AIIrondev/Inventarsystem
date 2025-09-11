@@ -269,7 +269,11 @@
 </style>
 <div class="container">
     <div class="content">
-        <h1>Inventar Objekte</h1>
+        <h1 style="position:relative;">Inventar Objekte
+            <button id="toggle-favorites-view" title="Nur Merkliste anzeigen" style="position:absolute; right:0; top:0; background:none; border:none; font-size:1.4rem; cursor:pointer;">
+                <span id="favorites-view-icon">🔖</span>
+            </button>
+        </h1>
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
@@ -615,6 +619,9 @@
                     return nameA.localeCompare(nameB); // Ascending order
                 });
                 
+                const favoriteIds = new Set(data.favorites || []);
+                window.currentFavorites = favoriteIds;
+                try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(favoriteIds))); } catch(e){}
                 data.items.forEach(item => {
                     try {
                         const card = document.createElement('div');
@@ -631,6 +638,9 @@
                             }, 500);
                         }
                         
+                        // Determine favorite state early
+                        const favActive = favoriteIds.has(item._id);
+
                         // Process and store filter values with consistent handling
                         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
                         const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
@@ -773,20 +783,31 @@
                             </div>
                             <div class="actions">
                                 ${item.Verfuegbar && !item.BlockedNow ? 
-                                    `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                    `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}" class="inline-action-form">
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
                                 : isBorrowedByMe ?
-                                    `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}">
+                                    `<form method="POST" action="{{ url_for('zurueckgeben', id='') }}${item._id}" class="inline-action-form">
                                         <button class="ausleihen" type="submit">Zurückgeben</button>
                                     </form>`
                                 :
                                     `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
-                                <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                                <button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                                <button class="quick-details-button" type="button" onclick="openItemQuick('${item._id}')">Details</button>
                             </div>
                         `;
+                        if (favActive) card.classList.add('favorite-item');
                         itemsContainer.appendChild(card);
+                        // Attach favorite action button handler
+                        const favBtn = document.createElement('button');
+                        favBtn.className = 'bookmark-btn' + (favActive? ' active':'');
+                        favBtn.type = 'button';
+                        favBtn.dataset.favId = item._id;
+                        favBtn.textContent = favActive? '★':'☆';
+                        favBtn.setAttribute('aria-label','Merken');
+                        favBtn.addEventListener('click',(ev)=>{ev.stopPropagation();toggleFavorite(item._id, favBtn, card);});
+                        card.appendChild(favBtn);
                         
                         // Add direct click event listeners to the card content area
                         const cardContent = card.querySelector('.card-content');
@@ -1103,6 +1124,9 @@
         // Build modal content HTML
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
+            <div class="modal-action-bar" style="position:absolute; top:10px; right:10px; display:flex; gap:8px;">
+                <button type="button" class="bookmark-btn" id="modal-bookmark-btn" title="Merken">${(window.currentFavorites||new Set()).has(item._id) ? '★' : '☆'}</button>
+            </div>
             ${borrowerInfoHtml}
             ${appointmentInfoHtml}
             
@@ -1176,6 +1200,7 @@
                     : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                 }
                 <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                <button type="button" class="close-modal secondary-close" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
             </div>
         `;
         
@@ -1187,6 +1212,15 @@
         closeButton.onclick = function() {
             modal.style.display = 'none';
         };
+        // Bookmark button in modal
+        const modalBookmark = document.getElementById('modal-bookmark-btn');
+        if(modalBookmark){
+            modalBookmark.addEventListener('click', ()=>{
+                // Find corresponding card elements if present
+                const card = document.querySelector(`.item-card .card-content[data-item-id="${item._id}"]`)?.parentElement;
+                toggleFavorite(item._id, modalBookmark, card || modalBookmark);
+            });
+        }
         
         // Store current image index for navigation
         window.currentModalImageIndex = 0;
@@ -2133,6 +2167,7 @@
         scroll-snap-align: center;
         cursor: pointer;
         transition: transform 0.2s;
+    position: relative;
     }
 
     .item-card:hover {
@@ -2954,5 +2989,67 @@
     /* Align modal actions layout to admin */
     .modal-actions { align-items: stretch; }
     .modal-actions form { margin: 0; flex: 0 0 auto; }
+    .bookmark-btn { position:absolute; top:8px; right:8px; width:46px; height:46px; background:rgba(255,255,255,.92); border:2px solid #ffc107; border-radius:50%; font-size:1.65rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ffc107; box-shadow:0 2px 6px rgba(0,0,0,.18); transition:background .2s, transform .15s, color .2s; z-index:6; }
+    .bookmark-btn:hover { background:#ffc107; color:#212529; }
+    .bookmark-btn:active { transform:scale(.9); }
+    .bookmark-btn.active { background:#ffc107; color:#212529; }
+    .favorite-item { outline: 2px solid #ffc107; }
+    body.favorites-only .item-card:not(.favorite-item){ display:none !important; }
+    .quick-details-button { background:#6c757d; color:#fff; border:2px solid #6c757d; padding:6px 10px; border-radius:4px; cursor:pointer; }
+    .quick-details-button:hover { background:#5a6268; }
+    .inline-action-form { display:inline-block; margin:0; }
+    .modal-action-bar .bookmark-btn { font-size:1.6rem; }
 </style>
+<script>
+let favoritesOnly = false;
+function toggleFavorite(id, btn, card){
+    const method = btn.textContent === '★' ? 'DELETE' : 'POST';
+    fetch(`/favorites/${id}`, {method}).then(r=>r.json()).then(data=>{
+        if(!data.ok) return;
+        const isFav = data.favorites.includes(id);
+        document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
+            b.textContent = isFav ? '★' : '☆';
+            b.classList.toggle('active', isFav);
+            b.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+        });
+        if(card){
+            if(isFav) card.classList.add('favorite-item'); else card.classList.remove('favorite-item');
+            if(favoritesOnly && !isFav) card.style.display='none';
+        }
+        if(!window.currentFavorites) window.currentFavorites = new Set();
+        if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
+        try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
+    });
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+    // Initialize favorites cache set if stored
+    try {
+        if(!window.currentFavorites){
+            const cached = sessionStorage.getItem('favoritesCache');
+            if(cached){ window.currentFavorites = new Set(JSON.parse(cached)); }
+        }
+    } catch(e){}
+    const toggleBtn = document.getElementById('toggle-favorites-view');
+    if(toggleBtn){
+        toggleBtn.addEventListener('click', ()=>{
+            favoritesOnly = !favoritesOnly;
+            document.body.classList.toggle('favorites-only', favoritesOnly);
+            document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+        });
+    }
+});
+
+// Open item modal directly from quick details button by fetching fresh data (ensures up-to-date favorite state)
+function openItemQuick(id){
+    fetch(`/get_item/${id}`).then(r=>r.json()).then(item=>{
+        if(item && !item.error){
+            // ensure favorites set available
+            if(!window.currentFavorites){
+                window.currentFavorites = new Set(JSON.parse(sessionStorage.getItem('favoritesCache')||'[]'));
+            }
+            openItemModal(item);
+        }
+    });
+}
+</script>
 {% endblock %}
