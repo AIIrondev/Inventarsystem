@@ -3004,22 +3004,25 @@
 let favoritesOnly = false;
 function toggleFavorite(id, btn, card){
     const method = btn.textContent === '★' ? 'DELETE' : 'POST';
-    fetch(`/favorites/${id}`, {method}).then(r=>r.json()).then(data=>{
-        if(!data.ok) return;
-        const isFav = data.favorites.includes(id);
-        document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
-            b.textContent = isFav ? '★' : '☆';
-            b.classList.toggle('active', isFav);
-            b.setAttribute('aria-pressed', isFav ? 'true' : 'false');
-        });
-        if(card){
-            if(isFav) card.classList.add('favorite-item'); else card.classList.remove('favorite-item');
-            if(favoritesOnly && !isFav) card.style.display='none';
-        }
-        if(!window.currentFavorites) window.currentFavorites = new Set();
-        if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
-        try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
-    });
+    fetch(`/favorites/${id}`, {method})
+        .then(r=>{ if(!r.ok) console.error('HTTP Fehler Favoriten', r.status); return r.json().catch(()=>({ok:false,error:'invalid json'})); })
+        .then(data=>{
+            if(!data.ok){ console.error('Antwort Fehler Favoriten', data); return; }
+            const isFav = (data.favorites||[]).includes(id);
+            document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
+                b.textContent = isFav ? '★' : '☆';
+                b.classList.toggle('active', isFav);
+                b.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+            });
+            if(card){
+                if(isFav) card.classList.add('favorite-item'); else card.classList.remove('favorite-item');
+                if(favoritesOnly && !isFav) card.style.display='none';
+            }
+            if(!window.currentFavorites) window.currentFavorites = new Set();
+            if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
+            try { sessionStorage.setItem('favoritesCache', JSON.stringify(Array.from(window.currentFavorites))); } catch(e){}
+        })
+        .catch(err=>console.error('Netzwerkfehler Favoriten', err));
 }
 document.addEventListener('DOMContentLoaded', ()=>{
     // Initialize favorites cache set if stored

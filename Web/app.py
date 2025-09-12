@@ -878,7 +878,6 @@ def get_items():
 
 
 @app.route('/get_item/<id>')
-@app.route('/get_item/<id>')
 def get_item_json(id):
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
@@ -907,7 +906,7 @@ def list_favorites():
             session['favorites'] = merged
         except Exception as e:
             app.logger.warning(f"Listing favorites merge failed: {e}")
-    return jsonify({'favorites': session['favorites']})
+    return jsonify({'ok': True, 'favorites': session['favorites']})
 
 @app.route('/favorites/<item_id>', methods=['POST'])
 def add_fav(item_id):
@@ -935,6 +934,20 @@ def remove_fav(item_id):
             app.logger.warning(f"Persist remove favorite failed: {e}")
     session.modified = True
     return jsonify({'ok': True, 'favorites': session['favorites']})
+
+@app.route('/debug/favorites')
+def debug_favorites():
+    """Diagnostic endpoint: shows session favorites, DB favorites and merged output."""
+    username = session.get('username')
+    session_favs = list(session.get('favorites', []))
+    db_favs = []
+    if username:
+        try:
+            db_favs = us.get_favorites(username)
+        except Exception as e:
+            return jsonify({'ok': False, 'error': f'db_error: {e}', 'session': session_favs})
+    merged = sorted(set(session_favs) | set(db_favs))
+    return jsonify({'ok': True, 'user': username, 'session': session_favs, 'db': db_favs, 'merged': merged})
 
 
 @app.route('/upload_item', methods=['POST'])
