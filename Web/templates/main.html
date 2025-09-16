@@ -329,6 +329,19 @@
                     </button>
                 </div>
             </div>
+
+            <div class="filter-group search-field">
+                <div class="filter-header">
+                    <label for="desc-search">Beschreibung suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearDescSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="desc-search" placeholder="Begriff in Beschreibung..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByDescription()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button">Barcode scannen</button>
@@ -427,6 +440,7 @@
         ? window.serverVars.highlightItemId
         : null;
     let codeSearchTerm = '';
+    let descSearchIds = null; // Set of matching IDs or null when disabled
 
     // QR scanner toggle setup
     document.addEventListener('DOMContentLoaded', function() {
@@ -569,6 +583,19 @@
                 this.searchTimeout = setTimeout(() => {
                     searchByCode();
                 }, 300);
+            });
+        }
+        // Add event listener for description search input
+        const descInput = document.getElementById('desc-search');
+        if (descInput) {
+            descInput.addEventListener('input', function(){
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    searchByDescription();
+                }, 400);
+            });
+            descInput.addEventListener('keydown', function(e){
+                if (e.key === 'Enter') { e.preventDefault(); searchByDescription(); }
             });
         }
         
@@ -900,11 +927,12 @@
         let codeMatchCount = 0;
         let exactMatchCount = 0;
         let firstMatchedCard = null;
+        let firstDescMatchedCard = null;
         let exactMatchCard = null;
         
         // Process search term
         const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
-        const isCodeSearch = searchTerm.length > 0;
+    const isCodeSearch = searchTerm.length > 0;
         
         items.forEach(item => {
             const itemFilter1 = item.dataset.filter1;
@@ -912,6 +940,7 @@
             const itemFilter3 = item.dataset.filter3;
             const rawCode = item.dataset.code || '';
             const itemCode = rawCode.trim().toLowerCase();
+            const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
             
             // Check if item matches all active filters
             const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
@@ -923,7 +952,8 @@
             let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
             let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
             
-            if (passesAllFilters && matchesCodeSearch) {
+            const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
+            if (passesAllFilters && matchesCodeSearch && matchesDesc) {
                 // Show item if it matches all filters and code search
                 item.style.display = 'block';
                 visibleCount++;
@@ -941,6 +971,14 @@
                     if (!firstMatchedCard) {
                         firstMatchedCard = item;
                     }
+                }
+
+                // Add description match highlight
+                if (descSearchIds && itemId && descSearchIds.has(String(itemId))) {
+                    item.classList.add('desc-match');
+                    if (!firstDescMatchedCard) firstDescMatchedCard = item;
+                } else {
+                    item.classList.remove('desc-match');
                 }
             } else {
                 // Hide non-matching items
@@ -967,6 +1005,45 @@
                 allCodes: Array.from(items).map(item => item.dataset.code?.trim() || 'empty')
             });
         }
+
+        // If description search active, scroll to first desc match
+        if (descSearchIds && firstDescMatchedCard) {
+            setTimeout(() => {
+                centerCardInView(firstDescMatchedCard, itemsContainer);
+                applyAttentionAnimation(firstDescMatchedCard);
+            }, 250);
+        }
+    }
+
+    // Description search using backend substring match (Beschreibung)
+    function searchByDescription() {
+        const input = document.getElementById('desc-search');
+        const term = (input?.value || '').trim();
+        if (!term) {
+            descSearchIds = null;
+            applyFilters(true);
+            return;
+        }
+        input?.classList.add('searching');
+        fetch(`/search_word/${encodeURIComponent(term)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success && Array.isArray(data.response)) {
+                    descSearchIds = new Set(data.response.map(String));
+                } else {
+                    descSearchIds = new Set();
+                }
+                applyFilters(true);
+            })
+            .catch(() => { descSearchIds = new Set(); applyFilters(true); })
+            .finally(() => { setTimeout(() => input?.classList.remove('searching'), 250); });
+    }
+
+    function clearDescSearch() {
+        const input = document.getElementById('desc-search');
+        if (input) input.value = '';
+        descSearchIds = null;
+        applyFilters();
     }
 
     // Helper function to center a card in the container view
@@ -2339,6 +2416,14 @@
         animation: highlight-pulse 2s infinite;
         position: relative;
         z-index: 11;
+    }
+
+    /* Description match highlight */
+    .desc-match {
+        border: 2px solid #ffc107 !important; /* warning/amber */
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+        position: relative;
+        z-index: 6;
     }
 
     @keyframes highlight-pulse {

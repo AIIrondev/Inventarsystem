@@ -551,6 +551,14 @@
         z-index: 11;
     }
 
+    /* Description match highlight */
+    .desc-match {
+        border: 2px solid #ffc107 !important;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+        position: relative;
+        z-index: 6;
+    }
+
     @keyframes highlight-pulse {
         0% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
         50% { box-shadow: 0 0 30px rgba(40, 167, 69, 1); transform: scale(1.03); }
@@ -1778,6 +1786,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     </button>
                 </div>
             </div>
+
+            <div class="filter-group search-field">
+                <div class="filter-header">
+                    <label for="desc-search">Beschreibung suchen:</label>
+                    <button type="button" class="clear-filter" onclick="clearDescSearch()">Clear</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="desc-search" placeholder="Begriff in Beschreibung..." autocomplete="off">
+                    <button type="button" class="search-button" onclick="searchByDescription()">
+                        <i class="fas fa-search"></i> Suchen
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="qr-container">
             <button id="scanButton" class="scan-button">Barcode scannen</button>
@@ -2051,6 +2072,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Initialize QR Code scanner and global variables
     let html5QrcodeScanner = null;
     let codeSearchTerm = '';
+    let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
     let allItems = []; // Cache for all items
     
@@ -2387,6 +2409,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 loadItems(); // Load items anyway in case of error
             });
         
+        // Hook description search input handlers
+        const descInput = document.getElementById('desc-search');
+        if (descInput) {
+            descInput.addEventListener('input', function(){
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => { searchByDescription(); }, 400);
+            });
+            descInput.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); searchByDescription(); }});
+        }
+
         // Close modals when clicking outside
         window.onclick = function(event) {
             const itemModal = document.getElementById('item-modal');
@@ -2690,7 +2722,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         let visibleCount = 0;
         let codeMatchCount = 0;
         let exactMatchCount = 0;
-        let firstMatchedCard = null;
+    let firstMatchedCard = null;
+    let firstDescMatchedCard = null;
         let exactMatchCard = null;
         
         const searchTerm = codeSearchTerm ? codeSearchTerm.trim().toLowerCase() : '';
@@ -2702,6 +2735,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const itemFilter3 = item.dataset.filter3;
             const rawCode = item.dataset.code || '';
             const itemCode = rawCode.trim().toLowerCase();
+            const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
             
             const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
             const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
@@ -2711,7 +2745,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
             let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
             let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
             
-            if (passesAllFilters && matchesCodeSearch) {
+            const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
+            if (passesAllFilters && matchesCodeSearch && matchesDesc) {
                 item.style.display = 'block';
                 visibleCount++;
                 
@@ -2728,6 +2763,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         firstMatchedCard = item;
                     }
                 }
+
+                // Add description match highlight
+                if (descSearchIds && itemId && descSearchIds.has(String(itemId))) {
+                    item.classList.add('desc-match');
+                    if (!firstDescMatchedCard) firstDescMatchedCard = item;
+                } else {
+                    item.classList.remove('desc-match');
+                }
             } else {
                 item.style.display = 'none';
             }
@@ -2742,6 +2785,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     applyAttentionAnimation(cardToHighlight);
                 }
             }, 300);
+        }
+
+        // If description search active, scroll to first description match too
+        if (descSearchIds && firstDescMatchedCard) {
+            setTimeout(() => {
+                centerCardInView(firstDescMatchedCard, itemsContainer);
+                applyAttentionAnimation(firstDescMatchedCard);
+            }, 250);
         }
     }
 
@@ -2810,6 +2861,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
             card.classList.remove('highlight-item', 'code-match', 'exact-code-match');
         });
         
+        applyFilters();
+    }
+
+    // Description search using backend substring match
+    function searchByDescription(){
+        const input = document.getElementById('desc-search');
+        const term = (input?.value || '').trim();
+        if (!term){
+            descSearchIds = null;
+            applyFilters(true);
+            return;
+        }
+        input?.classList.add('searching');
+        fetch(`/search_word/${encodeURIComponent(term)}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (data && data.success && Array.isArray(data.response)){
+                    descSearchIds = new Set(data.response.map(String));
+                } else {
+                    descSearchIds = new Set();
+                }
+                applyFilters(true);
+            })
+            .catch(()=>{ descSearchIds = new Set(); applyFilters(true); })
+            .finally(()=>{ setTimeout(()=> input?.classList.remove('searching'), 300); });
+    }
+
+    function clearDescSearch(){
+        const input = document.getElementById('desc-search');
+        if (input) input.value = '';
+        descSearchIds = null;
         applyFilters();
     }
 

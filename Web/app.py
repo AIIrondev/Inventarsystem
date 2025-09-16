@@ -2979,6 +2979,36 @@ def get_predefined_filter_values(filter_num):
     values = it.get_predefined_filter_values(filter_num)
     return jsonify({'values': values})
 
+@app.route('/search_word/<path:word>')
+def search_word(word):
+    """Search items by Beschreibung substring, case-insensitive.
+
+    Returns list of matching item IDs.
+    """
+    try:
+        term = (word or "").strip()
+        if not term:
+            return jsonify({"success": True, "response": []})
+
+        term_lower = term.lower()
+        responses = []
+        for i in it.get_items():
+            beschreibung = i.get("Beschreibung", "")
+            try:
+                if isinstance(beschreibung, (list, tuple)):
+                    text = " ".join([str(x) for x in beschreibung])
+                else:
+                    text = str(beschreibung)
+            except Exception:
+                text = ""
+
+            if term_lower in text.lower():
+                responses.append(i.get("_id"))
+
+        return jsonify({"success": True, "response": responses})
+    except Exception as e:
+        return jsonify({"success": False, "response": str(e)})
+
 @app.route('/fetch_book_info/<isbn>')
 def fetch_book_info(isbn):
     """
