@@ -529,6 +529,7 @@ server {
                 include proxy_params;
                 proxy_pass http://unix:/tmp/inventarsystem.sock;
                 proxy_read_timeout 300;
+				add_header Cache-Control "public";
         }
 }
 EOF
