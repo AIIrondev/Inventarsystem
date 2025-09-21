@@ -2981,9 +2981,9 @@ def get_predefined_filter_values(filter_num):
 
 @app.route('/search_word/<path:word>')
 def search_word(word):
-    """Search items by Beschreibung substring, case-insensitive.
+    """Search items by Titel (Name) and Beschreibung, case-insensitive.
 
-    Returns list of matching item IDs.
+    Returns: JSON with list of matching item IDs.
     """
     try:
         term = (word or "").strip()
@@ -2991,9 +2991,11 @@ def search_word(word):
             return jsonify({"success": True, "response": []})
 
         term_lower = term.lower()
-        responses = []
+        id_set = set()
         for i in it.get_items():
             beschreibung = i.get("Beschreibung", "")
+            titel = i.get("Name", "")
+            # Normalize Beschreibung to string
             try:
                 if isinstance(beschreibung, (list, tuple)):
                     text = " ".join([str(x) for x in beschreibung])
@@ -3002,10 +3004,18 @@ def search_word(word):
             except Exception:
                 text = ""
 
-            if term_lower in text.lower():
-                responses.append(i.get("_id"))
+            # Normalize title
+            try:
+                title_text = str(titel)
+            except Exception:
+                title_text = ""
 
-        return jsonify({"success": True, "response": responses})
+            if (term_lower in text.lower()) or (term_lower in title_text.lower()):
+                _id = i.get("_id")
+                if _id is not None:
+                    id_set.add(str(_id))
+
+        return jsonify({"success": True, "response": list(id_set)})
     except Exception as e:
         return jsonify({"success": False, "response": str(e)})
 
