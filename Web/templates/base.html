@@ -325,6 +325,59 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+    <!-- Cookie consent banner -->
+    <style>
+        #cookie-banner { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(33,37,41,.98); color: #fff; padding: 14px 16px; display: none; z-index: 2000; box-shadow: 0 -2px 8px rgba(0,0,0,.25); }
+        #cookie-banner .cb-inner { max-width: 1100px; margin: 0 auto; display:flex; gap:12px; align-items:center; justify-content:space-between; }
+        #cookie-banner .cb-text { font-size: .95rem; line-height:1.35; margin-right: 12px; }
+        #cookie-banner .cb-actions { display:flex; gap:8px; flex-shrink:0; }
+        #cookie-banner .btn-accept { background:#28a745; border:2px solid #28a745; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; }
+        #cookie-banner .btn-decline { background:transparent; border:2px solid #ffc107; color:#ffc107; padding:6px 12px; border-radius:4px; cursor:pointer; }
+        #cookie-banner .btn-accept:hover { background:#218838; border-color:#218838; }
+        #cookie-banner .btn-decline:hover { background:#ffc107; color:#212529; }
+    </style>
+    <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">
+        <div class="cb-inner">
+            <div class="cb-text">
+                Wir verwenden technisch notwendige Cookies, um Ihre Sitzung zu verwalten und die Anwendung bereitzustellen. Bitte akzeptieren Sie Cookies, um fortzufahren.
+            </div>
+            <div class="cb-actions">
+                <button class="btn-decline" id="cookie-decline">Ablehnen</button>
+                <button class="btn-accept" id="cookie-accept">Akzeptieren</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function(){
+            function getCookie(name){
+                const v = document.cookie.split(';').map(s=>s.trim());
+                for(const c of v){ if(c.startsWith(name+'=')) return decodeURIComponent(c.split('=')[1]); }
+                return null;
+            }
+            function setCookie(name, value, days){
+                const d = new Date(); d.setTime(d.getTime() + (days*24*60*60*1000));
+                document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+            }
+            function showBanner(){ var el = document.getElementById('cookie-banner'); if(el) el.style.display = 'block'; }
+            function hideBanner(){ var el = document.getElementById('cookie-banner'); if(el) el.style.display = 'none'; }
+
+            // If not decided yet, show banner and block app until decision
+            const consent = getCookie('cookie_consent');
+            if(!consent){
+                showBanner();
+                // Optionally blur content until consent
+                document.body.style.filter = 'none';
+            }
+            document.getElementById('cookie-accept')?.addEventListener('click', function(){
+                setCookie('cookie_consent','accepted',365);
+                hideBanner();
+            });
+            document.getElementById('cookie-decline')?.addEventListener('click', function(){
+                setCookie('cookie_consent','declined',365);
+                window.location.href = 'https://www.ecosia.org/';
+            });
+        })();
+    </script>
     <!-- Mobile compatibility scripts -->
     <script src="{{ url_for('static', filename='js/mobile_compatibility.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ios_fixes.js') }}"></script>
