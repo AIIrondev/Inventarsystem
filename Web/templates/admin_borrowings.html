@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h1>Ausleihen verwalten</h1>
+  <p>Liste aller aktiven und geplanten Ausleihen. Sie können einzelne Einträge zurücksetzen.</p>
+
+  {% if entries and entries|length > 0 %}
+  <table class="table" style="width:100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Status</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Item</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Item-ID</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Benutzer</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Start</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Ende</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Stunde</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Notizen</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.status }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.item_name }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee; font-family:monospace;">{{ e.item_id }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.user }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.start }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.end }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.period }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.notes }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">
+          <form method="post" action="{{ url_for('admin_reset_borrowing', borrow_id=e.id) }}" onsubmit="return confirm('Ausleihe zurücksetzen?');">
+            <button type="submit" class="btn btn-warning">Zurücksetzen</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="empty-state">
+      <p>Keine aktiven oder geplanten Ausleihen gefunden.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

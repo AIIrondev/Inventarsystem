@@ -2761,6 +2761,105 @@ def delete_user():
     return redirect(url_for('user_del'))
 
 
+@app.route('/admin/borrowings')
+def admin_borrowings():
+    """
+    Admin view: list all active and planned borrowings with ability to reset.
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+    db = client[MONGODB_DB]
+    ausleihungen = db['ausleihungen']
+    items_col = db['items']
+
+    # Load active and planned borrowings
+    records = list(ausleihungen.find({'Status': {'$in': ['active', 'planned']}}).sort('Start', -1))
+
+    # Preload item names
+    item_ids = {r.get('Item') for r in records if r.get('Item')}
+    items_map = {}
+    if item_ids:
+        # IDs are stored as strings in this app
+        items_map = {str(doc['_id']): doc.get('Name', '(Unbekannt)') for doc in items_col.find({'_id': {'$in': [ObjectId(i) for i in item_ids if i]}})}
+
+    def fmt_dt(dt):
+        try:
+            return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+        except Exception:
+            return str(dt) if dt else ''
+
+    entries = []
+    for r in records:
+        item_id = r.get('Item')
+        entries.append({
+            'id': str(r.get('_id')),
+            'item_id': item_id,
+            'item_name': items_map.get(item_id, '(Unbekannt)') if item_id else '(Fehlend)',
+            'user': r.get('User', ''),
+            'status': r.get('Status', ''),
+            'start': fmt_dt(r.get('Start')),
+            'end': fmt_dt(r.get('End')),
+            'period': r.get('Period') if r.get('Period') is not None else '',
+            'notes': r.get('Notes', '')
+        })
+
+    client.close()
+    return render_template('admin_borrowings.html', entries=entries)
+
+
+@app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
+def admin_reset_borrowing(borrow_id):
+    """
+    Admin action: reset a single borrowing.
+    - If active: complete it and free the item
+    - If planned: cancel it
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        rec = ausleihungen.find_one({'_id': ObjectId(borrow_id)})
+        if not rec:
+            client.close()
+            flash('Ausleihung nicht gefunden', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        status = rec.get('Status')
+        item_id = rec.get('Item')
+        user = rec.get('User')
+
+        now = datetime.datetime.now()
+        if status == 'active':
+            ausleihungen.update_one({'_id': rec['_id']}, {'$set': {'Status': 'completed', 'End': now, 'LastUpdated': now}})
+            # Free the item
+            if item_id:
+                try:
+                    items_col.update_one({'_id': ObjectId(item_id)}, {'$set': {'Verfuegbar': True, 'LastUpdated': now}, '$unset': {'User': ""}})
+                except Exception:
+                    pass
+            flash('Aktive Ausleihe wurde zurückgesetzt (abgeschlossen).', 'success')
+        elif status == 'planned':
+            ausleihungen.update_one({'_id': rec['_id']}, {'$set': {'Status': 'cancelled', 'LastUpdated': now}})
+            flash('Geplante Ausleihe wurde storniert.', 'success')
+        else:
+            flash('Diese Ausleihe ist weder aktiv noch geplant.', 'warning')
+
+        client.close()
+    except Exception as e:
+        flash(f'Fehler beim Zurücksetzen: {str(e)}', 'error')
+
+    return redirect(url_for('admin_borrowings'))
+
+
 @app.route('/admin_reset_user_password', methods=['POST'])
 def admin_reset_user_password():
     """
