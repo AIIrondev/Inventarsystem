@@ -2721,6 +2721,36 @@ def delete_user():
         flash('You cannot delete your own account', 'error')
         return redirect(url_for('user_del'))
     
+    # Reset this user's borrowings and free items before deleting the user
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+        now = datetime.datetime.now()
+
+        # Complete all active borrowings of this user
+        ausleihungen.update_many(
+            {'User': username, 'Status': 'active'},
+            {'$set': {'Status': 'completed', 'End': now, 'LastUpdated': now}}
+        )
+
+        # Cancel all planned borrowings of this user
+        ausleihungen.update_many(
+            {'User': username, 'Status': 'planned'},
+            {'$set': {'Status': 'cancelled', 'LastUpdated': now}}
+        )
+
+        # Free all items currently associated with this user
+        items_col.update_many(
+            {'User': username},
+            {'$set': {'Verfuegbar': True, 'LastUpdated': now}, '$unset': {'User': ""}}
+        )
+
+        client.close()
+    except Exception as e:
+        flash(f'Warnung: Ausleihungen/Reservierungen für {username} konnten nicht vollständig zurückgesetzt werden: {str(e)}', 'warning')
+
     # Delete the user
     try:
         us.delete_user(username)
