@@ -3022,6 +3022,41 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <div class="detail-label">Beschreibung:</div>
                     <div class="detail-value">${item.Beschreibung || '-'}</div>
                 </div>
+
+                <div class="detail-group full-width" style="margin-top:12px; padding:10px; border:1px solid #e3e3e3; border-radius:8px;">
+                    <div class="detail-label">Verfügbarkeit prüfen:</div>
+                    <div class="detail-value">
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                            <input type="date" id="avail-date" style="padding:6px;">
+                            <select id="avail-start" style="padding:6px;">
+                                <option value="">Von Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <select id="avail-end" style="padding:6px;">
+                                <option value="">Bis Stunde</option>
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            </select>
+                            <button id="avail-check" class="filter-toggle">Prüfen</button>
+                            <span id="avail-result" style="margin-left:8px;"></span>
+                        </div>
+                        <div id="avail-conflicts" style="margin-top:8px; color:#a00;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-group full-width" style="margin-top:15px;">
+                <div class="detail-label">Geplante Ausleihen:</div>
+                <div class="detail-value">
+                    <button id="toggle-bookings" class="filter-toggle" style="margin-bottom:8px;">Anzeigen / Verbergen</button>
+                    <div id="bookings-panel" style="display:none; border:1px solid #ddd; border-radius:8px; padding:10px; background:#fafafa;">
+                        <div id="bookings-list"></div>
+                        <div id="bookings-pagination" style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+                            <button id="bookings-prev" class="filter-toggle">Vorherige</button>
+                            <span id="bookings-page-info" style="min-width:120px;"></span>
+                            <button id="bookings-next" class="filter-toggle">Nächste</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="modal-actions">
@@ -3053,6 +3088,103 @@ document.addEventListener('DOMContentLoaded', ()=>{
         
         window.currentModalImageIndex = 0;
         window.totalModalImages = item.Images ? item.Images.length : 0;
+
+        // Init planned bookings panel
+        const toggleBtn = document.getElementById('toggle-bookings');
+        const panel = document.getElementById('bookings-panel');
+        const listEl = document.getElementById('bookings-list');
+        const prevBtn = document.getElementById('bookings-prev');
+        const nextBtn = document.getElementById('bookings-next');
+        const pageInfo = document.getElementById('bookings-page-info');
+        let bookings = [];
+        let page = 1;
+        const pageSize = 7;
+
+        function renderPage(){
+            const total = bookings.length;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+            if(page > totalPages) page = totalPages;
+            const start = (page - 1) * pageSize;
+            const slice = bookings.slice(start, start + pageSize);
+            listEl.innerHTML = slice.map(b=>{
+                const startStr = b.start ? new Date(b.start).toLocaleString() : '';
+                const endStr = b.end ? new Date(b.end).toLocaleString() : '';
+                const periodStr = b.period != null ? `Stunde: ${b.period}` : '';
+                const notesStr = b.notes ? ` | Notizen: ${b.notes}` : '';
+                return `<div style="padding:6px 8px; border-bottom:1px solid #eee;">
+                    <div><strong>Benutzer:</strong> ${b.user || '-'}${periodStr ? ` | <strong>${periodStr}</strong>` : ''}</div>
+                    <div><strong>Von:</strong> ${startStr} ${endStr ? ` | <strong>Bis:</strong> ${endStr}` : ''}${notesStr}</div>
+                </div>`;
+            }).join('');
+            if(slice.length === 0){
+                listEl.innerHTML = '<div style="padding:8px; color:#666;">Keine geplanten Ausleihen vorhanden.</div>';
+            }
+            pageInfo.textContent = `Seite ${page} / ${Math.max(1, Math.ceil(total / pageSize))}`;
+            prevBtn.disabled = page <= 1;
+            nextBtn.disabled = page >= Math.ceil(total / pageSize);
+        }
+
+        toggleBtn?.addEventListener('click', ()=>{
+            if(panel.style.display === 'none'){
+                panel.style.display = 'block';
+                // Lazy-load on first open
+                if(bookings.length === 0){
+                    fetch(`/get_planned_bookings/${item._id}`)
+                        .then(r=>r.json())
+                        .then(d=>{ if(d && d.ok && Array.isArray(d.bookings)){ bookings = d.bookings; page = 1; renderPage(); } else { listEl.innerHTML = '<div style="padding:8px; color:#a00;">Fehler beim Laden.</div>'; } })
+                        .catch(()=>{ listEl.innerHTML = '<div style="padding:8px; color:#a00;">Fehler beim Laden.</div>'; });
+                } else {
+                    renderPage();
+                }
+            } else {
+                panel.style.display = 'none';
+            }
+        });
+
+        prevBtn?.addEventListener('click', ()=>{ if(page>1){ page--; renderPage(); } });
+        nextBtn?.addEventListener('click', ()=>{ const max = Math.ceil(bookings.length / pageSize); if(page<max){ page++; renderPage(); } });
+
+        // Availability checker
+        const availDate = document.getElementById('avail-date');
+        const availStart = document.getElementById('avail-start');
+        const availEnd = document.getElementById('avail-end');
+        const availBtn = document.getElementById('avail-check');
+        const availRes = document.getElementById('avail-result');
+        const availConf = document.getElementById('avail-conflicts');
+        availBtn?.addEventListener('click', ()=>{
+            const d = availDate?.value;
+            const s = availStart?.value;
+            const e = availEnd?.value || s;
+            if(!d || !s){
+                availRes.textContent = 'Bitte Datum und Startstunde wählen.';
+                return;
+            }
+            availRes.textContent = 'Prüfe…';
+            availConf.innerHTML = '';
+            fetch(`/check_availability?item_id=${encodeURIComponent(item._id)}&date=${encodeURIComponent(d)}&start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`)
+                .then(r=>r.json())
+                .then(ans=>{
+                    if(ans && ans.ok){
+                        if(ans.available){
+                            availRes.textContent = 'Verfügbar ✅';
+                        } else {
+                            availRes.textContent = 'Nicht verfügbar ❌';
+                            if(Array.isArray(ans.conflicts)){
+                                availConf.innerHTML = ans.conflicts.map(c=>{
+                                    const start = c.start ? new Date(c.start).toLocaleString() : '';
+                                    const end = c.end ? new Date(c.end).toLocaleString() : '';
+                                    const who = c.user ? ` (${c.user})` : '';
+                                    const status = c.status || '';
+                                    return `<div>- ${status}${who}: ${start}${end? ' - '+end: ''}</div>`;
+                                }).join('');
+                            }
+                        }
+                    } else {
+                        availRes.textContent = 'Fehler bei der Prüfung.';
+                    }
+                })
+                .catch(()=>{ availRes.textContent = 'Fehler bei der Prüfung.'; });
+        });
     }
 
     function changeModalImage(direction) {

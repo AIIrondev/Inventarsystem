@@ -2302,6 +2302,142 @@ def get_ausleihung_by_item_route(id):
     }, 200  # Return 200 instead of 404 to allow processing of the error message
 
 
+@app.route('/get_planned_bookings/<item_id>')
+def get_planned_bookings(item_id):
+    """
+    Return all planned bookings for a given item (admin only).
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 403
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        cursor = ausleihungen.find({'Item': item_id, 'Status': 'planned'}).sort('Start', 1)
+        bookings = []
+        for r in cursor:
+            bookings.append({
+                'id': str(r.get('_id')),
+                'user': r.get('User', ''),
+                'period': r.get('Period'),
+                'start': r.get('Start').isoformat() if r.get('Start') else None,
+                'end': r.get('End').isoformat() if r.get('End') else None,
+                'notes': r.get('Notes', '')
+            })
+        client.close()
+        return jsonify({'ok': True, 'bookings': bookings})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/get_planned_bookings_public/<item_id>')
+def get_planned_bookings_public(item_id):
+    """
+    Return planned bookings for a given item (normal users; limited fields, no notes).
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        cursor = ausleihungen.find({'Item': item_id, 'Status': 'planned'}).sort('Start', 1)
+        bookings = []
+        for r in cursor:
+            bookings.append({
+                'period': r.get('Period'),
+                'start': r.get('Start').isoformat() if r.get('Start') else None,
+                'end': r.get('End').isoformat() if r.get('End') else None
+            })
+        client.close()
+        return jsonify({'ok': True, 'bookings': bookings})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/check_availability')
+def check_availability():
+    """
+    Check if a given item is available for the specified date and period range.
+    Query params: item_id, date=YYYY-MM-DD, start=<1-10>, end=<1-10>
+    Returns: { ok, available, conflicts:[...] }
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    item_id = request.args.get('item_id')
+    date_str = request.args.get('date')
+    start_p = request.args.get('start')
+    end_p = request.args.get('end') or start_p
+    if not item_id or not date_str or not start_p:
+        return jsonify({'ok': False, 'error': 'missing parameters'}), 400
+
+    try:
+        # Parse date
+        booking_date = datetime.datetime.strptime(date_str, '%Y-%m-%d')
+        start_num = int(start_p)
+        end_num = int(end_p)
+        if end_num < start_num:
+            start_num, end_num = end_num, start_num
+
+        # Compute requested time window
+        start_times = get_period_times(booking_date, start_num)
+        end_times = get_period_times(booking_date, end_num)
+        if not start_times or not end_times:
+            return jsonify({'ok': False, 'error': 'invalid period(s)'}), 400
+        req_start = start_times['start']
+        req_end = end_times['end']
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        # Collect potential conflicts (planned and active) for this day
+        same_day_start = datetime.datetime.combine(booking_date.date(), datetime.time.min)
+        same_day_end = datetime.datetime.combine(booking_date.date(), datetime.time.max)
+        candidates = list(ausleihungen.find({
+            'Item': item_id,
+            'Status': {'$in': ['planned', 'active']},
+            'Start': {'$lte': same_day_end},
+            'End': {'$gte': same_day_start}
+        }))
+
+        conflicts = []
+        for r in candidates:
+            r_start = r.get('Start')
+            r_end = r.get('End')
+            # If end missing for active, assume lasts through the day
+            if r_end is None:
+                r_end = same_day_end
+            if r_start is None:
+                r_start = same_day_start
+            # Overlap check: req_start < r_end and req_end > r_start
+            if req_start < r_end and req_end > r_start:
+                conflicts.append({
+                    'id': str(r.get('_id')),
+                    'status': r.get('Status'),
+                    'user': r.get('User', ''),
+                    'start': r_start.isoformat() if r_start else None,
+                    'end': r_end.isoformat() if r_end else None,
+                    'period': r.get('Period')
+                })
+
+        # Also include current availability if checking today and item is borrowed now
+        item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+        if item_doc and not item_doc.get('Verfuegbar', True):
+            now = datetime.datetime.now()
+            if req_start.date() == now.date():
+                conflicts.append({'status': 'active', 'user': item_doc.get('User'), 'start': None, 'end': None, 'period': None, 'id': None})
+
+        client.close()
+        return jsonify({'ok': True, 'available': len(conflicts) == 0, 'conflicts': conflicts})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # def create_qr_code(id):
 #     """
 #     Generate a QR code for an item.
