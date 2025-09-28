@@ -115,7 +115,17 @@ if not os.path.exists(app.config['PREVIEW_FOLDER']):
 # Create backup directories
 BACKUP_FOLDER = cfg.BACKUP_FOLDER
 if not os.path.exists(BACKUP_FOLDER):
-    os.makedirs(BACKUP_FOLDER)
+    try:
+        os.makedirs(BACKUP_FOLDER, exist_ok=True)
+    except PermissionError:
+        # Fallback: use a backup directory inside the application directory (writable)
+        fallback_backup = os.path.join(BASE_DIR, 'backups')
+        try:
+            os.makedirs(fallback_backup, exist_ok=True)
+            BACKUP_FOLDER = fallback_backup
+            print(f"Warnung: Konnte BACKUP_FOLDER nicht erstellen. Fallback genutzt: {BACKUP_FOLDER}")
+        except Exception as e:
+            print(f"Fehler: Backup-Verzeichnis konnte nicht erstellt werden: {e}")
 
 def create_daily_backup():
     """

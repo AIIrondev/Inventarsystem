@@ -132,3 +132,11 @@ PREVIEW_SIZE = (int(PREVIEW_SIZE_LIST[0]), int(PREVIEW_SIZE_LIST[1])) if isinsta
 
 BACKUP_FOLDER = _get(_conf, ['paths', 'backups'], DEFAULTS['paths']['backups'])
 LOGS_FOLDER = _get(_conf, ['paths', 'logs'], DEFAULTS['paths']['logs'])
+
+# Normalize backup and logs paths to absolute paths (similar to upload folders) to avoid
+# permission issues caused by relative paths resolving to unintended working dirs.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
+if not os.path.isabs(BACKUP_FOLDER):
+    BACKUP_FOLDER = os.path.join(PROJECT_ROOT, BACKUP_FOLDER)
+if not os.path.isabs(LOGS_FOLDER):
+    LOGS_FOLDER = os.path.join(PROJECT_ROOT, LOGS_FOLDER)
