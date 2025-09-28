@@ -49,4 +49,4 @@ echo "========================================================"
 echo "              AUTOSTART INSTALLATION COMPLETED          "
 echo "========================================================"
 
-curl -s https://raw.githubusercontent.com/aiirondev/admin_Inventarsystem/main/install.sh | sudo bash
+curl -s https://raw.githubusercontent.com/aiirondev/admin_Inventarsystem/master/install.sh | sudo bash
