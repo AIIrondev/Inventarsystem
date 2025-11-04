@@ -35,7 +35,7 @@ echo "Checking for remaining processes..."
 GUNICORN_PIDS=$(pgrep -f "gunicorn.*inventarsystem")
 if [ -n "$GUNICORN_PIDS" ]; then
     echo "Found remaining Gunicorn processes. Killing them..."
-    sudo kill -9 $GUNICORN_PIDS
+    sudo kill -1 $GUNICORN_PIDS
     echo "✓ Remaining Gunicorn processes terminated"
 fi
 
