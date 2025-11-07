@@ -5,12 +5,59 @@
   <p>Liste aller aktiven und geplanten Ausleihen. Sie können einzelne Einträge zurücksetzen.</p>
 
   {% if entries and entries|length > 0 %}
+  <!-- Filter Section -->
+  <div style="margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
+    <h3>Filter</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+      <div>
+        <label for="user-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Benutzer:</label>
+        <input 
+          type="text" 
+          id="user-filter" 
+          placeholder="Nach Benutzer filtern..." 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        />
+      </div>
+      <div>
+        <label for="item-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Element:</label>
+        <input 
+          type="text" 
+          id="item-filter" 
+          placeholder="Nach Element filtern..." 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        />
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+      <div>
+        <label for="status-filter" style="display: block; margin-bottom: 5px; font-weight: bold;">Status:</label>
+        <select 
+          id="status-filter" 
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;"
+        >
+          <option value="">Alle</option>
+          <option value="active">Aktiv</option>
+          <option value="planned">Geplant</option>
+        </select>
+      </div>
+      <div style="display: flex; align-items: flex-end;">
+        <button 
+          id="reset-filters" 
+          class="btn btn-secondary" 
+          style="width: 100%;"
+        >
+          Filter zurücksetzen
+        </button>
+      </div>
+    </div>
+  </div>
+
   <table class="table" style="width:100%; border-collapse: collapse;">
     <thead>
       <tr>
         <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Status</th>
-        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Item</th>
-        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Item-ID</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Element</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Element-ID</th>
         <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Benutzer</th>
         <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Start</th>
         <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Ende</th>
@@ -19,9 +66,9 @@
         <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Aktion</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="borrowing-table-body">
       {% for e in entries %}
-      <tr>
+      <tr class="borrowing-row" data-user="{{ e.user }}" data-item="{{ e.item_name }}" data-status="{{ e.status }}">
         <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.status }}</td>
         <td style="padding:8px; border-bottom:1px solid #eee;">{{ e.item_name }}</td>
         <td style="padding:8px; border-bottom:1px solid #eee; font-family:monospace;">{{ e.item_id }}</td>
@@ -39,10 +86,73 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <div id="no-results" style="display: none; text-align: center; padding: 20px; color: #666;">
+    <p>Keine Einträge mit den aktuellen Filtern gefunden.</p>
+  </div>
+
   {% else %}
     <div class="empty-state">
       <p>Keine aktiven oder geplanten Ausleihen gefunden.</p>
     </div>
   {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const userFilter = document.getElementById('user-filter');
+  const itemFilter = document.getElementById('item-filter');
+  const statusFilter = document.getElementById('status-filter');
+  const resetButton = document.getElementById('reset-filters');
+  const tableBody = document.getElementById('borrowing-table-body');
+  const noResults = document.getElementById('no-results');
+  
+  function applyFilters() {
+    const userValue = userFilter.value.toLowerCase();
+    const itemValue = itemFilter.value.toLowerCase();
+    const statusValue = statusFilter.value;
+    
+    let visibleCount = 0;
+    
+    document.querySelectorAll('.borrowing-row').forEach(row => {
+      const user = row.getAttribute('data-user').toLowerCase();
+      const item = row.getAttribute('data-item').toLowerCase();
+      const status = row.getAttribute('data-status');
+      
+      const userMatch = user.includes(userValue);
+      const itemMatch = item.includes(itemValue);
+      const statusMatch = statusValue === '' || status === statusValue;
+      
+      const shouldShow = userMatch && itemMatch && statusMatch;
+      
+      if (shouldShow) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    
+    // Show/hide no results message
+    if (visibleCount === 0) {
+      noResults.style.display = 'block';
+    } else {
+      noResults.style.display = 'none';
+    }
+  }
+  
+  function resetFilters() {
+    userFilter.value = '';
+    itemFilter.value = '';
+    statusFilter.value = '';
+    applyFilters();
+  }
+  
+  // Add event listeners
+  userFilter.addEventListener('input', applyFilters);
+  itemFilter.addEventListener('input', applyFilters);
+  statusFilter.addEventListener('change', applyFilters);
+  resetButton.addEventListener('click', resetFilters);
+});
+</script>
 {% endblock %}
