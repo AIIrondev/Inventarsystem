@@ -2813,24 +2813,21 @@ def user_del():
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
-    # Get all users except the current one (to prevent self-deletion)
     all_users = us.get_all_users()
-    # Format them as needed for the template
+
     users_list = []
     for user in all_users:
-        # Check different field names that might contain the username
         username = None
         for field in ['Username']:
             if field in user:
                 username = user[field]
                 break
                 
-        # Only add if not the current user and we found a username
         if username and username != session['username']:
             try:
                 fullname = us.get_full_name(username)
-                name = fullname[1]
-                last_name = fullname[2]
+                name = fullname[0]
+                last_name = fullname[1]
                 fullname = f"{last_name} {name}"
             except:
                 fullname = None
