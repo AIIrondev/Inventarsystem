@@ -2815,33 +2815,39 @@ def user_del():
     
     # Get all users except the current one (to prevent self-deletion)
     all_users = us.get_all_users()
-    # Format them as needed for the template
     users_list = []
+    
     for user in all_users:
-        # Check different field names that might contain the username
-        username = None
-        for field in ['username']:
-            if field in user:
-                username = user[field]
-                break
-                
+        # Extract username
+        username = user.get('username')
+        
         # Only add if not the current user and we found a username
         if username and username != session['username']:
-            #try:
-            #    fullname = us.get_full_name(username)
-            #    name = fullname[0]
-            #    last_name = fullname[1]
-            #    fullname = f"{last_name} {name}"
-            #except:
-            #    fullname = None
+            try:
+                fullname_tuple = us.get_full_name(username)
+                if fullname_tuple and len(fullname_tuple) >= 2:
+                    name = fullname_tuple[0] if fullname_tuple[0] else ''
+                    last_name = fullname_tuple[1] if fullname_tuple[1] else ''
+                    fullname = f"{last_name} {name}".strip()
+                else:
+                    fullname = username
+            except Exception as e:
+                app.logger.warning(f"Could not get full name for {username}: {str(e)}")
+                fullname = username
+            
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
-                'fullname': "fullname",
+                'fullname': fullname,
             })
     
+    # Flash a success message only if users were found
+    if users_list:
+        flash(f'{len(users_list)} Benutzer verfügbar', 'info')
+    else:
+        flash('Keine Benutzer zum Löschen verfügbar', 'info')
+    
     return render_template('user_del.html', users=users_list)
-
 
 @app.route('/delete_user', methods=['POST'])
 def delete_user():
