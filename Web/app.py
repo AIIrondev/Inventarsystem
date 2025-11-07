@@ -2829,8 +2829,8 @@ def user_del():
         if username and username != session['username']:
             try:
                 fullname = us.get_full_name(username)
-                name = fullname[0]
-                last_name = fullname[1]
+                name = fullname[1]
+                last_name = fullname[2]
                 fullname = f"{last_name} {name}"
             except:
                 fullname = None
