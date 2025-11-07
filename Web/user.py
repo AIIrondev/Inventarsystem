@@ -352,7 +352,7 @@ def get_full_name(username):
         client = MongoClient('localhost', 27017)
         db = client['Inventarsystem']
         users = db['users']
-        user = users.find_one({'username': username})
+        user = users.find_one({'Username': username})
         name = user.get("name")
         last_name = user.get("last-name")
         full_name = [name, last_name]
