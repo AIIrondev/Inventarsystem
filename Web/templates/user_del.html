@@ -37,7 +37,7 @@
                     {% for user in users %}
                     <tr>
                         <td>{{ user.username }}</td>
-                        <td>{{ user.fullname }}</td>
+                        <td>{{ user.fullname if user.fullname else user.username }}</td>
                         <td>{{ "Ja" if user.admin else "Nein" }}</td>
                         <td class="actions">
                             <form method="POST" action="{{ url_for('delete_user') }}" class="d-inline">

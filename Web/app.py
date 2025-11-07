@@ -2432,7 +2432,8 @@ def check_availability():
                     'user': r.get('User', ''),
                     'start': r_start.isoformat() if r_start else None,
                     'end': r_end.isoformat() if r_end else None,
-                    'period': r.get('Period')
+                    'period': r.get('Period') if r.get('Period') is not None else '',
+                    'notes': r.get('Notes', '')
                 })
 
         # Also include current availability if checking today and item is borrowed now
@@ -2525,7 +2526,7 @@ def plan_booking():
         if not all([item_id, start_date_str, end_date_str, period_start]):
             return {"success": False, "error": "Missing required fields"}, 400
             
-        # Parse dates
+        # Parse the date
         try:
             if start_date_str:
                 start_date = datetime.datetime.fromisoformat(start_date_str)
@@ -2616,7 +2617,6 @@ def plan_booking():
             return {"success": True, "booking_ids": booking_ids}
             
     except Exception as e:
-        import traceback
         print(f"Error in plan_booking: {e}")
         traceback.print_exc()
         return {"success": False, "error": f"Server error: {str(e)}"}, 500
@@ -2827,17 +2827,21 @@ def user_del():
                 
         # Only add if not the current user and we found a username
         if username and username != session['username']:
+            fullname = None
             try:
-                fullname = us.get_full_name(username)
-                name = fullname[0]
-                last_name = fullname[1]
-                fullname = f"{last_name} {name}"
-            except:
+                # Try to get full name from the user object
+                name = user.get('Name', '')
+                last_name = user.get('LastName', '')
+                if name or last_name:
+                    fullname = f"{last_name} {name}".strip()
+            except Exception as e:
+                app.logger.warning(f"Error getting fullname for user {username}: {e}")
                 fullname = None
+            
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
-                'fullname': fullname,
+                'fullname': fullname if fullname else username,  # Fallback to username if no fullname
             })
     
     return render_template('user_del.html', users=users_list)
@@ -3219,7 +3223,7 @@ def add_filter_value(filter_num):
     if success:
         flash(f'Wert "{value}" wurde zu Filter {filter_num} hinzugefügt', 'success')
     else:
-        flash(f'Wert "{value}" existiert bereits in Filter {filter_num}', 'error')
+        flash(f'Ort "{value}" existiert bereits', 'error')
     
     return redirect(url_for('manage_filters'))
 
