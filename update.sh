@@ -42,11 +42,16 @@ update_from_git() {
         }
     fi
 
+    # Stash local changes to avoid merge conflicts
+    log_message "Stashing local changes..."
+    git stash push -m "auto-stash-$(date +%s)" --include-untracked > /dev/null 2>&1 || {
+        log_message "WARNING: Could not stash changes, attempting force pull..."
+    }
+
     # If a version lock exists, ensure manage-version.sh is present (self-healing)
     if [ -f "$PROJECT_DIR/.version-lock" ]; then
         if [ ! -x "$PROJECT_DIR/manage-version.sh" ]; then
             log_message "WARNING: .version-lock present but manage-version.sh missing. Attempting to restore from origin/main..."
-            # Try to fetch the tool from origin/main (or a known good commit)
             git fetch origin main || true
             git show origin/main:manage-version.sh > "$PROJECT_DIR/manage-version.sh" 2>/dev/null && \
                 chmod +x "$PROJECT_DIR/manage-version.sh"
