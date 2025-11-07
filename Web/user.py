@@ -348,15 +348,12 @@ def get_name(username):
     Returns:
         str: String of name
     """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        users = db['users']
-        user = users.find_one({'Username': username})
-        name = user.get("name")
-        return name
-    except Exception as e:
-        return " "
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    users = db['users']
+    user = users.find_one({'Username': username})
+    name = user.get("name")
+    return name
 
 
 def get_last_name(username):
@@ -366,15 +363,12 @@ def get_last_name(username):
     Returns:
         str: String of last_name
     """
-    try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
-        users = db['users']
-        user = users.find_one({'Username': username})
-        name = user.get("last_name")
-        return name
-    except Exception as e:
-        return " "
+    client = MongoClient('localhost', 27017)
+    db = client['Inventarsystem']
+    users = db['users']
+    user = users.find_one({'Username': username})
+    name = user.get("last_name")
+    return name
 
 
 def get_all_users():
