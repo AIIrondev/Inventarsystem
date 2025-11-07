@@ -46,6 +46,16 @@
                         <span class="input-icon">👤</span>
                         <input type="text" id="username" name="username" placeholder="Geben Sie einen Benutzernamen ein" required>
                     </div>
+                    <label for="name">Name</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="name" name="name" placeholder="Geben Sie den Namen ein" required>
+                    </div>
+                    <label for="last-name">Nachname</label>
+                    <div class="input-container">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="last-name" name="last-name" placeholder="Geben Sie den Nachnamen ein" required>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -62,12 +72,6 @@
                 </div>
             </form>
         </div>
-    </div>
-
-    <div class="navigation-buttons">
-        <a href="{{ url_for('home') }}" class="back-button">
-            <span class="back-icon">←</span> Zurück zum Dashboard
-        </a>
     </div>
 </div>
 

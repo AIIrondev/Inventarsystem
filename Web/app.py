@@ -2778,6 +2778,8 @@ def register():
         if request.method == 'POST':
             username = request.form['username']
             password = request.form['password']
+            name = request.form['name']
+            last_name = request.form['last-name']
             if not username or not password:
                 flash('Please fill all fields', 'error')
                 return redirect(url_for('register'))
@@ -2787,14 +2789,7 @@ def register():
             if not us.check_password_strength(password):
                 flash('Password is too weak', 'error')
                 return redirect(url_for('register'))
-            us.add_user(username, password)
-
-
-
-
-
-
-
+            us.add_user(username, password, name, last_name)
             return redirect(url_for('home'))
         return render_template('register.html')
     flash('You are not authorized to view this page', 'error')
@@ -2825,16 +2820,21 @@ def user_del():
     for user in all_users:
         # Check different field names that might contain the username
         username = None
-        for field in ['username', 'Username', 'name']:
+        for field in ['username']:
             if field in user:
                 username = user[field]
                 break
                 
         # Only add if not the current user and we found a username
         if username and username != session['username']:
+            fullname = us.get_full_name(username)
+            name = fullname[0]
+            last_name = fullname[1]
+            fullname = f"{last_name} {name}"
             users_list.append({
                 'username': username,
-                'admin': user.get('Admin', False)
+                'admin': user.get('Admin', False),
+                'fullname': fullname,
             })
     
     return render_template('user_del.html', users=users_list)

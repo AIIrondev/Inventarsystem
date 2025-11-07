@@ -116,7 +116,7 @@ def check_nm_pwd(username, password):
     return user
 
 
-def add_user(username, password):
+def add_user(username, password, name, last_name):
     """
     Add a new user to the database.
     
@@ -132,7 +132,7 @@ def add_user(username, password):
     users = db['users']
     if not check_password_strength(password):
         return False
-    users.insert_one({'Username': username, 'Password': hashing(password), 'Admin': False, 'active_ausleihung': None})
+    users.insert_one({'Username': username, 'Password': hashing(password), 'Admin': False, 'active_ausleihung': None, 'name': name, 'last_name': last_name})
     client.close()
     return True
 
@@ -341,6 +341,25 @@ def update_active_borrowing(username, item_id, status):
         return False
 
 
+def get_full_name(username):
+    """
+    Retrieve the full name that is assosiated with the username.
+
+    Returns:
+        list: List of [name, last_name]
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        user = users.find_one({'username': username})
+        name = user.get("name")
+        last_name = user.get("last-name")
+        full_name = [name, last_name]
+        return full_name
+    except Exception as e:
+        return []
+
 def get_all_users():
     """
     Retrieve all users from the database.
@@ -351,7 +370,7 @@ def get_all_users():
     """
     try:
         client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']  # Match your actual database name
+        db = client['Inventarsystem']
         users = db['users']
         all_users = list(users.find())
         client.close()
