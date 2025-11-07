@@ -2827,20 +2827,18 @@ def user_del():
                 
         # Only add if not the current user and we found a username
         if username and username != session['username']:
-            try:
-                fullname = us.get_full_name(username)
-                name = fullname[0]
-                last_name = fullname[1]
-                fullname = f"{last_name} {name}"
-            except:
-                flash("Name not found")
-                fullname = None
+            #try:
+            #    fullname = us.get_full_name(username)
+            #    name = fullname[0]
+            #    last_name = fullname[1]
+            #    fullname = f"{last_name} {name}"
+            #except:
+            #    fullname = None
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
-                'fullname': fullname,
+                'fullname': "fullname",
             })
-            flash(users_list)
     
     return render_template('user_del.html', users=users_list)
 
@@ -2937,18 +2935,13 @@ def admin_borrowings():
 
     entries = []
     for r in records:
-        print(r)
         it_id = r.get('Item')
-        print(it_id)
         id = it.get_item(it_id)
-        print(id)
         try:
             item_id = id.get('Code_4')
             item_name = id.get('Name')
         except:
-            print(f"Failed to add: {r}")
             item_id = None
-            print(f"Failed to add: {r}")
             item_name = None
         entries.append({
             'id': str(r.get('_id')),
