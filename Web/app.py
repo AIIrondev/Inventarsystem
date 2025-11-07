@@ -2837,7 +2837,7 @@ def user_del():
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
-                'fullname': "fullname",
+                'fullname': fullname,
             })
     
     return render_template('user_del.html', users=users_list)
