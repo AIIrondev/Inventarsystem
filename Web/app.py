@@ -2924,13 +2924,6 @@ def admin_borrowings():
     # Load active and planned borrowings
     records = list(ausleihungen.find({'Status': {'$in': ['active', 'planned']}}).sort('Start', -1))
 
-    # Preload item names
-    item_ids = {r.get('Item') for r in records if r.get('Item')}
-    items_map = {}
-    if item_ids:
-        # IDs are stored as strings in this app
-        items_map = {str(doc['_id']): doc.get('Name', '(Unbekannt)') for doc in items_col.find({'_id': {'$in': [ObjectId(i) for i in item_ids if i]}})}
-
     def fmt_dt(dt):
         try:
             return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
@@ -2939,11 +2932,14 @@ def admin_borrowings():
 
     entries = []
     for r in records:
-        item_id = r.get('Item')
+        it_id = r.get('Item')
+        id = it.get_item(it_id)
+        item_id = id.get('Code_4')
+        item_name = id.get('Name')
         entries.append({
             'id': str(r.get('_id')),
             'item_id': item_id,
-            'item_name': items_map.get(item_id, '(Unbekannt)') if item_id else '(Fehlend)',
+            'item_name': item_name,
             'user': r.get('User', ''),
             'status': r.get('Status', ''),
             'start': fmt_dt(r.get('Start')),
