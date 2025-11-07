@@ -2827,10 +2827,13 @@ def user_del():
                 
         # Only add if not the current user and we found a username
         if username and username != session['username']:
-            fullname = us.get_full_name(username)
-            name = fullname[0]
-            last_name = fullname[1]
-            fullname = f"{last_name} {name}"
+            try:
+                fullname = us.get_full_name(username)
+                name = fullname[0]
+                last_name = fullname[1]
+                fullname = f"{last_name} {name}"
+            except:
+                fullname = None
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
