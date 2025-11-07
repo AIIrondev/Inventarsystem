@@ -341,12 +341,12 @@ def update_active_borrowing(username, item_id, status):
         return False
 
 
-def get_full_name(username):
+def get_name(username):
     """
-    Retrieve the full name that is assosiated with the username.
+    Retrieve the name that is assosiated with the username.
 
     Returns:
-        list: List of [name, last_name]
+        str: String of name
     """
     try:
         client = MongoClient('localhost', 27017)
@@ -354,11 +354,28 @@ def get_full_name(username):
         users = db['users']
         user = users.find_one({'Username': username})
         name = user.get("name")
-        last_name = user.get("last-name")
-        full_name = [name, last_name]
-        return full_name
+        return name
     except Exception as e:
-        return []
+        return " "
+
+
+def get_last_name(username):
+    """
+    Retrieve the last_name that is assosiated with the username.
+
+    Returns:
+        str: String of last_name
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        user = users.find_one({'Username': username})
+        name = user.get("last_name")
+        return name
+    except Exception as e:
+        return " "
+
 
 def get_all_users():
     """

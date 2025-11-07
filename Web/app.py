@@ -2825,10 +2825,7 @@ def user_del():
                 
         if username and username != session['username']:
             try:
-                fullname = us.get_full_name(username)
-                name = fullname[0]
-                last_name = fullname[-1]
-                fullname = f"{last_name} {name}"
+                fullname = f"{us.get_name(username)} {us.get_last_name(username)}"
             except:
                 fullname = None
             users_list.append({
