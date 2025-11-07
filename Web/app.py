@@ -2932,10 +2932,19 @@ def admin_borrowings():
 
     entries = []
     for r in records:
+        print(r)
         it_id = r.get('Item')
+        print(it_id)
         id = it.get_item(it_id)
-        item_id = id.get('Code_4')
-        item_name = id.get('Name')
+        print(id)
+        try:
+            item_id = id.get('Code_4')
+            item_name = id.get('Name')
+        except:
+            print(f"Failed to add: {r}")
+            item_id = None
+            print(f"Failed to add: {r}")
+            item_name = None
         entries.append({
             'id': str(r.get('_id')),
             'item_id': item_id,
@@ -2949,6 +2958,7 @@ def admin_borrowings():
         })
 
     client.close()
+
     return render_template('admin_borrowings.html', entries=entries)
 
 
