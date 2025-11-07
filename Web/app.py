@@ -2827,7 +2827,7 @@ def user_del():
             try:
                 fullname = us.get_full_name(username)
                 name = fullname[0]
-                last_name = fullname[1]
+                last_name = fullname[-1]
                 fullname = f"{last_name} {name}"
             except:
                 fullname = None
