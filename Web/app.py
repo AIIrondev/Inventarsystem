@@ -2817,14 +2817,21 @@ def user_del():
     all_users = us.get_all_users()
     users_list = []
     
+    # Debug logging
+    app.logger.info(f"get_all_users() returned {len(all_users) if all_users else 0} users")
+    if all_users and len(all_users) > 0:
+        app.logger.info(f"First user object: {all_users[0]}")
+    
     for user in all_users:
-        # Extract username
-        username = user.get('username')
+        # Extract username - handle different key names
+        username = user.get('username') or user.get('_id') or user.get('name')
+        
+        app.logger.debug(f"Processing user: {username}, current: {session['username']}")
         
         # Only add if not the current user and we found a username
-        if username and username != session['username']:
+        if username and str(username) != str(session['username']):
             try:
-                fullname_tuple = us.get_full_name(username)
+                fullname_tuple = us.get_full_name(str(username))
                 if fullname_tuple and len(fullname_tuple) >= 2:
                     name = fullname_tuple[0] if fullname_tuple[0] else ''
                     last_name = fullname_tuple[1] if fullname_tuple[1] else ''
@@ -2836,18 +2843,21 @@ def user_del():
                 fullname = username
             
             users_list.append({
-                'username': username,
+                'username': str(username),
                 'admin': user.get('Admin', False),
                 'fullname': fullname,
             })
+            app.logger.debug(f"Added user to list: {username}")
     
-    # Flash a success message only if users were found
+    # Flash appropriate message based on what was found
     if users_list:
         flash(f'{len(users_list)} Benutzer verfügbar', 'info')
     else:
         flash('Keine Benutzer zum Löschen verfügbar', 'info')
+        app.logger.warning(f"No users available for deletion. Total users: {len(all_users)}, Current user: {session['username']}")
     
     return render_template('user_del.html', users=users_list)
+
 
 @app.route('/delete_user', methods=['POST'])
 def delete_user():
