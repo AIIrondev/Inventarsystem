@@ -2947,8 +2947,8 @@ def admin_borrowings():
             item_name = None
         entries.append({
             'id': str(r.get('_id')),
-            'item_id': item_id,
-            'item_name': item_name,
+            'item_id': str(item_id),
+            'item_name': str(item_name),
             'user': r.get('User', ''),
             'status': r.get('Status', ''),
             'start': fmt_dt(r.get('Start')),

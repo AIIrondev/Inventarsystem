@@ -266,6 +266,10 @@
     .search-field {
         min-width: 250px;
     }
+
+    #codesearch {
+    border: 1px solid #dc3545 !important;
+    }
 </style>
 <div class="container">
     <div class="content">
@@ -317,7 +321,7 @@
                 </div>
             </div>
             
-            <div class="filter-group search-field">
+            <div class="filter-group search-field" id="codesearch">
                 <div class="filter-header">
                     <label for="code-search">Code suchen:</label>
                     <button type="button" class="clear-filter" onclick="clearCodeSearch()">Clear</button>
