@@ -427,6 +427,50 @@
     </div>
 </div>
 
+<!-- Multi-Day Borrowing Duration Modal -->
+<div id="borrowDurationModal" class="borrow-modal">
+    <div class="borrow-modal-content">
+        <span class="borrow-close-modal">&times;</span>
+        <h2>Ausleihungsdauer wählen</h2>
+        <p id="borrowItemName"></p>
+        
+        <form id="borrowForm" method="POST" action="">
+            <div class="borrow-form-group">
+                <label for="borrowDurationDays">Wie lange möchten Sie das Item ausleihen?</label>
+                
+                <div class="duration-preset-buttons">
+                    <button type="button" class="duration-preset-btn" data-days="1">1 Tag</button>
+                    <button type="button" class="duration-preset-btn" data-days="3">3 Tage</button>
+                    <button type="button" class="duration-preset-btn" data-days="7">1 Woche</button>
+                    <button type="button" class="duration-preset-btn" data-days="14">2 Wochen</button>
+                </div>
+                
+                <div class="custom-duration-section">
+                    <label for="borrowCustomDays">Benutzerdefiniert (Tage):</label>
+                    <div class="custom-duration-input">
+                        <input type="number" id="borrowCustomDays" name="duration_days" min="1" max="365" value="1" required>
+                        <span class="max-days-info">Max. 365 Tage</span>
+                    </div>
+                </div>
+                
+                <div class="return-date-info">
+                    <p>Geplante Rückgabe: <strong id="borrowReturnDate"></strong></p>
+                </div>
+            </div>
+            
+            <div class="borrow-form-group">
+                <label for="borrowExemplareCount" id="borrowExemplareCountLabel" style="display:none;">Anzahl der Exemplare:</label>
+                <input type="number" id="borrowExemplareCount" name="exemplare_count" min="1" max="10" value="1" style="display:none;">
+            </div>
+            
+            <div class="borrow-modal-actions">
+                <button type="button" class="borrow-cancel-btn" id="borrowCancelBtn">Abbrechen</button>
+                <button type="submit" class="borrow-submit-btn">Ausleihen</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Initialize template variables before any JavaScript code -->
 <script>
     // Create a global object to hold server-side template values
