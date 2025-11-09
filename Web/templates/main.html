@@ -1082,30 +1082,9 @@
 
     // Helper function to apply attention animation to a card
     function applyAttentionAnimation(card) {
-        // First remove any existing animations
-        card.getAnimations().forEach(anim => anim.cancel());
-        
-        // Apply a more pronounced animation
-        card.animate([
-            { transform: 'scale(1)', boxShadow: '0 0 15px rgba(40, 167, 69, 0.7)' },
-            { transform: 'scale(1.08)', boxShadow: '0 0 25px rgba(40, 167, 69, 1)' },
-            { transform: 'scale(1)', boxShadow: '0 0 15px rgba(40, 167, 69, 0.7)' }
-        ], {
-            duration: 800,
-            iterations: 3,
-            easing: 'ease-in-out'
-        });
-        
-        // Also flash the background for better visibility
-        card.animate([
-            { backgroundColor: 'white' },
-            { backgroundColor: 'rgba(40, 167, 69, 0.1)' },
-            { backgroundColor: 'white' }
-        ], {
-            duration: 800,
-            iterations: 3,
-            easing: 'ease-in-out'
-        });
+        // Simply apply green border without animation
+        card.style.border = '3px solid #28a745';
+        card.style.boxShadow = '0 0 20px rgba(40, 167, 69, 0.7)';
     }
 
     function clearCodeSearch() {
