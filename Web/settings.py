@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Default values
 DEFAULTS = {
-    'version': '1.2.4',
+    'version': '2.6.5',
     'debug': False,
     'secret_key': 'Hsse783942h2342f342342i34hwebf8',
     'host': '0.0.0.0',
