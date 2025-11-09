@@ -2513,7 +2513,6 @@
         box-shadow: 0 0 20px rgba(255, 215, 0, 0.7) !important;
         position: relative;
         z-index: 10;
-        animation: highlight-pulse 2s infinite;
     }
 
     .code-match {
@@ -2526,7 +2525,6 @@
     .exact-code-match {
         border: 3px solid #28a745 !important;
         box-shadow: 0 0 20px rgba(40, 167, 69, 0.7) !important;
-        animation: highlight-pulse 2s infinite;
         position: relative;
         z-index: 11;
     }
@@ -2537,12 +2535,6 @@
         box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
         position: relative;
         z-index: 6;
-    }
-
-    @keyframes highlight-pulse {
-        0% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
-        50% { box-shadow: 0 0 30px rgba(40, 167, 69, 1); transform: scale(1.03); }
-        100% { box-shadow: 0 0 15px rgba(40, 167, 69, 0.7); }
     }
 
     /* Messages */
