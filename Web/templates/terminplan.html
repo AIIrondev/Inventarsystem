@@ -373,6 +373,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 periodDiv.style.display = 'inline-block';
                 periodDiv.style.fontSize = '10px';
                 info.el.appendChild(periodDiv);
+            } else {
+                // Check if it is a multi-day event
+                const start = info.event.start;
+                const end = info.event.end;
+                if (start && end && start.toDateString() !== end.toDateString()) {
+                    const periodDiv = document.createElement('div');
+                    periodDiv.className = 'fc-event-period-marker';
+                    periodDiv.textContent = 'Mehrtägig';
+                    periodDiv.style.backgroundColor = 'rgba(255,255,255,0.3)';
+                    periodDiv.style.borderRadius = '3px';
+                    periodDiv.style.padding = '1px 3px';
+                    periodDiv.style.marginTop = '2px';
+                    periodDiv.style.display = 'inline-block';
+                    periodDiv.style.fontSize = '10px';
+                    info.el.appendChild(periodDiv);
+                }
             }
             
             // Add borrowed indicator if relevant

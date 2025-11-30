@@ -1731,12 +1731,15 @@ def upload_item():
     if ort and ort not in predefined_locations:
         it.add_predefined_location(ort)
     
+    reservierbar = 'reservierbar' in request.form
+
     # Add the item to the database
     item_id = it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
                         filter_upload2, filter_upload3, 
                         anschaffungs_jahr[0] if anschaffungs_jahr else None, 
                         anschaffungs_kosten[0] if anschaffungs_kosten else None,
-                        code_4[0] if code_4 else None)
+                        code_4[0] if code_4 else None,
+                        reservierbar=reservierbar)
     
     if item_id:
     # Create QR code for the item (deactivated)
@@ -1955,6 +1958,7 @@ def edit_item(id):
     anschaffungs_jahr = strip_whitespace(request.form.get('anschaffungsjahr'))
     anschaffungs_kosten = strip_whitespace(request.form.get('anschaffungskosten'))
     code_4 = strip_whitespace(request.form.get('code_4'))
+    reservierbar = 'reservierbar' in request.form
     
     # Check if code is unique (excluding the current item)
     if code_4 and not it.is_code_unique(code_4, exclude_id=id):
@@ -2012,7 +2016,7 @@ def edit_item(id):
     result = it.update_item(
         id, name, ort, beschreibung, 
         images, verfuegbar, filter1, filter2, filter3,
-        anschaffungs_jahr, anschaffungs_kosten, code_4
+        anschaffungs_jahr, anschaffungs_kosten, code_4, reservierbar
     )
     
     if result:
@@ -2547,6 +2551,10 @@ def plan_booking():
         item = it.get_item(item_id)
         if not item:
             return {"success": False, "error": "Item not found"}, 404
+            
+        # Check if item is reservable
+        if not item.get('Reservierbar', True):
+             return {"success": False, "error": "Dieses Item kann nicht reserviert werden."}, 400
         
         # Handle period range
         periods = []
@@ -2675,6 +2683,15 @@ def add_booking():
         return jsonify({'success': False, 'error': 'Not logged in'})
     
     item_id = request.form.get('item_id')
+    
+    # Check if item exists and is reservable
+    item = it.get_item(item_id)
+    if not item:
+        return jsonify({'success': False, 'error': 'Item not found'})
+        
+    if not item.get('Reservierbar', True):
+        return jsonify({'success': False, 'error': 'Dieses Item kann nicht reserviert werden.'})
+
     start_date_str = request.form.get('start_date')
     end_date_str = request.form.get('end_date')
     period = request.form.get('period')
@@ -3773,23 +3790,40 @@ def schedule_appointment():
         end_period = request.form.get('end_period')
         notes = request.form.get('notes', '')
         
+        # Check for multi-day
+        is_multi_day = request.form.get('is_multi_day') == 'on'
+        schedule_end_date = request.form.get('schedule_end_date')
+        
         # Validate inputs
         if not all([item_id, schedule_date, start_period, end_period]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
             
-        # Parse the date
+        # Parse the start date
         try:
             appointment_date_obj = datetime.datetime.strptime(schedule_date, '%Y-%m-%d')
             appointment_date = appointment_date_obj.date()  # Get date part only
         except ValueError:
             return jsonify({'success': False, 'message': 'Invalid date format'}), 400
             
+        # Parse end date if multi-day
+        appointment_end_date = appointment_date
+        if is_multi_day and schedule_end_date:
+            try:
+                appointment_end_date_obj = datetime.datetime.strptime(schedule_end_date, '%Y-%m-%d')
+                appointment_end_date = appointment_end_date_obj.date()
+                
+                if appointment_end_date < appointment_date:
+                    return jsonify({'success': False, 'message': 'End date cannot be before start date'}), 400
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Invalid end date format'}), 400
+            
         # Validate periods
         try:
             start_period_num = int(start_period)
             end_period_num = int(end_period)
             
-            if start_period_num > end_period_num:
+            # Only check period order if it's the same day
+            if appointment_date == appointment_end_date and start_period_num > end_period_num:
                 return jsonify({'success': False, 'message': 'Start period cannot be after end period'}), 400
                 
             if not (1 <= start_period_num <= 10) or not (1 <= end_period_num <= 10):
@@ -3803,11 +3837,17 @@ def schedule_appointment():
         if not item:
             return jsonify({'success': False, 'message': 'Item not found'}), 404
             
+        # Check if item is reservable
+        if not item.get('Reservierbar', True):
+             return jsonify({'success': False, 'message': 'Dieses Item kann nicht reserviert werden.'}), 400
+            
         # Calculate start and end times for the appointment
         # Make sure we're passing the correct datetime object
         period_start_datetime = datetime.datetime.combine(appointment_date, datetime.time())
         period_times_start = get_period_times(period_start_datetime, start_period_num)
-        period_times_end = get_period_times(period_start_datetime, end_period_num)
+        
+        period_end_datetime = datetime.datetime.combine(appointment_end_date, datetime.time())
+        period_times_end = get_period_times(period_end_datetime, end_period_num)
         
         # Check if we got valid period times
         if not period_times_start or not period_times_end:
@@ -3817,14 +3857,25 @@ def schedule_appointment():
         start_datetime = period_times_start['start']
         end_datetime = period_times_end['end']
         
+        # Determine if we should use period-based booking or time-based (multi-day)
+        # If it's multi-day (dates differ), we treat it as a continuous block (Period=None)
+        # If it's single day, we use the period range logic
+        
+        booking_period = None
+        booking_period_end = None
+        
+        if appointment_date == appointment_end_date:
+            booking_period = start_period_num
+            booking_period_end = end_period_num
+        
         # Check for conflicts (use full period-range aware check)
         try:
             has_conflict = au.check_booking_period_range_conflict(
                 item_id,
                 start_datetime,
                 end_datetime,
-                period=start_period_num,
-                period_end=end_period_num
+                period=booking_period,
+                period_end=booking_period_end
             )
             if has_conflict:
                 return jsonify({'success': False, 'message': 'Appointment conflicts with existing booking'}), 409
@@ -3840,7 +3891,7 @@ def schedule_appointment():
                 start_date=start_datetime,
                 end_date=end_datetime,
                 notes=notes,
-                period=start_period_num
+                period=booking_period # Will be None for multi-day
             )
             
             if not appointment_id:
@@ -3858,8 +3909,15 @@ def schedule_appointment():
             else:
                 appointment_datetime = appointment_date
                 
+            # Handle end date conversion
+            if isinstance(appointment_end_date, datetime.date) and not isinstance(appointment_end_date, datetime.datetime):
+                appointment_end_datetime = datetime.datetime.combine(appointment_end_date, datetime.time())
+            else:
+                appointment_end_datetime = appointment_end_date
+                
             result = it.update_item_next_appointment(item_id, {
                 'date': appointment_datetime,
+                'end_date': appointment_end_datetime,
                 'start_period': start_period_num,
                 'end_period': end_period_num,
                 'user': session['username'],

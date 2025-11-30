@@ -757,31 +757,30 @@ def check_ausleihung_conflict(item_id, start_date, end_date, period=None):
                     print(f"Error comparing dates: {e}")
                     # Continue checking other bookings if there's an error with one
         
-        # If no period specified, check for time overlaps
-        else:
-            for booking in all_bookings:
-                booking_start = booking.get('Start')
-                booking_end = booking.get('End')
-                
-                if not booking_start:
-                    continue
-                
-                # Set default end time if not specified
-                if not booking_end:
-                    booking_end = booking_start + datetime.timedelta(hours=1)
-                
-                # Check for overlap
-                # 1. New booking starts during existing booking
-                # 2. New booking ends during existing booking
-                # 3. New booking completely contains existing booking
-                # 4. Existing booking completely contains new booking
-                if ((start_date >= booking_start and start_date < booking_end) or
-                    (end_date > booking_start and end_date <= booking_end) or
-                    (start_date <= booking_start and end_date >= booking_end) or
-                    (start_date >= booking_start and end_date <= booking_end)):
-                    print(f"CONFLICT: Time overlap. New booking: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
-                    client.close()
-                    return True
+        # Always check for time overlaps, regardless of whether period was specified
+        for booking in all_bookings:
+            booking_start = booking.get('Start')
+            booking_end = booking.get('End')
+            
+            if not booking_start:
+                continue
+            
+            # Set default end time if not specified
+            if not booking_end:
+                booking_end = booking_start + datetime.timedelta(hours=1)
+            
+            # Check for overlap
+            # 1. New booking starts during existing booking
+            # 2. New booking ends during existing booking
+            # 3. New booking completely contains existing booking
+            # 4. Existing booking completely contains new booking
+            if ((start_date >= booking_start and start_date < booking_end) or
+                (end_date > booking_start and end_date <= booking_end) or
+                (start_date <= booking_start and end_date >= booking_end) or
+                (start_date >= booking_start and end_date <= booking_end)):
+                print(f"CONFLICT: Time overlap. New booking: {start_date}-{end_date}, Existing: {booking_start}-{booking_end}")
+                client.close()
+                return True
         
         print("No conflicts found!")
         client.close()

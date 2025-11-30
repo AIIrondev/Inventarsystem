@@ -42,7 +42,7 @@ import settings as cfg
 # === ITEM MANAGEMENT ===
 
 def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, filter3=None,
-             ansch_jahr=None, ansch_kost=None, code_4=None):
+             ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True):
     """
     Add a new item to the inventory.
     
@@ -57,6 +57,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
         ansch_jahr (int, optional): Year of acquisition
         ansch_kost (float, optional): Cost of acquisition
         code_4 (str, optional): 4-digit identification code
+        reservierbar (bool, optional): Whether the item can be reserved in advance
         
     Returns:
         ObjectId: ID of the new item or None if failed
@@ -76,6 +77,7 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
             'Beschreibung': beschreibung,
             'Images': images,
             'Verfuegbar': True,
+            'Reservierbar': reservierbar,
             'Filter': filter,
             'Filter2': filter2,
             'Filter3': filter3,
@@ -118,7 +120,7 @@ def remove_item(id):
 
 
 def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True, 
-                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None):
+                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True):
     """
     Update an existing inventory item.
     
@@ -135,6 +137,7 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
         ansch_jahr (int, optional): Year of acquisition
         ansch_kost (float, optional): Cost of acquisition
         code_4 (str, optional): 4-digit identification code
+        reservierbar (bool, optional): Whether the item can be reserved in advance
         
     Returns:
         bool: True if successful, False otherwise
@@ -154,6 +157,7 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
             'Beschreibung': beschreibung,
             'Images': images,
             'Verfuegbar': verfuegbar,
+            'Reservierbar': reservierbar,
             'Filter': filter,
             'Filter2': filter2,
             'Filter3': filter3,
@@ -840,6 +844,7 @@ def update_item_next_appointment(item_id, appointment_data):
         
         next_appointment = {
             'date': appointment_date,
+            'end_date': appointment_data.get('end_date', appointment_date),
             'start_period': appointment_data['start_period'],
             'end_period': appointment_data['end_period'],
             'user': appointment_data['user'],

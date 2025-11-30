@@ -65,6 +65,12 @@
         document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
         document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
 
+        // Set reservable status (default to true if undefined)
+        const reservierbarCheckbox = document.getElementById('edit-reservierbar');
+        if (reservierbarCheckbox) {
+            reservierbarCheckbox.checked = item.Reservierbar !== false;
+        }
+
         // Load location options
         loadLocationOptions();
 

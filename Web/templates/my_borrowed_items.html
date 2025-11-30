@@ -323,9 +323,16 @@
                             {% set start_date = item.AppointmentData.start %}
                             {% set end_date = item.AppointmentData.end %}
                             <p class="appointment-date">
-                                {% if start_date %}{{ start_date.strftime('%d.%m.%Y') }}{% else %}Unbekannt{% endif %}
                                 {% if item.AppointmentData.period %}
+                                    {% if start_date %}{{ start_date.strftime('%d.%m.%Y') }}{% else %}Unbekannt{% endif %}
                                     <span class="appointment-period">{{ item.AppointmentData.period }}. Stunde</span>
+                                {% else %}
+                                    {% if start_date and end_date and start_date.date() != end_date.date() %}
+                                        {{ start_date.strftime('%d.%m.%Y') }} - {{ end_date.strftime('%d.%m.%Y') }}
+                                        <span class="appointment-period">Mehrtägig</span>
+                                    {% else %}
+                                        {% if start_date %}{{ start_date.strftime('%d.%m.%Y') }}{% else %}Unbekannt{% endif %}
+                                    {% endif %}
                                 {% endif %}
                             </p>
                             {% if item.AppointmentData.notes %}

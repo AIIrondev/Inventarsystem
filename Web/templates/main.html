@@ -375,8 +375,18 @@
                 <input type="hidden" id="schedule-item-id" name="item_id">
                 
                 <div class="form-group">
-                    <label for="schedule-date">Datum:</label>
+                    <label for="schedule-date">Startdatum:</label>
                     <input type="date" id="schedule-date" name="schedule_date" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="schedule-multi-day" style="display:inline-block; width:auto; margin-right:10px;">Mehrtägig:</label>
+                    <input type="checkbox" id="schedule-multi-day" name="is_multi_day" style="width:auto;">
+                </div>
+
+                <div class="form-group" id="schedule-end-date-group" style="display:none;">
+                    <label for="schedule-end-date">Enddatum:</label>
+                    <input type="date" id="schedule-end-date" name="schedule_end_date">
                 </div>
                 
                 <div class="form-group">
@@ -824,7 +834,7 @@
                                 :
                                     `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
-                                <button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                                ${item.Reservierbar !== false ? `<button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                                 <button class="quick-details-button" type="button" onclick="openItemQuick('${item._id}')">Details</button>
                             </div>
                         `;
@@ -1300,7 +1310,7 @@
                     </form>`
                     : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                 }
-                <button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>
+                ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                 <button type="button" class="close-modal secondary-close" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
             </div>
         `;
@@ -2085,6 +2095,9 @@
         
         const itemIdField = document.getElementById('schedule-item-id');
         const dateField = document.getElementById('schedule-date');
+        const endDateField = document.getElementById('schedule-end-date');
+        const multiDayCheckbox = document.getElementById('schedule-multi-day');
+        const endDateGroup = document.getElementById('schedule-end-date-group');
         const notesField = document.getElementById('schedule-notes');
         const startPeriodField = document.getElementById('schedule-start-period');
         const endPeriodField = document.getElementById('schedule-end-period');
@@ -2096,11 +2109,30 @@
             const today = new Date().toISOString().split('T')[0];
             dateField.value = today;
         }
+
+        // Reset multi-day fields
+        if (multiDayCheckbox) {
+            multiDayCheckbox.checked = false;
+            multiDayCheckbox.onchange = function() {
+                if (endDateGroup) {
+                    endDateGroup.style.display = this.checked ? 'block' : 'none';
+                    if (endDateField) {
+                        endDateField.required = this.checked;
+                        if (this.checked && !endDateField.value) {
+                            endDateField.value = dateField.value;
+                        }
+                    }
+                }
+            };
+            // Trigger change to set initial state
+            multiDayCheckbox.dispatchEvent(new Event('change'));
+        }
         
         // Clear form
         if (notesField) notesField.value = '';
         if (startPeriodField) startPeriodField.value = '';
         if (endPeriodField) endPeriodField.value = '';
+        if (endDateField) endDateField.value = '';
         
         scheduleModal.style.display = 'block';
     }
