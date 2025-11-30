@@ -1270,13 +1270,19 @@
                 <div class="detail-group full-width" style="margin-top:12px;">
                     <div class="detail-label" style="font-weight:600; color:#374151;">Geplante Ausleihen</div>
                     <div class="detail-value">
-                        <button id="toggle-bookings" class="filter-toggle" style="margin-bottom:8px; padding:8px 12px; border-radius:8px;">Anzeigen / Verbergen</button>
-                        <div id="bookings-panel" style="display:none; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#fbfbfd; box-shadow: 0 1px 1px rgba(0,0,0,0.03);">
-                            <div id="bookings-list"></div>
-                            <div id="bookings-pagination" style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-                                <button id="bookings-prev" class="filter-toggle" style="padding:6px 10px; border-radius:8px;">Vorherige</button>
-                                <span id="bookings-page-info" style="min-width:120px;"></span>
-                                <button id="bookings-next" class="filter-toggle" style="padding:6px 10px; border-radius:8px;">Nächste</button>
+                        <button id="toggle-bookings" class="filter-toggle" style="margin-bottom:8px; padding:8px 12px; border-radius:8px;">Kalender anzeigen / verbergen</button>
+                        <div id="bookings-panel" style="display:none; margin-top:10px;">
+                            <div class="calendar-wrapper">
+                                <div class="calendar-header">
+                                    <button id="cal-prev">&lt;</button>
+                                    <span id="cal-month-year"></span>
+                                    <button id="cal-next">&gt;</button>
+                                </div>
+                                <div id="calendar-grid" class="calendar-grid"></div>
+                            </div>
+                            <div id="calendar-day-details" class="calendar-day-details">
+                                <h5 id="cal-details-date"></h5>
+                                <div id="cal-details-list"></div>
                             </div>
                         </div>
                     </div>
@@ -1334,38 +1340,107 @@
             }
         };
 
-        // Planned bookings panel (user, read-only)
+        // Planned bookings panel (Calendar Logic)
         const toggleBtn = document.getElementById('toggle-bookings');
         const panel = document.getElementById('bookings-panel');
-        const listEl = document.getElementById('bookings-list');
-        const prevBtn = document.getElementById('bookings-prev');
-        const nextBtn = document.getElementById('bookings-next');
-        const pageInfo = document.getElementById('bookings-page-info');
-        let bookings = [];
-        let page = 1;
-        const pageSize = 7;
+        const calGrid = document.getElementById('calendar-grid');
+        const calMonthYear = document.getElementById('cal-month-year');
+        const calPrev = document.getElementById('cal-prev');
+        const calNext = document.getElementById('cal-next');
+        const detailsPanel = document.getElementById('calendar-day-details');
+        const detailsDate = document.getElementById('cal-details-date');
+        const detailsList = document.getElementById('cal-details-list');
 
-        function renderPage(){
-            const total = bookings.length;
-            const totalPages = Math.max(1, Math.ceil(total / pageSize));
-            if(page > totalPages) page = totalPages;
-            const start = (page - 1) * pageSize;
-            const slice = bookings.slice(start, start + pageSize);
-            listEl.innerHTML = slice.map(b=>{
-                const startStr = b.start ? new Date(b.start).toLocaleString() : '';
-                const endStr = b.end ? new Date(b.end).toLocaleString() : '';
-                const periodStr = b.period != null ? `Stunde: ${b.period}` : '';
-                return `<div style="padding:8px 10px; border-bottom:1px solid #eee;">
-                    <div><strong>${periodStr}</strong></div>
-                    <div><strong>Von:</strong> ${startStr} ${endStr ? ` | <strong>Bis:</strong> ${endStr}` : ''}</div>
+        let bookings = [];
+        let currentDate = new Date();
+        let displayedMonth = currentDate.getMonth();
+        let displayedYear = currentDate.getFullYear();
+
+        function renderCalendar() {
+            calGrid.innerHTML = '';
+            const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            calMonthYear.textContent = `${monthNames[displayedMonth]} ${displayedYear}`;
+
+            // Headers
+            const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+            days.forEach(day => {
+                const div = document.createElement('div');
+                div.className = 'cal-cell header';
+                div.textContent = day;
+                calGrid.appendChild(div);
+            });
+
+            const firstDay = new Date(displayedYear, displayedMonth, 1);
+            const lastDay = new Date(displayedYear, displayedMonth + 1, 0);
+            
+            // Adjust for Monday start (0 = Sunday, 1 = Monday)
+            let startDayIndex = firstDay.getDay() - 1;
+            if (startDayIndex === -1) startDayIndex = 6;
+
+            // Empty cells before first day
+            for (let i = 0; i < startDayIndex; i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell empty';
+                calGrid.appendChild(div);
+            }
+
+            // Days
+            for (let i = 1; i <= lastDay.getDate(); i++) {
+                const div = document.createElement('div');
+                div.className = 'cal-cell';
+                div.textContent = i;
+                
+                const currentDayDate = new Date(displayedYear, displayedMonth, i);
+                const today = new Date();
+                if (currentDayDate.toDateString() === today.toDateString()) {
+                    div.classList.add('today');
+                }
+
+                // Check for bookings
+                const dayBookings = bookings.filter(b => {
+                    const checkDate = new Date(displayedYear, displayedMonth, i);
+                    checkDate.setHours(0,0,0,0);
+                    
+                    const bStart = new Date(b.start);
+                    bStart.setHours(0,0,0,0);
+                    
+                    // If end is present use it, otherwise assume single day
+                    let bEnd = b.end ? new Date(b.end) : new Date(bStart);
+                    bEnd.setHours(0,0,0,0);
+
+                    return checkDate >= bStart && checkDate <= bEnd;
+                });
+
+                if (dayBookings.length > 0) {
+                    div.classList.add('has-booking');
+                    div.onclick = () => showDayDetails(i, dayBookings);
+                }
+
+                calGrid.appendChild(div);
+            }
+        }
+
+        function showDayDetails(day, dayBookings) {
+            // Remove selected class from others
+            document.querySelectorAll('.cal-cell').forEach(c => c.classList.remove('selected'));
+            
+            detailsPanel.style.display = 'block';
+            detailsDate.textContent = `${day}.${displayedMonth + 1}.${displayedYear}`;
+            
+            if (dayBookings.length === 0) {
+                detailsList.innerHTML = '<div>Keine Buchungen</div>';
+                return;
+            }
+
+            detailsList.innerHTML = dayBookings.map(b => {
+                const startStr = new Date(b.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const endStr = b.end ? new Date(b.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                const periodStr = b.period ? ` (${b.period}. Std)` : '';
+                return `<div class="cal-booking-item">
+                    <strong>${startStr}${endStr ? ' - ' + endStr : ''}</strong>${periodStr}
+                    ${b.user ? '<br><small>Benutzer: ' + b.user + '</small>' : ''}
                 </div>`;
             }).join('');
-            if(slice.length === 0){
-                listEl.innerHTML = '<div style="padding:8px; color:#666;">Keine geplanten Ausleihen vorhanden.</div>';
-            }
-            pageInfo.textContent = `Seite ${page} / ${Math.max(1, Math.ceil(total / pageSize))}`;
-            prevBtn.disabled = page <= 1;
-            nextBtn.disabled = page >= Math.ceil(total / pageSize);
         }
 
         toggleBtn?.addEventListener('click', ()=>{
@@ -1374,18 +1449,43 @@
                 if(bookings.length === 0){
                     fetch(`/get_planned_bookings_public/${item._id}`)
                         .then(r=>r.json())
-                        .then(d=>{ if(d && d.ok && Array.isArray(d.bookings)){ bookings = d.bookings; page = 1; renderPage(); } else { listEl.innerHTML = '<div style="padding:8px; color:#a00;">Fehler beim Laden.</div>'; } })
-                        .catch(()=>{ listEl.innerHTML = '<div style="padding:8px; color:#a00;">Fehler beim Laden.</div>'; });
+                        .then(d=>{ 
+                            if(d && d.ok && Array.isArray(d.bookings)){ 
+                                bookings = d.bookings; 
+                                renderCalendar(); 
+                            } else { 
+                                calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; 
+                            } 
+                        })
+                        .catch(()=>{ calGrid.innerHTML = '<div style="padding:10px; grid-column:1/-1;">Fehler beim Laden.</div>'; });
                 } else {
-                    renderPage();
+                    renderCalendar();
                 }
             } else {
                 panel.style.display = 'none';
+                detailsPanel.style.display = 'none';
             }
         });
 
-        prevBtn?.addEventListener('click', ()=>{ if(page>1){ page--; renderPage(); } });
-        nextBtn?.addEventListener('click', ()=>{ const max = Math.ceil(bookings.length / pageSize); if(page<max){ page++; renderPage(); } });
+        calPrev?.addEventListener('click', () => {
+            displayedMonth--;
+            if (displayedMonth < 0) {
+                displayedMonth = 11;
+                displayedYear--;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
+
+        calNext?.addEventListener('click', () => {
+            displayedMonth++;
+            if (displayedMonth > 11) {
+                displayedMonth = 0;
+                displayedYear++;
+            }
+            detailsPanel.style.display = 'none';
+            renderCalendar();
+        });
 
         // Availability checker (user)
         const availDate = document.getElementById('avail-date');
@@ -3189,6 +3289,153 @@
     .quick-details-button:hover { background:#5a6268; }
     .inline-action-form { display:inline-block; margin:0; }
     .modal-action-bar .bookmark-btn { font-size:1.6rem; }
+
+    /* Calendar Styles - Optimized & Mobile Friendly */
+    .calendar-wrapper {
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-top: 10px;
+    }
+    
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px;
+        background-color: #fff;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .calendar-header button {
+        background: #f3f4f6;
+        border: none;
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-weight: bold;
+        color: #374151;
+    }
+    
+    .calendar-header button:hover { background-color: #e5e7eb; }
+    .calendar-header span { font-weight: 600; font-size: 1.1rem; color: #111827; }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background-color: #fff;
+        padding: 10px;
+        gap: 5px;
+    }
+    
+    .cal-cell {
+        aspect-ratio: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 8px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.2s;
+        color: #374151;
+        position: relative;
+    }
+    
+    .cal-cell.header {
+        aspect-ratio: auto;
+        height: 30px;
+        justify-content: center;
+        padding: 0;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #9ca3af;
+        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .cal-cell:not(.header):not(.empty):hover { 
+        background-color: #f3f4f6; 
+    }
+    
+    .cal-cell.empty { cursor: default; }
+    
+    .cal-cell.today { 
+        background-color: #eff6ff;
+        color: #2563eb;
+        font-weight: bold;
+    }
+    
+    .cal-cell.selected {
+        background-color: #2563eb !important;
+        color: #fff !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+    }
+    
+    .cal-cell.has-booking::after {
+        content: '';
+        position: absolute;
+        bottom: 6px;
+        width: 6px;
+        height: 6px;
+        background-color: #ef4444;
+        border-radius: 50%;
+    }
+    
+    .cal-cell.selected.has-booking::after {
+        background-color: #fff;
+    }
+
+    .calendar-day-details {
+        border-top: 1px solid #f3f4f6;
+        padding: 15px;
+        background-color: #f9fafb;
+        display: none;
+        animation: slideDown 0.2s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .calendar-day-details h5 { 
+        margin: 0 0 12px 0; 
+        font-size: 1rem; 
+        font-weight: 600;
+        color: #111827; 
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .cal-booking-item {
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #2563eb;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 480px) {
+        .calendar-grid { gap: 2px; padding: 5px; }
+        .cal-cell { font-size: 0.85rem; border-radius: 6px; }
+        .calendar-header { padding: 10px; }
+        .calendar-header span { font-size: 1rem; }
+    }
 </style>
 <script>
 let favoritesOnly = false;
