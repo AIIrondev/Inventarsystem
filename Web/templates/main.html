@@ -499,25 +499,11 @@
     });
 
     // Return preferred primary and fallback image URLs based on extension
-    // - Prefer JPG as primary when original is PNG (fallback to PNG)
-    // - If already JPG/JPEG, fallback tries PNG
-    // - Otherwise, primary and fallback are the same
+    // Simplified to trust the URL provided by the backend
     function getImageSrc(url) {
         try {
             if (!url || typeof url !== 'string') {
                 return { primary: url, fallback: url };
-            }
-            // Preserve query/hash when swapping extensions
-            const [pathPart, suffix] = url.split(/([?#].*)/);
-            const tail = suffix || '';
-            const lower = pathPart.toLowerCase();
-            if (lower.endsWith('.png')) {
-                const jpg = pathPart.replace(/\.png$/i, '.jpg') + tail;
-                return { primary: jpg, fallback: url };
-            }
-            if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
-                const png = pathPart.replace(/\.(jpg|jpeg)$/i, '.png') + tail;
-                return { primary: url, fallback: png };
             }
             return { primary: url, fallback: url };
         } catch (e) {

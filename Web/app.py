@@ -1456,34 +1456,35 @@ def upload_item():
                     optimization_result = generate_optimized_versions(saved_filename, max_original_width=500, target_size_kb=80)
                 
                 # Log file size after optimization
-                optimized_name = os.path.splitext(saved_filename)[0] + '.webp'
-                optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
-                
-                if os.path.exists(optimized_path):
-                    optimized_size = os.path.getsize(optimized_path)
-                    reduction = (1 - (optimized_size / original_size)) * 100 if original_size > 0 else 0
+                if optimization_result['success'] and optimization_result['original']:
+                    optimized_name = optimization_result['original']
+                    optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
                     
-                    # Get optimized dimensions
-                    optimized_dimensions = "unknown"
-                    try:
-                        with Image.open(optimized_path) as img:
-                            optimized_dimensions = f"{img.width}x{img.height}"
-                    except Exception as dim_err:
-                        app.logger.warning(f"{image_log_prefix} Could not get optimized dimensions: {str(dim_err)}")
+                    if os.path.exists(optimized_path):
+                        optimized_size = os.path.getsize(optimized_path)
+                        reduction = (1 - (optimized_size / original_size)) * 100 if original_size > 0 else 0
                         
-                    app.logger.info(
-                        f"{image_log_prefix} Optimization results:\n"
-                        f"  File: {saved_filename} → {optimized_name}\n"
-                        f"  Size: {original_size/1024:.1f}KB → {optimized_size/1024:.1f}KB ({reduction:.1f}% reduction)\n"
-                        f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
-                    )
-                    optimization_success = True
-                    
-                    # If optimization created a new file (WebP), use that as the main file
-                    if optimized_name != saved_filename:
+                        # Get optimized dimensions
+                        optimized_dimensions = "unknown"
+                        try:
+                            with Image.open(optimized_path) as img:
+                                optimized_dimensions = f"{img.width}x{img.height}"
+                        except Exception as dim_err:
+                            app.logger.warning(f"{image_log_prefix} Could not get optimized dimensions: {str(dim_err)}")
+                            
+                        app.logger.info(
+                            f"{image_log_prefix} Optimization results:\n"
+                            f"  File: {saved_filename} → {optimized_name}\n"
+                            f"  Size: {original_size/1024:.1f}KB → {optimized_size/1024:.1f}KB ({reduction:.1f}% reduction)\n"
+                            f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
+                        )
+                        
+                        # Use the optimized filename
                         saved_filename = optimized_name
+                    else:
+                        app.logger.warning(f"{image_log_prefix} Optimized file reported success but not found: {optimized_path}")
                 else:
-                    app.logger.warning(f"{image_log_prefix} Optimized file not found: {optimized_path}")
+                    app.logger.warning(f"{image_log_prefix} Optimization failed or returned no file")
             except Exception as e:
                 app.logger.error(f"{image_log_prefix} Optimization failed: {str(e)}")
                 traceback.print_exc()
