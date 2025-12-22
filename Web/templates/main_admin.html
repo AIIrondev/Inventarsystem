@@ -2455,6 +2455,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 if (parsedFilters.filter2) activeFilters.filter2 = parsedFilters.filter2;
                 if (parsedFilters.filter3) activeFilters.filter3 = parsedFilters.filter3;
                 
+                // Update UI to show selected filters
+                updateSelectedFilters(1);
+                updateSelectedFilters(2);
+                updateSelectedFilters(3);
+                
                 // We'll rebuild Filter 3 options after items are loaded
             } catch (e) {
                 console.error("Error loading saved filters:", e);
