@@ -1366,19 +1366,21 @@ def upload_item():
                         
                         # Try one last method - save as a different format
                         try:
-                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting last resort conversion to JPG")
+                            app.logger.info(f"PNG DEBUG: {image_log_prefix} Attempting last resort conversion to WebP")
                             image.seek(0)
                             
-                            # Try to convert PNG to JPG as a last resort
+                            # Try to convert PNG to WebP as a last resort
                             with Image.open(image) as img:
-                                rgb_img = img.convert('RGB')
-                                jpg_path = os.path.splitext(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))[0] + '.jpg'
-                                rgb_img.save(jpg_path, 'JPEG')
-                                app.logger.info(f"PNG DEBUG: {image_log_prefix} Successfully saved as JPG instead: {jpg_path}")
+                                # Ensure RGBA for transparency
+                                if img.mode != 'RGBA':
+                                    img = img.convert('RGBA')
+                                webp_path = os.path.splitext(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))[0] + '.webp'
+                                img.save(webp_path, 'WEBP')
+                                app.logger.info(f"PNG DEBUG: {image_log_prefix} Successfully saved as WebP instead: {webp_path}")
                                 # Update the saved_filename to reflect the new extension
-                                saved_filename = os.path.basename(jpg_path)
-                        except Exception as jpg_err:
-                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Final JPG conversion failed: {str(jpg_err)}")
+                                saved_filename = os.path.basename(webp_path)
+                        except Exception as webp_err:
+                            app.logger.error(f"PNG DEBUG: {image_log_prefix} Final WebP conversion failed: {str(webp_err)}")
                             
                         traceback.print_exc()
                     error_count += 1
@@ -1458,7 +1460,7 @@ def upload_item():
                     optimization_result = generate_optimized_versions(saved_filename, max_original_width=500, target_size_kb=80)
                 
                 # Log file size after optimization
-                optimized_name = os.path.splitext(saved_filename)[0] + '.jpg'
+                optimized_name = os.path.splitext(saved_filename)[0] + '.webp'
                 optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_name)
                 
                 if os.path.exists(optimized_path):
@@ -1480,6 +1482,10 @@ def upload_item():
                         f"  Dimensions: {original_dimensions} → {optimized_dimensions}"
                     )
                     optimization_success = True
+                    
+                    # If optimization created a new file (WebP), use that as the main file
+                    if optimized_name != saved_filename:
+                        saved_filename = optimized_name
                 else:
                     app.logger.warning(f"{image_log_prefix} Optimized file not found: {optimized_path}")
             except Exception as e:
@@ -1490,18 +1496,18 @@ def upload_item():
                 try:
                     app.logger.info(f"{image_log_prefix} Attempting simplified thumbnail generation as fallback")
                     # Simply create thumbnails directly from original without full optimization
-                    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], os.path.splitext(saved_filename)[0] + '_thumb.jpg')
-                    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], os.path.splitext(saved_filename)[0] + '_preview.jpg')
+                    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], os.path.splitext(saved_filename)[0] + '_thumb.webp')
+                    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], os.path.splitext(saved_filename)[0] + '_preview.webp')
                     
                     with Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)) as img:
                         # Make a small thumbnail
                         img.thumbnail((150, 150))
-                        img.save(thumbnail_path, 'JPEG', quality=85)
+                        img.save(thumbnail_path, 'WEBP', quality=85)
                         
                         # Make a medium preview
                         img = Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
                         img.thumbnail((300, 300))
-                        img.save(preview_path, 'JPEG', quality=85)
+                        img.save(preview_path, 'WEBP', quality=85)
                         
                     app.logger.info(f"{image_log_prefix} Fallback thumbnail generation successful")
                 except Exception as fallback_err:
@@ -1538,6 +1544,7 @@ def upload_item():
             name_part, ext_part = os.path.splitext(dup_img)
             possible_filenames = [
                 dup_img,
+                f"{name_part}.webp", # Check WebP first
                 f"{name_part}.jpg",  # In case it was converted to JPG
                 f"{name_part}.png",  # In case it was saved as PNG
             ]
@@ -4084,7 +4091,7 @@ def is_video_file(filename):
 
 def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
     """
-    Create a thumbnail for an image file, always converting to JPG format.
+    Create a thumbnail for an image file, always converting to WebP format.
     
     Args:
         image_path (str): Path to the original image
@@ -4102,66 +4109,11 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
     try:
         if is_png and log_prefix:
             app.logger.info(f"{log_prefix} Creating thumbnail from PNG: {image_path} -> {thumbnail_path}")
-            # Check the PNG file header directly
-            try:
-                with open(image_path, 'rb') as f:
-                    header_bytes = f.read(16)
-                    png_signature = b'\x89PNG\r\n\x1a\n'
-                    is_valid_signature = header_bytes.startswith(png_signature)
-                    header_hex = ' '.join([f"{b:02x}" for b in header_bytes[:16]])
-                    app.logger.info(f"{log_prefix} PNG file header: {header_hex}")
-                    app.logger.info(f"{log_prefix} PNG has valid signature: {is_valid_signature}")
-            except Exception as header_err:
-                app.logger.error(f"{log_prefix} Error checking PNG header: {str(header_err)}")
             
         try:
             with Image.open(image_path) as img:
                 if is_png and log_prefix:
                     app.logger.info(f"{log_prefix} PNG opened successfully: Format={img.format}, Mode={img.mode}, Size={img.size}")
-                    app.logger.info(f"{log_prefix} PNG bands: {img.getbands()}")
-                
-                # Always convert to RGB for JPG output
-                if img.mode in ('RGBA', 'LA', 'P'):
-                    # Create a white background
-                    if is_png and log_prefix:
-                        app.logger.info(f"{log_prefix} Converting PNG from {img.mode} to RGB with background")
-                        
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode == 'P':
-                        if is_png and log_prefix:
-                            app.logger.info(f"{log_prefix} Converting PNG from P to RGBA first")
-                            # Check if palette has transparency
-                            has_transparency = img.info.get('transparency') is not None
-                            app.logger.info(f"{log_prefix} PNG palette has transparency: {has_transparency}")
-                        img = img.convert('RGBA')
-                    
-                    # For PNG files, let's add extra transparency debug
-                    if is_png and log_prefix:
-                        if img.mode == 'RGBA':
-                            # Check if image actually has transparency
-                            alpha = img.split()[3]
-                            has_transparency = alpha.getextrema()[0] < 255
-                            app.logger.info(f"{log_prefix} PNG has transparency: {has_transparency}")
-                            
-                    # Do the paste with alpha mask if available
-                    if img.mode == 'RGBA':
-                        alpha_channel = img.split()[3]
-                        if is_png and log_prefix:
-                            app.logger.info(f"{log_prefix} Using alpha channel for PNG composite")
-                        background.paste(img, mask=alpha_channel)
-                    else:
-                        if is_png and log_prefix:
-                            app.logger.info(f"{log_prefix} No alpha channel for PNG composite")
-                        background.paste(img)
-                        
-                    img = background
-                    
-                    if is_png and log_prefix:
-                        app.logger.info(f"{log_prefix} PNG background compositing completed")
-                elif img.mode != 'RGB':
-                    if is_png and log_prefix:
-                        app.logger.info(f"{log_prefix} Converting PNG from {img.mode} to RGB directly")
-                    img = img.convert('RGB')
                 
                 # Create thumbnail with proper aspect ratio
                 if is_png and log_prefix:
@@ -4176,47 +4128,44 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
                     img = img.resize((min(img.width, size[0]), min(img.height, size[1])), Image.Resampling.BILINEAR)
                 
                 # Create a new image with the exact size (add padding if needed)
-                thumb = Image.new('RGB', size, (255, 255, 255))
+                # Use RGBA for transparency support in WebP
+                thumb = Image.new('RGBA', size, (255, 255, 255, 0))
                 
                 # Calculate position to center the image
                 x = (size[0] - img.size[0]) // 2
                 y = (size[1] - img.size[1]) // 2
                 
-                thumb.paste(img, (x, y))
+                # Convert image to RGBA if it's not already
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                thumb.paste(img, (x, y), img)
 
-                # Ensure the thumbnail path ends with .jpg
-                if not thumbnail_path.lower().endswith('.jpg'):
-                    thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
+                # Ensure the thumbnail path ends with .webp
+                if not thumbnail_path.lower().endswith('.webp'):
+                    thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.webp'
 
                 # Ensure target directory exists
                 os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
 
                 # Save with optimization
-                thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+                thumb.save(thumbnail_path, 'WEBP', quality=85, method=6)
                 return True
         except Exception as img_err:
             # Special handling for corrupted PNGs
             if is_png and log_prefix:
                 app.logger.error(f"{log_prefix} Error opening PNG with PIL: {str(img_err)}")
-                app.logger.error(f"{log_prefix} Error type: {type(img_err).__name__}")
-                
-                # Log traceback for PNG errors
-                import io
-                tb_output = io.StringIO()
-                traceback.print_exc(file=tb_output)
-                app.logger.error(f"{log_prefix} Image open traceback:\n{tb_output.getvalue()}")
                 
                 # Try to fix the PNG if possible
                 app.logger.info(f"{log_prefix} Attempting to fix corrupt PNG")
                 try:
                     # Create a placeholder thumbnail since we can't process this PNG
-                    thumb = Image.new('RGB', size, (200, 200, 200))
+                    thumb = Image.new('RGBA', size, (200, 200, 200, 255))
                     # Add text indicating error
-                    from PIL import ImageDraw, ImageFont
+                    from PIL import ImageDraw
                     draw = ImageDraw.Draw(thumb)
                     text = "PNG Error"
-                    # Use default font since we can't rely on specific fonts
-                    draw.text((size[0]//4, size[1]//2), text, fill=(0, 0, 0))
+                    draw.text((size[0]//4, size[1]//2), text, fill=(0, 0, 0, 255))
                     # Continue with saving this placeholder
                     app.logger.info(f"{log_prefix} Created placeholder for corrupt PNG")
                 except Exception as fix_err:
@@ -4225,11 +4174,12 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
             else:
                 # For non-PNG files, just propagate the error
                 raise
-            if not thumbnail_path.lower().endswith('.jpg'):
-                thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.jpg'
+            
+            if not thumbnail_path.lower().endswith('.webp'):
+                thumbnail_path = os.path.splitext(thumbnail_path)[0] + '.webp'
             os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
             # Save with optimization
-            thumb.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+            thumb.save(thumbnail_path, 'WEBP', quality=85, method=6)
             return True
             
     except Exception as e:
@@ -4285,7 +4235,7 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
 def generate_optimized_versions(filename, max_original_width=500, target_size_kb=80, debug_prefix=""):
     """
     Generate thumbnail and preview versions of uploaded files.
-    Convert all image files to JPG format.
+    Convert all image files to WebP format.
     Also resizes and compresses the original image to save storage space.
     
     Args:
@@ -4316,15 +4266,17 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     # Generate file paths
     name_part, ext = os.path.splitext(filename)
     ext = ext.lower()
-    is_jpg_ext = ext in ('.jpg', '.jpeg')
-    # If already a JPG, keep filename to avoid same-file writes
-    converted_filename = filename if is_jpg_ext else f"{name_part}.jpg"
+    is_webp_ext = ext == '.webp'
+    
+    # If already a WebP, keep filename to avoid same-file writes
+    converted_filename = filename if is_webp_ext else f"{name_part}.webp"
     converted_path = os.path.join(app.config['UPLOAD_FOLDER'], converted_filename)
-    thumbnail_filename = f"{name_part}_thumb.jpg"
-    preview_filename = f"{name_part}_preview.jpg"
+    thumbnail_filename = f"{name_part}_thumb.webp"
+    preview_filename = f"{name_part}_preview.webp"
     
     thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
     preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    
     # Fallback to production directories if dev ones missing
     if not os.path.exists(thumbnail_path):
         prod_thumbs = "/var/Inventarsystem/Web/thumbnails"
@@ -4347,7 +4299,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
             preview_path = os.path.join(prod_previews, preview_filename)
     
     result = {
-        'original': converted_filename,  # Use JPG name; if already JPG, this equals input
+        'original': converted_filename,  # Use WebP name; if already WebP, this equals input
         'thumbnail': None,
         'preview': None,
         'is_image': False,
@@ -4470,234 +4422,49 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                             app.logger.error(f"{debug_msg} Error type: {type(e).__name__}")
                         # Continue without resizing
                 
-                # Handle color mode conversion
-                try:
-                    original_mode = img.mode
-                    if img.mode in ('RGBA', 'LA', 'P'):
-                        app.logger.info(f"{log_prefix} Converting from {img.mode} to RGB")
-                        
-                        if is_png:
-                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                            app.logger.info(f"{debug_msg} PNG has transparency (mode: {img.mode})")
-                            
-                            # Special handling for PNG with transparency
-                            if img.mode == 'RGBA' or img.mode == 'LA':
-                                app.logger.info(f"{debug_msg} Preserving PNG transparency during conversion")
-                                # Try to preserve alpha during conversion by using a white background
-                                background = Image.new('RGB', img.size, (255, 255, 255))
-                                if img.mode == 'P':
-                                    app.logger.info(f"{debug_msg} Converting PNG from P to RGBA first")
-                                    img = img.convert('RGBA')
-                                
-                                # Get alpha channel if available
-                                alpha = None
-                                if img.mode == 'RGBA':
-                                    alpha = img.split()[3]
-                                elif img.mode == 'LA':
-                                    alpha = img.split()[1]
-                                
-                                # Paste with alpha mask
-                                if alpha:
-                                    app.logger.info(f"{debug_msg} PNG using alpha channel for paste")
-                                    background.paste(img, mask=alpha)
-                                else:
-                                    app.logger.info(f"{debug_msg} PNG no alpha channel found, using regular paste")
-                                    background.paste(img)
-                                
-                                img = background
-                            else:
-                                # For other modes like P
-                                app.logger.info(f"{debug_msg} Standard conversion for PNG mode {img.mode}")
-                                img = img.convert('RGB')
-                        else:
-                            # Standard conversion for non-PNG files
-                            background = Image.new('RGB', img.size, (255, 255, 255))
-                            if img.mode == 'P':
-                                img = img.convert('RGBA')
-                            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                            img = background
-                    elif img.mode != 'RGB':
-                        app.logger.info(f"{log_prefix} Converting from {img.mode} to RGB")
-                        if is_png:
-                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                            app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB")
-                        img = img.convert('RGB')
-                except Exception as e:
-                    app.logger.error(f"{log_prefix} Mode conversion failed: {str(e)}")
-                    if is_png:
-                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                        app.logger.error(f"{debug_msg} PNG mode conversion failed: {str(e)}")
-                        app.logger.error(f"{debug_msg} Error type: {type(e).__name__}")
-                        traceback.print_exc()
-                    
-                    # Try a simpler conversion method as fallback
-                    try:
-                        app.logger.info(f"{log_prefix} Attempting simple RGB conversion as fallback")
-                        img = img.convert('RGB')
-                        if is_png:
-                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                            app.logger.info(f"{debug_msg} Simple PNG RGB conversion fallback")
-                    except Exception as conv_err:
-                        if is_png:
-                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                            app.logger.error(f"{debug_msg} All PNG conversion methods failed: {str(conv_err)}")
-                        # If conversion fails entirely, we'll save without conversion
-                        pass
-                
-                # Save as JPG with compression to target file size
+                # Save as WebP with compression to target file size
                 try:
                     # Get optimal quality setting to reach target size
-                    quality = get_optimal_image_quality(img, target_size_kb=target_size_kb)
+                    # For WebP we can use a fixed quality or adapt it
+                    quality = 80 # Default quality for WebP
                     app.logger.info(f"{log_prefix} Using quality setting: {quality}")
                     
-                    if is_png:
-                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                        app.logger.info(f"{debug_msg} Converting PNG to JPG with quality: {quality}")
-                        app.logger.info(f"{debug_msg} PNG details before conversion - Mode: {img.mode}, Size: {img.size}, Bands: {img.getbands()}")
-                        
-                        # Special handling for PNG conversion
-                        try:
-                            # For PNGs, we might want to try a special save method first
-                            temp_converted_path = f"{converted_path}.temp"
-                            
-                            # Additional debugging for problem PNGs
-                            try:
-                                # Check for transparency issues
-                                has_transparency = False
-                                if img.mode == 'RGBA':
-                                    alpha = img.split()[3]
-                                    has_transparency = alpha.getextrema()[0] < 255
-                                    app.logger.info(f"{debug_msg} PNG has alpha transparency: {has_transparency}")
-                                elif img.mode == 'P' and 'transparency' in img.info:
-                                    has_transparency = True
-                                    app.logger.info(f"{debug_msg} PNG has palette transparency")
-                                    
-                                if has_transparency:
-                                    app.logger.info(f"{debug_msg} Handling PNG transparency for conversion")
-                                    # Create a white background layer first
-                                    background = Image.new('RGB', img.size, (255, 255, 255))
-                                    if img.mode == 'P':
-                                        img = img.convert('RGBA')
-                                    
-                                    # Composite with alpha mask if available
-                                    alpha_mask = None
-                                    if img.mode == 'RGBA':
-                                        alpha_mask = img.split()[3]
-                                    
-                                    background.paste(img, mask=alpha_mask)
-                                    img = background
-                                    app.logger.info(f"{debug_msg} PNG transparency handled, now in mode: {img.mode}")
-                            except Exception as trans_err:
-                                app.logger.error(f"{debug_msg} Error handling PNG transparency: {str(trans_err)}")
-                                # Continue with conversion anyway
-                            
-                            # Try to ensure we have RGB mode
-                            if img.mode != 'RGB':
-                                app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB before save")
-                                img = img.convert('RGB')
-                            
-                            # Save with high quality first to preserve details
-                            img.save(temp_converted_path, 'JPEG', quality=95, optimize=True)
-                            app.logger.info(f"{debug_msg} Initial PNG to JPG conversion successful")
-                            
-                            # Verify the temporary file
-                            if os.path.exists(temp_converted_path) and os.path.getsize(temp_converted_path) > 0:
-                                app.logger.info(f"{debug_msg} Temp JPG file size: {os.path.getsize(temp_converted_path)/1024:.1f}KB")
-                                
-                                # Now optimize the saved JPG to target size
-                                with Image.open(temp_converted_path) as temp_img:
-                                    temp_img.save(converted_path, 'JPEG', quality=quality, optimize=True)
-                                    
-                                # Remove temp file
-                                if os.path.exists(temp_converted_path):
-                                    os.remove(temp_converted_path)
-                                    
-                                app.logger.info(f"{debug_msg} PNG converted to JPG and optimized successfully: {os.path.getsize(converted_path)/1024:.1f}KB")
-                            else:
-                                app.logger.error(f"{debug_msg} Temp JPG file missing or zero size")
-                                raise Exception("Temporary conversion file missing or empty")
-                        except Exception as png_save_err:
-                            app.logger.error(f"{debug_msg} PNG special conversion failed: {str(png_save_err)}")
-                            app.logger.error(f"{debug_msg} Error type: {type(png_save_err).__name__}")
-                            
-                            # Log traceback for PNG errors
-                            import io
-                            tb_output = io.StringIO()
-                            traceback.print_exc(file=tb_output)
-                            app.logger.error(f"{debug_msg} PNG conversion traceback:\n{tb_output.getvalue()}")
-                            
-                            # Fall back to standard method
-                            app.logger.info(f"{debug_msg} Trying direct PNG to JPG conversion...")
-                            
-                            # Try to ensure we have RGB mode
-                            if img.mode != 'RGB':
-                                app.logger.info(f"{debug_msg} Converting PNG from {img.mode} to RGB for fallback")
-                                img = img.convert('RGB')
-                                
-                            img.save(converted_path, 'JPEG', quality=quality, optimize=True)
-                            app.logger.info(f"{debug_msg} Direct PNG to JPG conversion successful")
+                    # Standard save for WebP
+                    if not is_webp_ext:
+                        # Only create a new WebP if source wasn't already WebP
+                        img.save(converted_path, 'WEBP', quality=quality, method=6)
+                        app.logger.info(f"{log_prefix} Saved optimized WebP: {converted_path}")
                     else:
-                        # Standard save for non-PNG images
-                        if not is_jpg_ext:
-                            # Only create a new JPG if source wasn't already JPG
-                            img.save(converted_path, 'JPEG', quality=quality, optimize=True)
-                            app.logger.info(f"{log_prefix} Saved optimized JPG: {converted_path}")
-                        else:
-                            # Already a JPG: don't overwrite original; we'll use it for thumbs
-                            app.logger.info(f"{log_prefix} Original is already JPG; skip in-place re-save")
+                        # Already a WebP: don't overwrite original; we'll use it for thumbs
+                        app.logger.info(f"{log_prefix} Original is already WebP; skip in-place re-save")
                         
                 except Exception as save_err:
-                    app.logger.error(f"{log_prefix} Failed to save optimized JPG: {str(save_err)}")
-                    if is_png:
-                        debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                        app.logger.error(f"{debug_msg} Failed to save PNG as JPG: {str(save_err)}")
-                        app.logger.error(f"{debug_msg} Error type: {type(save_err).__name__}")
-                        
-                        # Log traceback for PNG errors
-                        import io
-                        tb_output = io.StringIO()
-                        traceback.print_exc(file=tb_output)
-                        app.logger.error(f"{debug_msg} PNG save traceback:\n{tb_output.getvalue()}")
-                        
-                        # Try a more direct approach for problematic PNGs
-                        try:
-                            app.logger.info(f"{debug_msg} Attempting last resort PNG conversion method...")
-                            # Try to ensure we have RGB mode
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-                            # Use lowest-level save method
-                            img.save(converted_path, 'JPEG', quality=85)
-                            app.logger.info(f"{debug_msg} Last resort PNG conversion successful")
-                        except Exception as final_err:
-                            app.logger.error(f"{debug_msg} All PNG conversion methods failed: {str(final_err)}")
-                            # Give up and let the code continue to next error handling step
+                    app.logger.error(f"{log_prefix} Failed to save optimized WebP: {str(save_err)}")
                     
-                    # Try with default quality as fallback (only when not already JPG)
+                    # Try with default quality as fallback (only when not already WebP)
                     try:
-                        if not is_jpg_ext:
+                        if not is_webp_ext:
                             app.logger.info(f"{log_prefix} Attempting save with default quality")
-                            img.save(converted_path, 'JPEG', quality=85)
-                            app.logger.info(f"{log_prefix} Saved JPG with default quality")
+                            img.save(converted_path, 'WEBP', quality=80, method=6)
+                            app.logger.info(f"{log_prefix} Saved WebP with default quality")
                         else:
-                            app.logger.info(f"{log_prefix} Skipping fallback save; original is JPG and won't be overwritten")
+                            app.logger.info(f"{log_prefix} Skipping fallback save; original is WebP and won't be overwritten")
                     except Exception as default_save_err:
-                        if is_png:
-                            debug_msg = debug_prefix if debug_prefix else f"PNG DEBUG: {log_prefix}"
-                            app.logger.error(f"{debug_msg} PNG fallback save also failed: {str(default_save_err)}")
+                        app.logger.error(f"{log_prefix} WebP fallback save also failed: {str(default_save_err)}")
                         
-                        # If JPG conversion fails entirely and different path, copy original
-                        if not is_jpg_ext and os.path.abspath(original_path) != os.path.abspath(converted_path):
+                        # If WebP conversion fails entirely and different path, copy original
+                        if not is_webp_ext and os.path.abspath(original_path) != os.path.abspath(converted_path):
                             shutil.copy2(original_path, converted_path)
                             app.logger.warning(f"{log_prefix} Used original file without optimization")
                     
                     # Compare file sizes
-                    if not is_jpg_ext and os.path.exists(converted_path):
+                    if not is_webp_ext and os.path.exists(converted_path):
                         new_size = os.path.getsize(converted_path)
                         reduction = (1 - (new_size / original_size)) * 100 if original_size > 0 else 0
                         app.logger.info(f"{log_prefix} Size reduction: {original_size/1024:.1f}KB -> {new_size/1024:.1f}KB ({reduction:.1f}%)")
                     
-                    # Remove the original non-JPG file if it was converted or resized
-                    if not is_jpg_ext and os.path.exists(converted_path) and (not filename.lower().endswith('.jpg') or resized):
+                    # Remove the original non-WebP file if it was converted or resized
+                    if not is_webp_ext and os.path.exists(converted_path) and (not filename.lower().endswith('.webp') or resized):
                         try:
                             os.remove(original_path)
                             app.logger.info(f"{log_prefix} Removed original file after conversion")
@@ -4712,15 +4479,15 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                         app.logger.warning(f"{log_prefix} Used original file as fallback")
                 
                 # Use the converted file for thumbnails if it exists
-                # If we produced a converted JPG (non-JPG source), use it as the basis for thumbs
-                if not is_jpg_ext and os.path.exists(converted_path):
+                # If we produced a converted WebP (non-WebP source), use it as the basis for thumbs
+                if not is_webp_ext and os.path.exists(converted_path):
                     original_path = converted_path
         
         except Exception as e:
             app.logger.error(f"{log_prefix} Failed to process image: {str(e)}")
             traceback.print_exc()
             # Just copy the original file as is
-            if not is_jpg_ext and os.path.exists(original_path) and not os.path.exists(converted_path):
+            if not is_webp_ext and os.path.exists(original_path) and not os.path.exists(converted_path):
                 try:
                     shutil.copy2(original_path, converted_path)
                     app.logger.warning(f"{log_prefix} Used original file after processing error")
@@ -4753,7 +4520,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                 try:
                     with Image.open(original_path) as img:
                         img.thumbnail(THUMBNAIL_SIZE)
-                        img.save(thumbnail_path, 'JPEG')
+                        img.save(thumbnail_path, 'WEBP')
                         result['thumbnail'] = thumbnail_filename
                         thumbnail_created = True
                         app.logger.warning(f"{log_prefix} Created thumbnail with fallback method")
@@ -4786,7 +4553,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                 try:
                     with Image.open(original_path) as img:
                         img.thumbnail(PREVIEW_SIZE)
-                        img.save(preview_path, 'JPEG')
+                        img.save(preview_path, 'WEBP')
                         result['preview'] = preview_filename
                         preview_created = True
                         app.logger.warning(f"{log_prefix} Created preview with fallback method")
@@ -4853,21 +4620,43 @@ def get_thumbnail_info(filename):
         return {'has_thumbnail': False, 'has_preview': False}
     
     name_part, ext_part = os.path.splitext(filename)
-    thumbnail_filename = f"{name_part}_thumb.jpg"
-    preview_filename = f"{name_part}_preview.jpg"
+    
+    # Check for WebP versions first (new standard)
+    thumbnail_filename = f"{name_part}_thumb.webp"
+    preview_filename = f"{name_part}_preview.webp"
     
     thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
     preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
     
-    # Check if thumbnails exist, create if needed
+    # Check if thumbnails exist
     has_thumbnail = os.path.exists(thumbnail_path)
     has_preview = os.path.exists(preview_path)
     
+    # Fallback to legacy JPG if WebP doesn't exist
+    if not has_thumbnail:
+        legacy_thumb = f"{name_part}_thumb.jpg"
+        legacy_path = os.path.join(app.config['THUMBNAIL_FOLDER'], legacy_thumb)
+        if os.path.exists(legacy_path):
+            thumbnail_filename = legacy_thumb
+            has_thumbnail = True
+            
+    if not has_preview:
+        legacy_prev = f"{name_part}_preview.jpg"
+        legacy_path = os.path.join(app.config['PREVIEW_FOLDER'], legacy_prev)
+        if os.path.exists(legacy_path):
+            preview_filename = legacy_prev
+            has_preview = True
+    
+    # If still missing, try to generate (will generate WebP)
     if not has_thumbnail or not has_preview:
         try:
             result = generate_optimized_versions(filename, max_original_width=500, target_size_kb=80)
-            has_thumbnail = result['thumbnail'] is not None
-            has_preview = result['preview'] is not None
+            if result['thumbnail']:
+                thumbnail_filename = result['thumbnail']
+                has_thumbnail = True
+            if result['preview']:
+                preview_filename = result['preview']
+                has_preview = True
         except Exception as e:
             print(f"Error generating thumbnails for {filename}: {str(e)}")
     
@@ -5001,6 +4790,7 @@ def log_mobile_issue():
 def delete_item_images(filenames):
     """
     Delete all images associated with an item (original, thumbnail, preview).
+    Handles both WebP and legacy JPG formats.
     
     Args:
         filenames (list): List of image filenames to delete
@@ -5026,36 +4816,30 @@ def delete_item_images(filenames):
             # Generate paths based on filename pattern
             name_part = os.path.splitext(filename)[0]
             
-            # Original file (may be JPG converted)
-            original_jpg = f"{name_part}.jpg"
-            original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_jpg)
-            
-            # Also try with original extension in case conversion didn't happen
-            original_orig_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            # Thumbnail and preview
-            thumbnail_filename = f"{name_part}_thumb.jpg"
-            preview_filename = f"{name_part}_preview.jpg"
-            thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-            preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
-            
-            # Delete original file(s)
-            if os.path.exists(original_path):
-                os.remove(original_path)
-                stats['originals'] += 1
-            elif os.path.exists(original_orig_path):
-                os.remove(original_orig_path)
-                stats['originals'] += 1
+            # Potential original files (WebP or JPG)
+            files_to_check = [
+                (os.path.join(app.config['UPLOAD_FOLDER'], f"{name_part}.webp"), 'originals'),
+                (os.path.join(app.config['UPLOAD_FOLDER'], f"{name_part}.jpg"), 'originals'),
+                (os.path.join(app.config['UPLOAD_FOLDER'], filename), 'originals'),
                 
-            # Delete thumbnail
-            if os.path.exists(thumbnail_path):
-                os.remove(thumbnail_path)
-                stats['thumbnails'] += 1
+                # Thumbnails (WebP or JPG)
+                (os.path.join(app.config['THUMBNAIL_FOLDER'], f"{name_part}_thumb.webp"), 'thumbnails'),
+                (os.path.join(app.config['THUMBNAIL_FOLDER'], f"{name_part}_thumb.jpg"), 'thumbnails'),
                 
-            # Delete preview
-            if os.path.exists(preview_path):
-                os.remove(preview_path)
-                stats['previews'] += 1
+                # Previews (WebP or JPG)
+                (os.path.join(app.config['PREVIEW_FOLDER'], f"{name_part}_preview.webp"), 'previews'),
+                (os.path.join(app.config['PREVIEW_FOLDER'], f"{name_part}_preview.jpg"), 'previews')
+            ]
+            
+            # Delete all found files
+            for file_path, category in files_to_check:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        stats[category] += 1
+                    except Exception as del_err:
+                        app.logger.error(f"Failed to delete {file_path}: {del_err}")
+                        stats['errors'] += 1
                 
         except Exception as e:
             app.logger.error(f"Error deleting image files for {filename}: {str(e)}")
