@@ -1630,6 +1630,8 @@ def upload_item():
                     try:
                         result = generate_optimized_versions(new_filename, max_original_width=500, target_size_kb=80)
                         app.logger.info(f"Generated optimized versions: {result}")
+                        if result['success'] and result['original']:
+                            new_filename = result['original']
                     except Exception as e:
                         app.logger.error(f"Error generating optimized versions for {new_filename}: {e}")
                         # If optimization fails, at least keep the original file
@@ -1987,6 +1989,15 @@ def edit_item(id):
                 filename = f"{unique_id}_{timestamp}{ext_part}"
                 
                 image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                
+                # Optimize the image
+                try:
+                    opt_result = generate_optimized_versions(filename, max_original_width=500, target_size_kb=80)
+                    if opt_result['success'] and opt_result['original']:
+                        filename = opt_result['original']
+                except Exception as e:
+                    app.logger.error(f"Error optimizing image in edit_item: {e}")
+                
                 images.append(filename)
             else:
                 flash(error_message, 'error')
