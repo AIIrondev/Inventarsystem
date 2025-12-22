@@ -648,7 +648,7 @@ def home():
         flask.Response: Rendered template or redirect
     """
     if 'username' not in session:
-        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
     elif not us.check_admin(session['username']):
         return render_template('main.html', username=session['username'])
