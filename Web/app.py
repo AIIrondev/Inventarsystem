@@ -758,7 +758,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         if not username or not password:
-            flash('Please fill all fields', 'error')
+            flash('Bitte alle Felder ausfüllen', 'error')
             return redirect(url_for('login'))
         
         user = us.check_nm_pwd(username, password)
@@ -770,7 +770,7 @@ def login():
                 return redirect(url_for('home_admin'))
             return redirect(url_for('home'))
         else:
-            flash('Invalid credentials', 'error')
+            flash('Ungültige Anmeldedaten', 'error')
             get_flashed_messages()
     return render_template('login.html')
 
@@ -972,12 +972,12 @@ def upload_item():
     """
     # Check if the user is authenticated
     if 'username' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+        return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
         
     # Check if user is an admin
     username = session['username']
     if not us.check_admin(username):
-        return jsonify({'success': False, 'message': 'Admin rights required'}), 403
+        return jsonify({'success': False, 'message': 'Administratorrechte erforderlich'}), 403
         
     # Detect if request is from mobile device
     is_mobile = 'Mobile' in request.headers.get('User-Agent', '')
@@ -1038,7 +1038,7 @@ def upload_item():
             except json.JSONDecodeError as e:
                 app.logger.error(f"Error parsing mobile data: {str(e)}")
     except Exception as e:
-        error_msg = f"Error processing form data: {str(e)}"
+        error_msg = f"Fehler beim Verarbeiten der Formulardaten: {str(e)}"
         app.logger.error(error_msg)
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 400
@@ -1858,7 +1858,7 @@ def duplicate_item():
                            
         return jsonify({
             'success': True, 
-            'message': 'Duplication data prepared successfully',
+            'message': 'Duplizierungsdaten erfolgreich vorbereitet',
             'item_data': {
                 'name': original_item.get('Name', ''),
                 'description': original_item.get('Beschreibung', ''),
@@ -1904,7 +1904,7 @@ def delete_item(id):
     # Delete associated images first
     item_to_delete = it.get_item(id)
     if not item_to_delete:
-        flash('Item not found.', 'error')
+        flash('Element nicht gefunden.', 'error')
         return redirect(url_for('home_admin'))
     
     image_filenames = item_to_delete.get('Images', [])
@@ -1920,9 +1920,9 @@ def delete_item(id):
     
     # Delete the item from the database
     if it.remove_item(id):
-        flash(f'Item deleted successfully. Removed {stats["originals"]} images.', 'success')
+        flash(f'Element erfolgreich gelöscht. {stats["originals"]} Bilder entfernt.', 'success')
     else:
-        flash('Error deleting item from database.', 'error')
+        flash('Fehler beim Löschen des Elements aus der Datenbank.', 'error')
         
     return redirect(url_for('home_admin'))
 
@@ -1968,7 +1968,7 @@ def edit_item(id):
     # Get current item to check availability status
     current_item = it.get_item(id)
     if not current_item:
-        flash('Item not found', 'error')
+        flash('Element nicht gefunden', 'error')
         return redirect(url_for('home_admin'))
     
     # Preserve current availability status
@@ -2020,9 +2020,9 @@ def edit_item(id):
     )
     
     if result:
-        flash('Item updated successfully', 'success')
+        flash('Element erfolgreich aktualisiert', 'success')
     else:
-        flash('Error updating item', 'error')
+        flash('Fehler beim Aktualisieren des Elements', 'error')
     
     return redirect(url_for('home_admin'))
 
@@ -2056,7 +2056,7 @@ def ausleihen(id):
     
     item = it.get_item(id)
     if not item:
-        flash('Item not found', 'error')
+        flash('Element nicht gefunden', 'error')
         return redirect(url_for('home'))
     
     # Before borrowing, block if there's a conflicting planned booking
@@ -2118,7 +2118,7 @@ def ausleihen(id):
     available_count = total_exemplare - borrowed_count
     
     if available_count < exemplare_count:
-        flash(f'Not enough copies available. Requested: {exemplare_count}, Available: {available_count}', 'error')
+        flash(f'Nicht genügend Exemplare verfügbar. Angefordert: {exemplare_count}, Verfügbar: {available_count}', 'error')
         return redirect(url_for('home'))
     
     # If we reach here, we can borrow the requested number of exemplars
@@ -2130,7 +2130,7 @@ def ausleihen(id):
         it.update_item_status(id, False, username)
         start_date = datetime.datetime.now()
         au.add_ausleihung(id, username, start_date)
-        flash('Item borrowed successfully', 'success')
+        flash('Element erfolgreich ausgeliehen', 'success')
     else:
         # Handle multi-exemplar item
         new_borrowed_exemplars = []
@@ -2169,7 +2169,7 @@ def ausleihen(id):
                 'exemplar_number': exemplar['number']
             })
         
-        flash(f'{exemplare_count} copies borrowed successfully', 'success')
+        flash(f'{exemplare_count} Exemplare erfolgreich ausgeliehen', 'success')
     
     if 'username' in session and not us.check_admin(session['username']):
         return redirect(url_for('home'))
@@ -2194,7 +2194,7 @@ def zurueckgeben(id):
     
     item = it.get_item(id)
     if not item:
-        flash('Item not found', 'error')
+        flash('Element nicht gefunden', 'error')
         return redirect(url_for('home'))
         
     username = session['username']
@@ -2242,16 +2242,16 @@ def zurueckgeben(id):
             it.update_item_status(id, True, original_user)
             
             if updated_count > 0:
-                flash(f'Item returned successfully ({updated_count} record(s) completed)', 'success')
+                flash(f'Element erfolgreich zurückgegeben ({updated_count} Datensätze abgeschlossen)', 'success')
             else:
-                flash('Item returned successfully', 'success')
+                flash('Element erfolgreich zurückgegeben', 'success')
                 
         except Exception as e:
             print(f"Error in return process: {e}")
             it.update_item_status(id, True)
-            flash(f'Item returned but encountered an error: {str(e)}', 'warning')
+            flash(f'Element zurückgegeben, aber ein Fehler ist aufgetreten: {str(e)}', 'warning')
     else:
-        flash('You are not authorized to return this item or it is already available', 'error')
+        flash('Sie sind nicht berechtigt, dieses Element zurückzugeben, oder es ist bereits verfügbar', 'error')
 
     # Check if request came from my_borrowed_items page
     source_page = request.form.get('source_page')
@@ -2627,7 +2627,7 @@ def plan_booking():
         import traceback
         print(f"Error in plan_booking: {e}")
         traceback.print_exc()
-        return {"success": False, "error": f"Server error: {str(e)}"}, 500
+        return {"success": False, "error": f"Serverfehler: {str(e)}"}, 500
 
 def process_day_bookings(item_id, booking_date, periods, notes):
     """
@@ -2764,7 +2764,7 @@ def terminplan():
         template_path = os.path.join(BASE_DIR, 'templates', 'terminplan.html')
         if not os.path.exists(template_path):
             print(f"Template file not found: {template_path}")
-            flash('Template not found. Please contact the administrator.', 'error')
+            flash('Vorlage nicht gefunden. Bitte kontaktieren Sie den Administrator.', 'error')
             return redirect(url_for('home'))
             
         return render_template('terminplan.html', school_periods=SCHOOL_PERIODS)
@@ -2772,7 +2772,7 @@ def terminplan():
         import traceback
         print(f"Error rendering terminplan: {e}")
         traceback.print_exc()
-        flash('An error occurred while displaying the calendar.', 'error')
+        flash('Ein Fehler ist beim Anzeigen des Kalenders aufgetreten.', 'error')
         return redirect(url_for('home'))
 
 
@@ -2798,18 +2798,18 @@ def register():
             name = request.form['name']
             last_name = request.form['last-name']
             if not username or not password:
-                flash('Please fill all fields', 'error')
+                flash('Bitte füllen Sie alle Felder aus', 'error')
                 return redirect(url_for('register'))
             if us.get_user(username):
-                flash('User already exists', 'error')
+                flash('Benutzer existiert bereits', 'error')
                 return redirect(url_for('register'))
             if not us.check_password_strength(password):
-                flash('Password is too weak', 'error')
+                flash('Passwort ist zu schwach', 'error')
                 return redirect(url_for('register'))
             us.add_user(username, password, name, last_name)
             return redirect(url_for('home'))
         return render_template('register.html')
-    flash('You are not authorized to view this page', 'error')
+    flash('Sie sind nicht berechtigt, diese Seite anzuzeigen', 'error')
     return redirect(url_for('login'))
 
 
@@ -2873,12 +2873,12 @@ def delete_user():
     
     username = request.form.get('username')
     if not username:
-        flash('No user selected', 'error')
+        flash('Kein Benutzer ausgewählt', 'error')
         return redirect(url_for('user_del'))
     
     # Prevent self-deletion
     if username == session['username']:
-        flash('You cannot delete your own account', 'error')
+        flash('Sie können Ihr eigenes Konto nicht löschen', 'error')
         return redirect(url_for('user_del'))
     
     # Reset this user's borrowings and free items before deleting the user
@@ -2914,9 +2914,9 @@ def delete_user():
     # Delete the user
     try:
         us.delete_user(username)
-        flash(f'User {username} deleted successfully', 'success')
+        flash(f'Benutzer {username} erfolgreich gelöscht', 'success')
     except Exception as e:
-        flash(f'Error deleting user: {str(e)}', 'error')
+        flash(f'Fehler beim Löschen des Benutzers: {str(e)}', 'error')
     
     return redirect(url_for('user_del'))
 
@@ -3170,7 +3170,7 @@ def get_usernames():
     elif 'username' in session and us.check_admin(session['username']):
         return jsonify(us.get_all_users())  # Fixed to use get_all_users
     else:
-        flash('Please login to access this function', 'error')
+        flash('Bitte melden Sie sich an, um auf diese Funktion zuzugreifen', 'error')
         return redirect(url_for('login'))  # Added proper return
 
 # New routes for filter management
@@ -3780,7 +3780,7 @@ def schedule_appointment():
     Schedule an appointment for an item
     """
     if 'username' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'Nicht angemeldet'}), 401
         
     try:
         # Extract form data
@@ -3796,14 +3796,14 @@ def schedule_appointment():
         
         # Validate inputs
         if not all([item_id, schedule_date, start_period, end_period]):
-            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+            return jsonify({'success': False, 'message': 'Pflichtfelder fehlen'}), 400
             
         # Parse the start date
         try:
             appointment_date_obj = datetime.datetime.strptime(schedule_date, '%Y-%m-%d')
             appointment_date = appointment_date_obj.date()  # Get date part only
         except ValueError:
-            return jsonify({'success': False, 'message': 'Invalid date format'}), 400
+            return jsonify({'success': False, 'message': 'Ungültiges Datumsformat'}), 400
             
         # Parse end date if multi-day
         appointment_end_date = appointment_date
@@ -3813,9 +3813,9 @@ def schedule_appointment():
                 appointment_end_date = appointment_end_date_obj.date()
                 
                 if appointment_end_date < appointment_date:
-                    return jsonify({'success': False, 'message': 'End date cannot be before start date'}), 400
+                    return jsonify({'success': False, 'message': 'Enddatum kann nicht vor Startdatum liegen'}), 400
             except ValueError:
-                return jsonify({'success': False, 'message': 'Invalid end date format'}), 400
+                return jsonify({'success': False, 'message': 'Ungültiges Enddatumsformat'}), 400
             
         # Validate periods
         try:
@@ -3824,18 +3824,18 @@ def schedule_appointment():
             
             # Only check period order if it's the same day
             if appointment_date == appointment_end_date and start_period_num > end_period_num:
-                return jsonify({'success': False, 'message': 'Start period cannot be after end period'}), 400
+                return jsonify({'success': False, 'message': 'Startperiode kann nicht nach Endperiode liegen'}), 400
                 
             if not (1 <= start_period_num <= 10) or not (1 <= end_period_num <= 10):
-                return jsonify({'success': False, 'message': 'Invalid period numbers'}), 400
+                return jsonify({'success': False, 'message': 'Ungültige Periodennummern'}), 400
                 
         except ValueError:
-            return jsonify({'success': False, 'message': 'Invalid period values'}), 400
+            return jsonify({'success': False, 'message': 'Ungültige Periodenwerte'}), 400
             
         # Check if item exists
         item = it.get_item(item_id)
         if not item:
-            return jsonify({'success': False, 'message': 'Item not found'}), 404
+            return jsonify({'success': False, 'message': 'Element nicht gefunden'}), 404
             
         # Check if item is reservable
         if not item.get('Reservierbar', True):
@@ -3852,7 +3852,7 @@ def schedule_appointment():
         # Check if we got valid period times
         if not period_times_start or not period_times_end:
             print(f"Invalid period times: start={period_times_start}, end={period_times_end}")
-            return jsonify({'success': False, 'message': 'Invalid period times'}), 400
+            return jsonify({'success': False, 'message': 'Ungültige Periodenzeiten'}), 400
             
         start_datetime = period_times_start['start']
         end_datetime = period_times_end['end']
@@ -3878,10 +3878,10 @@ def schedule_appointment():
                 period_end=booking_period_end
             )
             if has_conflict:
-                return jsonify({'success': False, 'message': 'Appointment conflicts with existing booking'}), 409
+                return jsonify({'success': False, 'message': 'Termin kollidiert mit bestehender Buchung'}), 409
         except Exception as e:
             print(f"Error checking for booking conflicts: {e}")
-            return jsonify({'success': False, 'message': f'Error checking availability: {str(e)}'}), 500
+            return jsonify({'success': False, 'message': f'Fehler beim Prüfen der Verfügbarkeit: {str(e)}'}), 500
             
         # Create the appointment as a planned booking
         try:
@@ -3895,10 +3895,10 @@ def schedule_appointment():
             )
             
             if not appointment_id:
-                return jsonify({'success': False, 'message': 'Failed to create appointment'}), 500
+                return jsonify({'success': False, 'message': 'Termin konnte nicht erstellt werden'}), 500
         except Exception as e:
             print(f"Error creating planned booking: {e}")
-            return jsonify({'success': False, 'message': f'Error creating appointment: {str(e)}'}), 500
+            return jsonify({'success': False, 'message': f'Fehler beim Erstellen des Termins: {str(e)}'}), 500
         
         # If we got this far, we have a valid appointment_id
         try:
@@ -3929,17 +3929,17 @@ def schedule_appointment():
                 return jsonify({'success': True, 'appointment_id': str(appointment_id)})
             else:
                 print("Failed to update item with appointment info")
-                return jsonify({'success': False, 'message': 'Failed to update item with appointment info'}), 500
+                return jsonify({'success': False, 'message': 'Element konnte nicht mit Termininformationen aktualisiert werden'}), 500
                 
         except Exception as e:
             print(f"Error updating item with appointment info: {e}")
-            return jsonify({'success': False, 'message': f'Error updating item: {str(e)}'}), 500
+            return jsonify({'success': False, 'message': f'Fehler beim Aktualisieren des Elements: {str(e)}'}), 500
             
     except Exception as e:
         print(f"Error creating appointment: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Server error occurred: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Serverfehler aufgetreten: {str(e)}'}), 500
 
 @app.route('/cancel_ausleihung/<id>', methods=['POST'])
 def cancel_ausleihung_route(id):
@@ -4048,7 +4048,7 @@ def reset_item(id):
         traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': f'Server error: {str(e)}'
+            'error': f'Serverfehler: {str(e)}'
         }), 500
 
 # New image and video optimization functions
