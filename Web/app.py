@@ -104,10 +104,6 @@ def inject_version():
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
-if not os.path.exists(app.config['THUMBNAIL_FOLDER']):
-    os.makedirs(app.config['THUMBNAIL_FOLDER'])
-if not os.path.exists(app.config['PREVIEW_FOLDER']):
-    os.makedirs(app.config['PREVIEW_FOLDER'])
 # QR Code directory creation deactivated
 # if not os.path.exists(app.config['QR_CODE_FOLDER']):
 #     os.makedirs(app.config['QR_CODE_FOLDER'])
@@ -1084,7 +1080,7 @@ def upload_item():
     app.logger.info(f"Starting image upload session {upload_session_id} - Files: {len(images)}, User: {username}")
     
     # Ensure all required directories exist
-    for directory in [app.config['UPLOAD_FOLDER'], app.config['THUMBNAIL_FOLDER'], app.config['PREVIEW_FOLDER']]:
+    for directory in [app.config['UPLOAD_FOLDER']]:
         try:
             os.makedirs(directory, exist_ok=True)
         except Exception as e:
@@ -1492,26 +1488,7 @@ def upload_item():
                 app.logger.error(f"{image_log_prefix} Optimization failed: {str(e)}")
                 traceback.print_exc()
                 
-                # Try a simplified optimization fallback if the full one fails
-                try:
-                    app.logger.info(f"{image_log_prefix} Attempting simplified thumbnail generation as fallback")
-                    # Simply create thumbnails directly from original without full optimization
-                    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], os.path.splitext(saved_filename)[0] + '_thumb.webp')
-                    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], os.path.splitext(saved_filename)[0] + '_preview.webp')
-                    
-                    with Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)) as img:
-                        # Make a small thumbnail
-                        img.thumbnail((150, 150))
-                        img.save(thumbnail_path, 'WEBP', quality=85)
-                        
-                        # Make a medium preview
-                        img = Image.open(os.path.join(app.config['UPLOAD_FOLDER'], saved_filename))
-                        img.thumbnail((300, 300))
-                        img.save(preview_path, 'WEBP', quality=85)
-                        
-                    app.logger.info(f"{image_log_prefix} Fallback thumbnail generation successful")
-                except Exception as fallback_err:
-                    app.logger.error(f"{image_log_prefix} Fallback thumbnail generation also failed: {str(fallback_err)}")
+                # No fallback thumbnail generation needed as we only use the main image
             
             # Always add the filename to our list even if optimization failed
             # We'll use the original in that case
@@ -1849,18 +1826,18 @@ def duplicate_item():
 
         # For iOS devices, add more diagnostics and reduce data size if needed
         if is_ios:
-            # Check if images have thumbnail versions to use for preview instead of full images
-            thumbnails_exist = []
+            # Check if images exist (we now use main images as thumbnails)
+            images_exist = []
             for img in verified_images[:5]:  # Only check first 5 to save time
-                thumb_path = os.path.join(app.config['THUMBNAIL_FOLDER'], img.replace('_thumb', '') + '_thumb')
-                if os.path.exists(thumb_path):
-                    thumbnails_exist.append(True)
+                img_path = os.path.join(app.config['UPLOAD_FOLDER'], img)
+                if os.path.exists(img_path):
+                    images_exist.append(True)
                 else:
-                    thumbnails_exist.append(False)
+                    images_exist.append(False)
             
             # Log detailed diagnostics
             app.logger.info(f"iOS duplication details: {len(verified_images)} images, "
-                           f"thumbnails available: {all(thumbnails_exist)}, "
+                           f"images available: {all(images_exist)}, "
                            f"filter sizes: {len(filter1_array)}, {len(filter2_array)}, {len(filter3_array)}")
                            
         return jsonify({
@@ -4234,9 +4211,10 @@ def create_video_thumbnail(video_path, thumbnail_path, size):
 
 def generate_optimized_versions(filename, max_original_width=500, target_size_kb=80, debug_prefix=""):
     """
-    Generate thumbnail and preview versions of uploaded files.
+    Generate optimized version of uploaded files.
     Convert all image files to WebP format.
     Also resizes and compresses the original image to save storage space.
+    No separate thumbnail or preview files are generated.
     
     Args:
         filename (str): Name of the uploaded file
@@ -4252,7 +4230,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     app.logger.info(f"{log_prefix} Starting optimization")
     
     # Make sure all required directories exist
-    for directory in [app.config['UPLOAD_FOLDER'], app.config['THUMBNAIL_FOLDER'], app.config['PREVIEW_FOLDER']]:
+    for directory in [app.config['UPLOAD_FOLDER']]:
         os.makedirs(directory, exist_ok=True)
     
     original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -4271,32 +4249,6 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     # If already a WebP, keep filename to avoid same-file writes
     converted_filename = filename if is_webp_ext else f"{name_part}.webp"
     converted_path = os.path.join(app.config['UPLOAD_FOLDER'], converted_filename)
-    thumbnail_filename = f"{name_part}_thumb.webp"
-    preview_filename = f"{name_part}_preview.webp"
-    
-    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
-    
-    # Fallback to production directories if dev ones missing
-    if not os.path.exists(thumbnail_path):
-        prod_thumbs = "/var/Inventarsystem/Web/thumbnails"
-        alt_thumb = os.path.join(prod_thumbs, thumbnail_filename)
-        if os.path.exists(alt_thumb):
-            thumbnail_path = alt_thumb
-    if not os.path.exists(preview_path):
-        prod_previews = "/var/Inventarsystem/Web/previews"
-        alt_prev = os.path.join(prod_previews, preview_filename)
-        if os.path.exists(alt_prev):
-            preview_path = alt_prev
-    # Fallbacks for production directories if needed
-    if not os.path.exists(os.path.dirname(thumbnail_path)):
-        prod_thumbs = "/var/Inventarsystem/Web/thumbnails"
-        if os.path.exists(prod_thumbs):
-            thumbnail_path = os.path.join(prod_thumbs, thumbnail_filename)
-    if not os.path.exists(os.path.dirname(preview_path)):
-        prod_previews = "/var/Inventarsystem/Web/previews"
-        if os.path.exists(prod_previews):
-            preview_path = os.path.join(prod_previews, preview_filename)
     
     result = {
         'original': converted_filename,  # Use WebP name; if already WebP, this equals input
@@ -4330,12 +4282,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
             try:
                 # Copy placeholder to uploads folder with the original filename
                 shutil.copy2(placeholder_path, original_path)
-                # Also create thumbnails
-                shutil.copy2(placeholder_path, thumbnail_path)
-                shutil.copy2(placeholder_path, preview_path)
                 result['original'] = filename
-                result['thumbnail'] = thumbnail_filename
-                result['preview'] = preview_filename
                 result['is_placeholder'] = True
                 result['success'] = True
                 return result
@@ -4362,23 +4309,13 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     elif is_video_file(filename):
         result['is_video'] = True
         app.logger.info(f"{log_prefix} Processing as video file")
-        
-        # Create video thumbnail
-        try:
-            if create_video_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-                result['thumbnail'] = thumbnail_filename
-                app.logger.info(f"{log_prefix} Created video thumbnail")
-            
-            # Create video preview
-            if create_video_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-                result['preview'] = preview_filename
-                app.logger.info(f"{log_prefix} Created video preview")
-                
-            result['success'] = True
-            return result
-        except Exception as e:
-            app.logger.error(f"{log_prefix} Failed to create video thumbnails: {str(e)}")
-            # Continue with regular processing as fallback
+        # For videos, we might want to extract a frame as the "image" representation
+        # But for now, we'll just leave it as is, assuming the video itself is the asset
+        # If a thumbnail is needed for video, we might need to generate one "poster" image
+        # But the requirement says "only the downsized Image", which implies for images.
+        # For videos, we'll just return success.
+        result['success'] = True
+        return result
     else:
         app.logger.info(f"{log_prefix} Not an image or video file, skipping optimization")
         return result
@@ -4494,72 +4431,6 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                 except Exception as copy_err:
                     app.logger.error(f"{log_prefix} Failed to copy original file: {str(copy_err)}")
         
-        # Create thumbnail - with multiple fallbacks
-        thumbnail_created = False
-        try:
-            if create_image_thumbnail(original_path, thumbnail_path, THUMBNAIL_SIZE):
-                result['thumbnail'] = thumbnail_filename
-                thumbnail_created = True
-                app.logger.info(f"{log_prefix} Created thumbnail successfully")
-        except Exception as thumb_err:
-            app.logger.error(f"{log_prefix} Thumbnail creation failed: {str(thumb_err)}")
-            
-            # Try direct copy if thumbnail creation fails
-            if not thumbnail_created:
-                try:
-                    # Just copy the original (or converted) file
-                    shutil.copy2(original_path, thumbnail_path)
-                    result['thumbnail'] = thumbnail_filename
-                    thumbnail_created = True
-                    app.logger.warning(f"{log_prefix} Used original as thumbnail after error")
-                except Exception as copy_err:
-                    app.logger.error(f"{log_prefix} Failed to copy original as thumbnail: {str(copy_err)}")
-            
-            # If all else fails, try a very simple PIL thumbnail as last resort
-            if not thumbnail_created:
-                try:
-                    with Image.open(original_path) as img:
-                        img.thumbnail(THUMBNAIL_SIZE)
-                        img.save(thumbnail_path, 'WEBP')
-                        result['thumbnail'] = thumbnail_filename
-                        thumbnail_created = True
-                        app.logger.warning(f"{log_prefix} Created thumbnail with fallback method")
-                except Exception as last_err:
-                    app.logger.error(f"{log_prefix} All thumbnail creation methods failed: {str(last_err)}")
-        
-        # Create preview - with multiple fallbacks
-        preview_created = False
-        try:
-            if create_image_thumbnail(original_path, preview_path, PREVIEW_SIZE):
-                result['preview'] = preview_filename
-                preview_created = True
-                app.logger.info(f"{log_prefix} Created preview successfully")
-        except Exception as prev_err:
-            app.logger.error(f"{log_prefix} Preview creation failed: {str(prev_err)}")
-            
-            # Try direct copy if preview creation fails
-            if not preview_created:
-                try:
-                    # Just copy the original (or converted) file
-                    shutil.copy2(original_path, preview_path)
-                    result['preview'] = preview_filename
-                    preview_created = True
-                    app.logger.warning(f"{log_prefix} Used original as preview after error")
-                except Exception as copy_err:
-                    app.logger.error(f"{log_prefix} Failed to copy original as preview: {str(copy_err)}")
-            
-            # If all else fails, try a very simple PIL thumbnail as last resort
-            if not preview_created:
-                try:
-                    with Image.open(original_path) as img:
-                        img.thumbnail(PREVIEW_SIZE)
-                        img.save(preview_path, 'WEBP')
-                        result['preview'] = preview_filename
-                        preview_created = True
-                        app.logger.warning(f"{log_prefix} Created preview with fallback method")
-                except Exception as last_err:
-                    app.logger.error(f"{log_prefix} All preview creation methods failed: {str(last_err)}")
-        
         # Mark success if we have at least the original or converted file
         if os.path.exists(original_path) or os.path.exists(converted_path):
             result['success'] = True
@@ -4568,9 +4439,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
             # Log verification of all created files
             for file_type, file_path in [
                 ('Original', original_path),
-                ('Converted', converted_path),
-                ('Thumbnail', thumbnail_path),
-                ('Preview', preview_path)
+                ('Converted', converted_path)
             ]:
                 if os.path.exists(file_path):
                     file_size = os.path.getsize(file_path) / 1024.0  # KB
@@ -4588,14 +4457,12 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
         if os.path.exists(original_path):
             try:
                 # Copy original to all required outputs as last resort
-                for target_path in [converted_path, thumbnail_path, preview_path]:
+                for target_path in [converted_path]:
                     if not os.path.exists(os.path.dirname(target_path)):
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
                     shutil.copy2(original_path, target_path)
                 
                 result['original'] = filename
-                result['thumbnail'] = thumbnail_filename
-                result['preview'] = preview_filename
                 result['success'] = True
                 result['recovery'] = True
                 app.logger.warning(f"{log_prefix} Recovery completed: using original file for all outputs")
@@ -4608,7 +4475,7 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
 def get_thumbnail_info(filename):
     """
     Get thumbnail and preview information for a file.
-    Creates thumbnails if they don't exist.
+    Returns the main image URL for all requests as we only use one image version now.
     
     Args:
         filename (str): Original filename
@@ -4621,58 +4488,44 @@ def get_thumbnail_info(filename):
     
     name_part, ext_part = os.path.splitext(filename)
     
-    # Check for WebP versions first (new standard)
-    thumbnail_filename = f"{name_part}_thumb.webp"
-    preview_filename = f"{name_part}_preview.webp"
+    # Check if the file exists (either as WebP or original extension)
+    # We prefer WebP if available
+    webp_filename = f"{name_part}.webp"
+    webp_path = os.path.join(app.config['UPLOAD_FOLDER'], webp_filename)
     
-    thumbnail_path = os.path.join(app.config['THUMBNAIL_FOLDER'], thumbnail_filename)
-    preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
-    # Check if thumbnails exist
-    has_thumbnail = os.path.exists(thumbnail_path)
-    has_preview = os.path.exists(preview_path)
+    final_filename = filename
+    has_image = False
     
-    # Fallback to legacy JPG if WebP doesn't exist
-    if not has_thumbnail:
-        legacy_thumb = f"{name_part}_thumb.jpg"
-        legacy_path = os.path.join(app.config['THUMBNAIL_FOLDER'], legacy_thumb)
-        if os.path.exists(legacy_path):
-            thumbnail_filename = legacy_thumb
-            has_thumbnail = True
+    if os.path.exists(webp_path):
+        final_filename = webp_filename
+        has_image = True
+    elif os.path.exists(original_path):
+        final_filename = filename
+        has_image = True
+    else:
+        # Check production paths
+        prod_upload = "/var/Inventarsystem/Web/uploads"
+        if os.path.exists(os.path.join(prod_upload, webp_filename)):
+            final_filename = webp_filename
+            has_image = True
+        elif os.path.exists(os.path.join(prod_upload, filename)):
+            final_filename = filename
+            has_image = True
             
-    if not has_preview:
-        legacy_prev = f"{name_part}_preview.jpg"
-        legacy_path = os.path.join(app.config['PREVIEW_FOLDER'], legacy_prev)
-        if os.path.exists(legacy_path):
-            preview_filename = legacy_prev
-            has_preview = True
-    
-    # If still missing, try to generate (will generate WebP)
-    if not has_thumbnail or not has_preview:
-        try:
-            result = generate_optimized_versions(filename, max_original_width=500, target_size_kb=80)
-            if result['thumbnail']:
-                thumbnail_filename = result['thumbnail']
-                has_thumbnail = True
-            if result['preview']:
-                preview_filename = result['preview']
-                has_preview = True
-        except Exception as e:
-            print(f"Error generating thumbnails for {filename}: {str(e)}")
-    
-    # Make sure we're using the actual filename as it exists on disk
-    # Build URLs based on the filename; routes handle prod/dev paths
-    actual_thumbnail_url = f"/thumbnails/{thumbnail_filename}" if has_thumbnail else None
-    actual_preview_url = f"/previews/{preview_filename}" if has_preview else None
+    # Build URLs based on the filename
+    # We use the same URL for thumbnail and preview since we only have one image
+    image_url = f"/uploads/{final_filename}" if has_image else None
     
     return {
-        'has_thumbnail': has_thumbnail,
-        'has_preview': has_preview,
-        'thumbnail_url': actual_thumbnail_url,
-        'preview_url': actual_preview_url,
-        'original_ext': ext_part.lower(),
-        'is_image': is_image_file(filename),
-        'is_video': is_video_file(filename)
+        'has_thumbnail': has_image,
+        'has_preview': has_image,
+        'thumbnail_url': image_url,
+        'preview_url': image_url,
+        'original_ext': os.path.splitext(final_filename)[1].lower(),
+        'is_image': is_image_file(final_filename),
+        'is_video': is_video_file(final_filename)
     }
 
 # Mobile device detection utilities
@@ -4789,14 +4642,14 @@ def log_mobile_issue():
 
 def delete_item_images(filenames):
     """
-    Delete all images associated with an item (original, thumbnail, preview).
-    Handles both WebP and legacy JPG formats.
+    Delete all images associated with an item.
+    Only deletes the main image file as we no longer use separate thumbnails/previews.
     
     Args:
         filenames (list): List of image filenames to delete
         
     Returns:
-        dict: Statistics of deleted files (counts of originals, thumbnails, previews, errors)
+        dict: Statistics of deleted files
     """
     stats = {
         'originals': 0,
@@ -4816,17 +4669,15 @@ def delete_item_images(filenames):
             # Generate paths based on filename pattern
             name_part = os.path.splitext(filename)[0]
             
-            # Potential original files (WebP or JPG)
+            # Potential original files (WebP or JPG or original extension)
             files_to_check = [
                 (os.path.join(app.config['UPLOAD_FOLDER'], f"{name_part}.webp"), 'originals'),
                 (os.path.join(app.config['UPLOAD_FOLDER'], f"{name_part}.jpg"), 'originals'),
                 (os.path.join(app.config['UPLOAD_FOLDER'], filename), 'originals'),
                 
-                # Thumbnails (WebP or JPG)
+                # Also try to clean up legacy thumbnails/previews if they exist
                 (os.path.join(app.config['THUMBNAIL_FOLDER'], f"{name_part}_thumb.webp"), 'thumbnails'),
                 (os.path.join(app.config['THUMBNAIL_FOLDER'], f"{name_part}_thumb.jpg"), 'thumbnails'),
-                
-                # Previews (WebP or JPG)
                 (os.path.join(app.config['PREVIEW_FOLDER'], f"{name_part}_preview.webp"), 'previews'),
                 (os.path.join(app.config['PREVIEW_FOLDER'], f"{name_part}_preview.jpg"), 'previews')
             ]
