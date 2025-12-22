@@ -4371,6 +4371,14 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
                         # Only create a new WebP if source wasn't already WebP
                         img.save(converted_path, 'WEBP', quality=quality, method=6)
                         app.logger.info(f"{log_prefix} Saved optimized WebP: {converted_path}")
+                        
+                        # Remove the original non-WebP file after successful conversion
+                        if os.path.exists(converted_path):
+                            try:
+                                os.remove(original_path)
+                                app.logger.info(f"{log_prefix} Removed original file after conversion")
+                            except Exception as e:
+                                app.logger.warning(f"{log_prefix} Error removing original file: {str(e)}")
                     else:
                         # Already a WebP: don't overwrite original; we'll use it for thumbs
                         app.logger.info(f"{log_prefix} Original is already WebP; skip in-place re-save")
@@ -4518,11 +4526,52 @@ def get_thumbnail_info(filename):
     # We use the same URL for thumbnail and preview since we only have one image
     image_url = f"/uploads/{final_filename}" if has_image else None
     
+    # Backward compatibility: Check for legacy thumbnails/previews
+    thumbnail_url = image_url
+    has_thumbnail = has_image
+    
+    # Check for legacy thumbnail files if we have a main image or not
+    legacy_thumb_names = [
+        f"{name_part}_thumb.webp",
+        f"{name_part}_thumb.jpg",
+        f"{name_part}_thumb{ext_part}"
+    ]
+    
+    for thumb_name in legacy_thumb_names:
+        if os.path.exists(os.path.join(app.config['THUMBNAIL_FOLDER'], thumb_name)):
+            thumbnail_url = f"/thumbnails/{thumb_name}"
+            has_thumbnail = True
+            break
+        elif os.path.exists(os.path.join("/var/Inventarsystem/Web/thumbnails", thumb_name)):
+            thumbnail_url = f"/thumbnails/{thumb_name}"
+            has_thumbnail = True
+            break
+
+    # Check for legacy preview files
+    preview_url = image_url
+    has_preview = has_image
+    
+    legacy_preview_names = [
+        f"{name_part}_preview.webp",
+        f"{name_part}_preview.jpg",
+        f"{name_part}_preview{ext_part}"
+    ]
+    
+    for preview_name in legacy_preview_names:
+        if os.path.exists(os.path.join(app.config['PREVIEW_FOLDER'], preview_name)):
+            preview_url = f"/previews/{preview_name}"
+            has_preview = True
+            break
+        elif os.path.exists(os.path.join("/var/Inventarsystem/Web/previews", preview_name)):
+            preview_url = f"/previews/{preview_name}"
+            has_preview = True
+            break
+    
     return {
-        'has_thumbnail': has_image,
-        'has_preview': has_image,
-        'thumbnail_url': image_url,
-        'preview_url': image_url,
+        'has_thumbnail': has_thumbnail,
+        'has_preview': has_preview,
+        'thumbnail_url': thumbnail_url,
+        'preview_url': preview_url,
         'original_ext': os.path.splitext(final_filename)[1].lower(),
         'is_image': is_image_file(final_filename),
         'is_video': is_video_file(final_filename)
