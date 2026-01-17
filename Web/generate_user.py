@@ -60,8 +60,23 @@ def generate_user_interactive():
         else:
             print("Please enter 'y' or 'n'")
     
+    while True:
+        name_input = input("Enter a first name for the user:")
+        if not name_input:
+            print("You have to provide a name!")
+        else:
+            break
+    
+    while True:
+        last_name_input = input("Enter a last name for the user:")
+        if not last_name_input:
+            print("You have to provide a name!")
+        else:
+            break
+
+    
     # Add the user
-    added = user.add_user(username, password)
+    added = user.add_user(username, password, name_input, last_name_input)
     
     if added:
         print(f"User '{username}' created successfully.")
