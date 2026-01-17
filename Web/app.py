@@ -2838,13 +2838,26 @@ def user_del():
                 
         if username and username != session['username']:
             try:
-                fullname = f"{us.get_name(username)} {us.get_last_name(username)}"
+                name = us.get_name(username)
+                last_name = us.get_last_name(username)
+                if name and last_name:
+                    fullname = f"{name} {last_name}"
+                elif name:
+                    fullname = name
+                elif last_name:
+                    fullname = last_name
+                else:
+                    fullname = None
             except:
+                name = ""
+                last_name = ""
                 fullname = None
             users_list.append({
                 'username': username,
                 'admin': user.get('Admin', False),
                 'fullname': fullname,
+                'name': name,
+                'last_name': last_name
             })
     
     return render_template('user_del.html', users=users_list)
@@ -3060,6 +3073,34 @@ def admin_reset_user_password():
     except Exception as e:
         flash(f'Fehler beim Zurücksetzen des Passworts: {str(e)}', 'error')
     
+    return redirect(url_for('user_del'))
+
+
+@app.route('/admin_update_user_name', methods=['POST'])
+def admin_update_user_name():
+    """
+    Admin route to update a user's name details.
+    
+    Returns:
+        flask.Response: Redirect to user management page
+    """
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Nicht autorisierter Zugriff', 'error')
+        return redirect(url_for('login'))
+        
+    username = request.form.get('username')
+    name = request.form.get('name')
+    last_name = request.form.get('last_name')
+    
+    if not username:
+        flash('Kein Benutzer ausgewählt', 'error')
+        return redirect(url_for('user_del'))
+        
+    if us.update_user_name(username, name, last_name):
+        flash(f'Name für {username} wurde erfolgreich aktualisiert.', 'success')
+    else:
+        flash(f'Fehler beim Aktualisieren des Namens.', 'error')
+        
     return redirect(url_for('user_del'))
 
 

@@ -46,6 +46,13 @@
                                     Löschen
                                 </button>
                             </form>
+                            <button type="button" class="btn btn-primary btn-sm" 
+                                    data-username="{{ user.username }}"
+                                    data-firstname="{{ user.name if user.name else '' }}"
+                                    data-lastname="{{ user.last_name if user.last_name else '' }}"
+                                    onclick="openEditUserModal(this)">
+                                Bearbeiten
+                            </button>
                             <button type="button" class="btn btn-warning btn-sm" 
                                     onclick="openResetPasswordModal('{{ user.username }}')">
                                 Passwort zurücksetzen
@@ -55,6 +62,39 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editUserModalLabel">Benutzer bearbeiten</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin_update_user_name') }}">
+                <div class="modal-body">
+                    <input type="hidden" id="edit-username" name="username">
+                    <div class="mb-3">
+                        <label for="edit-username-display" class="form-label">Benutzer:</label>
+                        <input type="text" class="form-control" id="edit-username-display" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-name" class="form-label">Vorname:</label>
+                        <input type="text" class="form-control" id="edit-name" name="name">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-last-name" class="form-label">Nachname:</label>
+                        <input type="text" class="form-control" id="edit-last-name" name="last_name">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -92,6 +132,20 @@
 </div>
 
 <script>
+    function openEditUserModal(button) {
+        var username = button.getAttribute('data-username');
+        var name = button.getAttribute('data-firstname');
+        var lastName = button.getAttribute('data-lastname');
+        
+        document.getElementById('edit-username').value = username;
+        document.getElementById('edit-username-display').value = username;
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-last-name').value = lastName;
+        
+        var modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+        modal.show();
+    }
+
     function openResetPasswordModal(username) {
         document.getElementById('reset-username').value = username;
         document.getElementById('username-display').value = username;

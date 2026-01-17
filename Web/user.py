@@ -422,3 +422,31 @@ def update_password(username, new_password):
     except Exception as e:
         print(f"Error updating password: {e}")
         return False
+ 
+def update_user_name(username, name, last_name):
+    """
+    Update a user's name and last name.
+
+    Args:
+        username (str): Username of the user
+        name (str): New first name
+        last_name (str): New last name
+
+    Returns:
+        bool: True if updated successfully, False otherwise
+    """
+    try:
+        client = MongoClient('localhost', 27017)
+        db = client['Inventarsystem']
+        users = db['users']
+        
+        result = users.update_one(
+            {'Username': username}, 
+            {'$set': {'name': name, 'last_name': last_name}}
+        )
+        
+        client.close()
+        return True
+    except Exception as e:
+        print(f"Error updating user name: {e}")
+        return False
