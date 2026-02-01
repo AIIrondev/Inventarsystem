@@ -80,7 +80,7 @@ Anschließend führen sie den folgenden Comand aus:
 sudo ./start.sh
 ```
 
-** Dies ist nur notwendig falls der Server nicht automatisch Hochfährt nach einem Neustart. **
+**Dies ist nur notwendig falls der Server nicht automatisch Hochfährt nach einem Neustart.**
 
 ## Schritt-für-Schritt-Anleitungen
 
