@@ -1,17 +1,10 @@
 <!--
-   Copyright 2025-2026 Maximilian Gründinger
+   Copyright 2025-2026 AIIrondev
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+   See Legal/LICENSE for the full license text.
+   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+   For commercial licensing inquiries: https://github.com/AIIrondev
 -->
 {% extends "base.html" %}
 
@@ -20,251 +13,384 @@
 {% block content %}
 <div class="container">
     <div class="content">
-        <h1>License Information</h1>
-        
+        <h1>Lizenzinformationen &amp; Rechtliches</h1>
+
+        <!-- Tab navigation -->
+        <ul class="nav nav-tabs mt-3" id="legalTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-eula" data-bs-toggle="tab" data-bs-target="#pane-eula"
+                    type="button" role="tab">📄 EULA</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-notice" data-bs-toggle="tab" data-bs-target="#pane-notice"
+                    type="button" role="tab">📦 NOTICE</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-privacy" data-bs-toggle="tab" data-bs-target="#pane-privacy"
+                    type="button" role="tab">🔒 Datenschutz</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-security" data-bs-toggle="tab" data-bs-target="#pane-security"
+                    type="button" role="tab">🛡️ Sicherheit</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-data" data-bs-toggle="tab" data-bs-target="#pane-data"
+                    type="button" role="tab">📊 Datenverarbeitung</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-legal" data-bs-toggle="tab" data-bs-target="#pane-legal"
+                    type="button" role="tab">⚖️ Rechtsgrundlage</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="legalTabContent">
+
+        <!-- ── EULA ─────────────────────────────────────────────────────── -->
+        <div class="tab-pane fade show active" id="pane-eula" role="tabpanel">
         <div class="license-content">
-            <h2>Apache License, Version 2.0</h2>
-            
-            <p>Copyright 2025-2026 Maximilian Gründinger</p>
-            
-            <p>Licensed under the Apache License, Version 2.0 (the "License");
-            you may not use this file except in compliance with the License.
-            You may obtain a copy of the License at</p>
-            
-            <p class="license-link">
-                <a href="http://www.apache.org/licenses/LICENSE-2.0" target="_blank">http://www.apache.org/licenses/LICENSE-2.0</a>
-            </p>
-            
-            <p>Unless required by applicable law or agreed to in writing, software
-            distributed under the License is distributed on an "AS IS" BASIS,
-            WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-            See the License for the specific language governing permissions and
-            limitations under the License.</p>
-            
-            <h3>Full License Text</h3>
-            
-            <div class="license-full-text">
-                <p>                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/</p>
 
-                <p>TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION</p>
+            <!-- EULA -->
+            <h2>Endbenutzer-Lizenzvertrag (EULA) und Nutzungsbedingungen</h2>
+            <p><strong>Softwareprojekt:</strong> Inventarsystem<br>
+               <strong>Urheberrechtshalter (Lizenzgeber):</strong> AIIrondev<br>
+               <strong>Gültigkeit:</strong> Stand 2026</p>
 
-                <p>1. Definitions.</p>
+            <hr>
 
-                <p>"License" shall mean the terms and conditions for use, reproduction,
-                and distribution as defined by Sections 1 through 9 of this document.</p>
+            <h3>Präambel</h3>
+            <p>Dieser Endbenutzer-Lizenzvertrag (im Folgenden „Vertrag") stellt eine rechtsgültige Vereinbarung zwischen Ihnen
+            (im Folgenden „Lizenznehmer") und dem Urheber <strong>AIIrondev</strong> (im Folgenden „Lizenzgeber") dar.
+            Durch den Zugriff auf den Quellcode, die Installation, das Kopieren oder die sonstige Nutzung der Software
+            „Inventarsystem" (im Folgenden „Produkt") erklärt sich der Lizenznehmer mit den nachfolgenden Bedingungen
+            vollumfänglich einverstanden.</p>
+            <p>Sollte der Lizenznehmer den Bedingungen dieses Vertrags nicht zustimmen, ist jegliche Nutzung,
+            Vervielfältigung oder Distribution des Produkts mit sofortiger Wirkung untersagt.</p>
 
-                <p>"Licensor" shall mean the copyright owner or entity authorized by
-                the copyright owner that is granting the License.</p>
+            <hr>
 
-                <p>"Legal Entity" shall mean the union of the acting entity and all
-                other entities that control, are controlled by, or are under common
-                control with that entity. For the purposes of this definition,
-                "control" means (i) the power, direct or indirect, to cause the
-                direction or management of such entity, whether by contract or
-                otherwise, or (ii) ownership of fifty percent (50%) or more of the
-                outstanding shares, or (iii) beneficial ownership of such entity.</p>
+            <h3>§ 1 Gegenstand der Lizenz und Eigentumsrechte</h3>
+            <ol>
+                <li>Das Produkt wird dem Lizenznehmer unter Vorbehalt lizenziert, nicht verkauft. Sämtliche
+                    Eigentumsrechte, Urheberrechte und sonstigen geistigen Eigentumsrechte am Produkt sowie an allen
+                    Kopien davon verbleiben ausschließlich beim Lizenzgeber.</li>
+                <li>Diese Lizenz gewährt lediglich ein eingeschränktes Nutzungsrecht unter den in diesem Vertrag
+                    explizit genannten Bedingungen.</li>
+            </ol>
 
-                <p>"You" (or "Your") shall mean an individual or Legal Entity
-                exercising permissions granted by this License.</p>
+            <h3>§ 2 Zulässiger Nutzungskreis (Privatnutzung)</h3>
+            <ol>
+                <li>Die unentgeltliche Nutzung des Produkts ist ausschließlich <strong>natürlichen Personen für den
+                    rein privaten, häuslichen Gebrauch</strong> gestattet.</li>
+                <li>Die Nutzung umfasst die Verwaltung privater Bestände ohne jegliche Gewinnerzielungsabsicht.</li>
+                <li>Jegliche Nutzung durch <strong>Institutionelle Nutzer</strong> (einschließlich, aber nicht
+                    beschränkt auf: Unternehmen, Einzelunternehmer, Freiberufler, Vereine, Bildungseinrichtungen,
+                    Behörden oder NGOs) ist ausdrücklich <strong>untersagt</strong> und bedarf einer gesonderten,
+                    schriftlichen Lizenzvereinbarung mit dem Lizenzgeber.</li>
+            </ol>
 
-                <p>"Source" form shall mean the preferred form for making modifications,
-                including but not limited to software source code, documentation
-                source, and configuration files.</p>
+            <h3>§ 3 Funktionale Einschränkungen und Support</h3>
+            <ol>
+                <li>Dem Lizenznehmer wird das Produkt in der jeweils vorliegenden Fassung bereitgestellt („As-Is").</li>
+                <li>Für die kostenlose Privatnutzung besteht <strong>kein Anspruch</strong> auf:
+                    <ul>
+                        <li>Technischen Support oder Beratung.</li>
+                        <li>Bereitstellung von Sicherheits-Updates oder Patches.</li>
+                        <li>Gewährleistung der Kompatibilität mit spezifischen Hardware- oder Softwareumgebungen.</li>
+                    </ul>
+                </li>
+                <li>Der Lizenzgeber behält sich das Recht vor, Funktionen in zukünftigen Versionen zu ändern,
+                    einzuschränken oder kostenpflichtig zu gestalten.</li>
+            </ol>
 
-                <p>"Object" form shall mean any form resulting from mechanical
-                transformation or translation of a Source form, including but
-                not limited to compiled object code, generated documentation,
-                and conversions to other media types.</p>
+            <h3>§ 4 Wahrung der Urheberbezeichnung (Branding-Klausel)</h3>
+            <ol>
+                <li>Das Produkt verfügt über fest integrierte Urheberrechtshinweise, insbesondere die Kennzeichnung
+                    <strong>„Powered by AIIrondev"</strong> in der Benutzeroberfläche (Footer/Menü).</li>
+                <li>Es ist dem Lizenznehmer untersagt, diese Hinweise zu entfernen, zu modifizieren, zu verdecken oder
+                    deren Sichtbarkeit durch technische Maßnahmen (z. B. Manipulation von CSS, JavaScript oder
+                    Metadaten) zu beeinträchtigen.</li>
+                <li>Das Entfernen dieser Hinweise führt zum sofortigen und automatischen Erlöschen der
+                    Nutzungslizenz.</li>
+            </ol>
 
-                <p>"Work" shall mean the work of authorship, whether in Source or
-                Object form, made available under the License, as indicated by a
-                copyright notice that is included in or attached to the work.</p>
+            <h3>§ 5 Verbot der kommerziellen Verwertung &amp; SaaS</h3>
+            <ol>
+                <li>Die Bereitstellung des Produkts als Dienstleistung für Dritte (Software-as-a-Service, SaaS),
+                    insbesondere gegen Entgelt oder zur Generierung von Werbeeinnahmen, ist strikt untersagt.</li>
+                <li>Das Hosting auf öffentlichen Servern mit dem Ziel, Dritten ohne eigene Installation Zugriff auf
+                    die Funktionalität zu gewähren, ist nur mit ausdrücklicher schriftlicher Genehmigung des
+                    Lizenzgebers zulässig.</li>
+            </ol>
 
-                <p>"Derivative Works" shall mean any work, whether in Source or Object
-                form, that is based on (or derived from) the Work and for which the
-                editorial revisions, annotations, elaborations, or other modifications
-                represent, as a whole, an original work of authorship. For the purposes
-                of this License, Derivative Works shall not include works that remain
-                separable from, or merely link (or bind by name) to the interfaces of,
-                the Work and Derivative Works thereof.</p>
+            <h3>§ 6 Modifikationen und Contributions</h3>
+            <ol>
+                <li>Der Lizenznehmer darf den Quellcode für den privaten Eigenbedarf modifizieren.</li>
+                <li>Im Falle einer Veröffentlichung von Modifikationen oder der Einreichung von
+                    Verbesserungsvorschlägen (z. B. Pull Requests auf GitHub) räumt der Lizenznehmer dem Lizenzgeber
+                    ein unwiderrufliches, weltweites, zeitlich unbeschränktes und kostenfreies Nutzungs- und
+                    Verwertungsrecht an diesen Änderungen ein. Der Lizenzgeber ist berechtigt, diese Änderungen in
+                    das Hauptprodukt zu übernehmen und unter dieser oder einer anderen Lizenz zu vertreiben.</li>
+            </ol>
 
-                <p>"Contribution" shall mean any work of authorship, including
-                the original version of the Work and any modifications or additions
-                to that Work or Derivative Works thereof, that is intentionally
-                submitted to Licensor for inclusion in the Work by the copyright owner
-                or by an individual or Legal Entity authorized to submit on behalf of
-                the copyright owner. For the purposes of this definition, "submitted"
-                means any form of electronic, verbal, or written communication sent
-                to the Licensor or its representatives, including but not limited to
-                communication on electronic mailing lists, source code control systems,
-                and issue tracking systems that are managed by, or on behalf of, the
-                Licensor for the purpose of discussing and improving the Work, but
-                excluding communication that is conspicuously marked or otherwise
-                designated in writing by the copyright owner as "Not a Contribution."</p>
+            <h3>§ 7 Haftungsbeschränkung</h3>
+            <ol>
+                <li>Die Haftung des Lizenzgebers für Schäden, die aus der Nutzung oder Unmöglichkeit der Nutzung des
+                    Produkts entstehen (einschließlich Datenverlust, Betriebsunterbrechung oder entgangener Gewinn),
+                    ist auf Vorsatz und grobe Fahrlässigkeit beschränkt.</li>
+                <li>Der Lizenzgeber übernimmt keine Haftung für die Richtigkeit der mit dem Produkt verwalteten
+                    Daten.</li>
+            </ol>
 
-                <p>"Contributor" shall mean Licensor and any individual or Legal Entity
-                on behalf of whom a Contribution has been received by Licensor and
-                subsequently incorporated within the Work.</p>
+            <h3>§ 8 Rechtswahl und Gerichtsstand</h3>
+            <ol>
+                <li>Es gilt ausschließlich das Recht der <strong>Bundesrepublik Deutschland</strong> unter Ausschluss
+                    des UN-Kaufrechts (CISG).</li>
+                <li>Soweit gesetzlich zulässig, wird als Gerichtsstand für alle Streitigkeiten aus diesem Vertrag der
+                    Sitz des Lizenzgebers vereinbart.</li>
+                <li>Sollten einzelne Bestimmungen dieses Vertrags unwirksam sein, bleibt die Wirksamkeit der übrigen
+                    Bestimmungen unberührt (Salvatorische Klausel).</li>
+            </ol>
 
-                <p>2. Grant of Copyright License.</p>
+            <hr>
 
-                <p>Subject to the terms and conditions of
-                this License, each Contributor hereby grants to You a perpetual,
-                worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-                copyright license to reproduce, prepare Derivative Works of,
-                publicly display, publicly perform, sublicense, and distribute the
-                Work and such Derivative Works in Source or Object form.</p>
+            <div class="license-exception-notice">
+                <h3>⚠️ Anfragen für Ausnahmegenehmigungen (Kommerzielle Lizenzen)</h3>
+                <p>
+                    Bitte kontaktieren Sie den Urheber direkt über das GitHub-Profil:
+                    <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">AIIrondev auf GitHub</a>
+                </p>
+            </div>
 
-                <p>3. Grant of Patent License.</p>
+        </div><!-- /.license-content -->
+        </div><!-- /#pane-eula -->
 
-                <p>Subject to the terms and conditions of
-                this License, each Contributor hereby grants to You a perpetual,
-                worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-                (except as stated in this section) patent license to make, have made,
-                use, offer to sell, sell, import, and otherwise transfer the Work,
-                where such license applies only to those patent claims licensable
-                by such Contributor that are necessarily infringed by their
-                Contribution(s) alone or by combination of their Contribution(s)
-                with the Work to which such Contribution(s) was submitted. If You
-                institute patent litigation against any entity (including a
-                cross-claim or counterclaim in a lawsuit) alleging that the Work
-                or a Contribution incorporated within the Work constitutes direct
-                or contributory patent infringement, then any patent licenses
-                granted to You under this License for that Work shall terminate
-                as of the date such litigation is filed.</p>
+        <!-- ── NOTICE ────────────────────────────────────────────────────── -->
+        <div class="tab-pane fade" id="pane-notice" role="tabpanel">
+        <div class="license-content">
+            <h2>NOTICE – Urheberrechtliche Hinweise</h2>
+            <p><strong>Inventarsystem</strong><br>Copyright © 2025-2026 AIIrondev</p>
+            <p>Dieses Projekt steht unter dem Inventarsystem EULA (Endbenutzer-Lizenzvertrag). Der vollständige Lizenztext
+            befindet sich in <code>Legal/LICENSE</code>. Die Software wird ausschließlich für den privaten,
+            nicht-kommerziellen Gebrauch bereitgestellt. Unerlaubte kommerzielle Nutzung, SaaS-Hosting oder das Entfernen
+            von Branding ist untersagt. Anfragen für kommerzielle Lizenzen:
+            <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">https://github.com/AIIrondev</a></p>
 
-                <p>4. Redistribution.</p>
+            <hr>
+            <h3>Drittanbieter-Hinweise</h3>
+            <p>Dieses Projekt nutzt oder referenziert die folgende Drittanbieter-Software. Deren jeweilige Lizenzen gelten
+            wie angegeben. Dieser NOTICE-Abschnitt dient ausschließlich der Attribution und ändert keine Lizenzbedingungen.</p>
 
-                <p>You may reproduce and distribute copies of the
-                Work or Derivative Works thereof in any medium, with or without
-                modifications, and in Source or Object form, provided that You
-                meet the following conditions:</p>
+            <h4>Python-Pakete (Laufzeit)</h4>
+            <ul>
+                <li>Flask (BSD-3-Clause) © Pallets</li>
+                <li>Werkzeug (BSD-3-Clause) © Pallets</li>
+                <li>Jinja2 (BSD-3-Clause) © Pallets (indirekt via Flask)</li>
+                <li>Click (BSD-3-Clause) © Pallets (indirekt via Flask)</li>
+                <li>Gunicorn (MIT) © 2009-2025 Benoit Chesneau and contributors</li>
+                <li>PyMongo (Apache-2.0) © MongoDB, Inc.</li>
+                <li>APScheduler (MIT) © 2009-2025 Alex Grönholm and contributors</li>
+                <li>Pillow (HPND/FreeType-style) © 1995-2011 Fredrik Lundh; © 2010-2025 Alex Clark and contributors</li>
+                <li>python-dateutil (BSD-3-Clause) © 2017-2025 dateutil team; © 2003-2011 Gustavo Niemeyer</li>
+                <li>pytz (MIT) © 2003-2025 Stuart Bishop</li>
+                <li>requests (Apache-2.0) © 2011-2025 Kenneth Reitz and contributors</li>
+                <li>qrcode (BSD-3-Clause) © 2010-2025 Lincoln Loop and contributors</li>
+            </ul>
 
-                <ol type="a" class="ms-4">
-                    <li class="mb-2">You must give any other recipients of the Work or
-                        Derivative Works a copy of this License; and</li>
+            <h4>Frontend / Laufzeit-Assets</h4>
+            <ul>
+                <li>html5-qrcode (MIT) © 2020-2025 Manoj Brahmbhatt (mebjas)</li>
+            </ul>
 
-                    <li class="mb-2">You must cause any modified files to carry prominent notices
-                        stating that You changed the files; and</li>
+            <h4>Systemkomponenten (nicht im Repository enthalten, ggf. im Deployment genutzt)</h4>
+            <ul>
+                <li>NGINX (2-clause BSD) © Nginx, Inc. and/or its licensors</li>
+                <li>FFmpeg (LGPL/GPL, je nach Konfiguration) © 2000-2025 FFmpeg developers</li>
+            </ul>
 
-                    <li class="mb-2">You must retain, in the Source form of any Derivative Works
-                        that You distribute, all copyright, patent, trademark, and
-                        attribution notices from the Source form of the Work,
-                        excluding those notices that do not pertain to any part of
-                        the Derivative Works; and</li>
+            <hr>
+            <p class="text-muted small">Falls Sie Derivative Works erstellen und vertreiben, fügen Sie bitte Ihre eigenen
+            Attributionshinweise hier ein und geben Sie geänderte Dateien an.</p>
+        </div>
+        </div><!-- /#pane-notice -->
 
-                    <li class="mb-2">If the Work includes a "NOTICE" text file as part of its
-                        distribution, then any Derivative Works that You distribute must
-                        include a readable copy of the attribution notices contained
-                        within such NOTICE file, excluding those notices that do not
-                        pertain to any part of the Derivative Works, in at least one
-                        of the following places: within a NOTICE text file distributed
-                        as part of the Derivative Works; within the Source form or
-                        documentation, if provided along with the Derivative Works; or,
-                        within a display generated by the Derivative Works, if and
-                        wherever such third-party notices normally appear. The contents
-                        of the NOTICE file are for informational purposes only and
-                        do not modify the License. You may add Your own attribution
-                        notices within Derivative Works that You distribute, alongside
-                        or as an addendum to the NOTICE text from the Work, provided
-                        that such additional attribution notices cannot be construed
-                        as modifying the License.</li>
-                </ol>
+        <!-- ── DATENSCHUTZ ───────────────────────────────────────────────── -->
+        <div class="tab-pane fade" id="pane-privacy" role="tabpanel">
+        <div class="license-content">
+            <h2>Datenschutzerklärung (Privacy Policy)</h2>
 
-                <p>You may add Your own copyright statement to Your modifications and
-                may provide additional or different license terms and conditions
-                for use, reproduction, or distribution of Your modifications, or
-                for any such Derivative Works as a whole, provided Your use,
-                reproduction, and distribution of the Work otherwise complies with
-                the conditions stated in this License.</p>
+            <h3>1. Einleitung</h3>
+            <p>Der Schutz Ihrer persönlichen Daten ist uns ein wichtiges Anliegen. Dieses Dokument erläutert, wie das
+            „Inventarsystem" personenbezogene Daten verarbeitet.</p>
 
-                <p>5. Submission of Contributions.</p>
+            <h3>2. Verantwortliche Stelle</h3>
+            <p>Verantwortlich für die Datenverarbeitung ist der Betreiber der jeweiligen Instanz (Self-Hosted). Bei Fragen
+            wenden Sie sich bitte an den Administrator Ihrer Installation.</p>
 
-                <p>Unless You explicitly state otherwise,
-                any Contribution intentionally submitted for inclusion in the Work
-                by You to the Licensor shall be under the terms and conditions of
-                this License, without any additional terms or conditions.
-                Notwithstanding the above, nothing herein shall supersede or modify
-                the terms of any separate license agreement you may have executed
-                with Licensor regarding such Contributions.</p>
+            <h3>3. Erhobene Daten</h3>
+            <p>Das System verarbeitet folgende Kategorien von Daten:</p>
+            <ul>
+                <li><strong>Benutzerdaten:</strong> Benutzername, (je nach Nutzer/Administrator Name und Nachname).</li>
+                <li><strong>Inventardaten:</strong> Bezeichnungen von Gegenständen, Mengen, Standorte, ggf. Zuordnungen zu Personen.</li>
+                <li><strong>Protokolldaten:</strong> Zeitstempel von Änderungen (Logs), IP-Adressen (serverseitig zur Sicherheit).</li>
+            </ul>
 
-                <p>6. Trademarks.</p>
+            <h3>4. Zweck der Verarbeitung</h3>
+            <p>Die Daten werden ausschließlich zu folgenden Zwecken verarbeitet:</p>
+            <ul>
+                <li>Verwaltung und Organisation von Beständen.</li>
+                <li>Sicherstellung der Systemsicherheit.</li>
+                <li>Nachvollziehbarkeit von Bestandsänderungen.</li>
+            </ul>
 
-                <p>This License does not grant permission to use the trade
-                names, trademarks, service marks, or product names of the Licensor,
-                except as required for reasonable and customary use in describing the
-                origin of the Work and reproducing the content of the NOTICE file.</p>
+            <h3>5. Rechtsgrundlage (DSGVO)</h3>
+            <p>Die Verarbeitung erfolgt auf Basis von:</p>
+            <ul>
+                <li><strong>Art. 6 Abs. 1 lit. b DSGVO:</strong> Erfüllung eines Vertrages oder vorvertraglicher Maßnahmen.</li>
+                <li><strong>Art. 6 Abs. 1 lit. f DSGVO:</strong> Berechtigtes Interesse (effiziente Bestandsverwaltung).</li>
+            </ul>
 
-                <p>7. Disclaimer of Warranty.</p>
+            <h3>6. Datenlöschung</h3>
+            <p>Daten werden gelöscht, sobald sie für die Erreichung des Zweckes ihrer Erhebung nicht mehr erforderlich sind,
+            sofern keine gesetzlichen Aufbewahrungspflichten entgegenstehen.</p>
+        </div>
+        </div><!-- /#pane-privacy -->
 
-                <p>Unless required by applicable law or
-                agreed to in writing, Licensor provides the Work (and each
-                Contributor provides its Contributions) on an "AS IS" BASIS,
-                WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-                implied, including, without limitation, any warranties or conditions
-                of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-                PARTICULAR PURPOSE. You are solely responsible for determining the
-                appropriateness of using or redistributing the Work and assume any
-                risks associated with Your exercise of permissions under this License.</p>
+        <!-- ── SICHERHEIT ────────────────────────────────────────────────── -->
+        <div class="tab-pane fade" id="pane-security" role="tabpanel">
+        <div class="license-content">
+            <h2>Sicherheitsrichtlinie (Security Policy)</h2>
 
-                <p>8. Limitation of Liability.</p>
+            <h3>Unterstützte Versionen</h3>
+            <p>Bitte nutzen Sie immer die neueste Version aus dem <code>main</code>-Branch, um Sicherheitsupdates zu erhalten.</p>
 
-                <p>In no event and under no legal theory,
-                whether in tort (including negligence), contract, or otherwise,
-                unless required by applicable law (such as deliberate and grossly
-                negligent acts) or agreed to in writing, shall any Contributor be
-                liable to You for damages, including any direct, indirect, special,
-                incidental, or consequential damages of any character arising as a
-                result of this License or out of the use or inability to use the
-                Work (including but not limited to damages for loss of goodwill,
-                work stoppage, computer failure or malfunction, or any and all
-                other commercial damages or losses), even if such Contributor
-                has been advised of the possibility of such damages.</p>
+            <h3>Datenschutzrechtliche Mechanismen</h3>
+            <ul>
+                <li><strong>Passwort-Hashing:</strong> Passwörter werden niemals im Klartext gespeichert.</li>
+                <li><strong>Session-Management:</strong> Automatisches Logout nach Inaktivität (konfigurierbar).</li>
+                <li><strong>Berechtigungskonzept:</strong> Rollenbasierte Zugriffskontrolle (RBAC), um den Zugriff auf
+                    „Need-to-know"-Basis zu beschränken.</li>
+            </ul>
 
-                <p>9. Accepting Warranty or Additional Liability.</p>
-
-                <p>While redistributing
-                the Work or Derivative Works thereof, You may choose to offer,
-                and charge a fee for, acceptance of support, warranty, indemnity,
-                or other liability obligations and/or rights consistent with this
-                License. However, in accepting such obligations, You may act only
-                on Your own behalf and on Your sole responsibility, not on behalf
-                of any other Contributor, and only if You agree to indemnify,
-                defend, and hold each Contributor harmless for any liability
-                incurred by, or claims asserted against, such Contributor by reason
-                of your accepting any such warranty or additional liability.</p>
+            <h3>Meldung von Sicherheitslücken</h3>
+            <div class="license-exception-notice">
+                <h3>⚠️ Responsible Disclosure</h3>
+                <p>Falls Sie eine Sicherheitslücke entdecken, öffnen Sie bitte <strong>kein öffentliches Issue</strong>.
+                Kontaktieren Sie den Maintainer direkt über die
+                <a href="https://github.com/AIIrondev" target="_blank" rel="noopener noreferrer">GitHub Security Advisory-Funktion</a>
+                oder per E-Mail.</p>
             </div>
         </div>
+        </div><!-- /#pane-security -->
+
+        <!-- ── DATENVERARBEITUNG ─────────────────────────────────────────── -->
+        <div class="tab-pane fade" id="pane-data" role="tabpanel">
+        <div class="license-content">
+            <h2>Dokumentation der Datenverarbeitung (VVT)</h2>
+
+            <h3>Systemübersicht</h3>
+            <p>Das <strong>Inventarsystem</strong> ist eine Anwendung zur Erfassung und Verwaltung von physischen Gütern.</p>
+
+            <h3>Datenfluss</h3>
+            <ol>
+                <li><strong>Eingabe:</strong> Nutzer gibt Daten über das Frontend/API ein.</li>
+                <li><strong>Speicherung:</strong> Daten werden in einer lokalen Datenbank verschlüsselt abgelegt.</li>
+                <li><strong>Ausgabe:</strong> Anzeige der Bestände für autorisierte Nutzer.</li>
+            </ol>
+
+            <h3>Technische und Organisatorische Maßnahmen (TOM)</h3>
+            <ul>
+                <li><strong>Zugangskontrolle:</strong> Authentifizierung über Benutzerkonten.</li>
+                <li><strong>Integrität:</strong> Validierung der Eingabedaten zur Vermeidung von Datenbankfehlern.</li>
+                <li><strong>Verfügbarkeit:</strong> Empfohlene Backup-Strategien für die Datenbank.</li>
+            </ul>
+
+            <h3>Empfänger der Daten</h3>
+            <p>Die Daten verbleiben innerhalb der kontrollierten Umgebung der Installation. Es findet kein automatisierter
+            Export an Dritte statt.</p>
+        </div>
+        </div><!-- /#pane-data -->
+
+        <!-- ── RECHTSGRUNDLAGE ───────────────────────────────────────────── -->
+        <div class="tab-pane fade" id="pane-legal" role="tabpanel">
+        <div class="license-content">
+            <h2>Rechtsgrundlage der Nutzung</h2>
+            <p>Um das Inventarsystem DSGVO-konform zu betreiben, muss der Betreiber eine der folgenden Grundlagen festlegen:</p>
+            <ol>
+                <li><strong>Innerbetriebliche Nutzung:</strong> Die Verarbeitung ist zur Durchführung des
+                    Beschäftigungsverhältnisses erforderlich (§ 26 BDSG / Art. 88 DSGVO).</li>
+                <li><strong>Berechtigtes Interesse:</strong> Das Unternehmen hat ein berechtigtes Interesse daran, zu wissen,
+                    wo sich Arbeitsmittel befinden (Art. 6 Abs. 1 lit. f DSGVO).</li>
+                <li><strong>Einwilligung:</strong> Falls private Daten der Nutzer erfasst werden, muss eine explizite
+                    Einwilligung vorliegen (Art. 6 Abs. 1 lit. a DSGVO).</li>
+            </ol>
+            <div class="license-exception-notice" style="background-color:#f8d7da; border-color:#f5c2c7; border-left-color:#dc3545;">
+                <h3 style="color:#842029;">⚠️ Hinweis</h3>
+                <p>Dieses Dokument stellt <strong>keine Rechtsberatung</strong> dar. Bitte konsultieren Sie im Zweifelsfall
+                einen Fachanwalt für Datenschutzrecht.</p>
+            </div>
+        </div>
+        </div><!-- /#pane-legal -->
+
+        </div><!-- /.tab-content -->
     </div>
 </div>
 
 <style>
+    #legalTabs .nav-link {
+        color: #495057;
+    }
+    #legalTabs .nav-link.active {
+        font-weight: 600;
+        color: #0d6efd;
+    }
     .license-content {
         background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        margin-top: 20px;
-    }
-    
-    .license-link {
-        margin: 15px 0;
-        padding: 10px;
-        background-color: #e9ecef;
-        border-radius: 5px;
-        text-align: center;
-    }
-    
-    .license-full-text {
-        margin-top: 20px;
-        padding: 15px;
+        padding: 20px 30px;
+        border-radius: 0 0 5px 5px;
         border: 1px solid #dee2e6;
+        border-top: none;
+    }
+    .license-content h2 {
+        margin-top: 10px;
+    }
+    .license-content h3 {
+        margin-top: 1.4em;
+        color: #343a40;
+    }
+    .license-content h4 {
+        margin-top: 1.1em;
+        color: #495057;
+    }
+    .license-content ol,
+    .license-content ul {
+        padding-left: 1.5em;
+        line-height: 1.7;
+    }
+    .license-content li {
+        margin-bottom: 0.4em;
+    }
+    .license-content hr {
+        margin: 25px 0;
+        border-color: #dee2e6;
+    }
+    .license-exception-notice {
+        margin: 20px 0;
+        padding: 15px 20px;
+        background-color: #fff3cd;
+        border: 1px solid #ffc107;
+        border-left: 5px solid #ffc107;
         border-radius: 5px;
-        background-color: #fff;
-        max-height: 400px;
-        overflow-y: auto;
-        font-size: 0.9em;
+    }
+    .license-exception-notice h3 {
+        margin-top: 0;
+        color: #856404;
+    }
+    .license-exception-notice p {
+        margin-bottom: 0;
+    }
+    .license-exception-notice a {
+        font-weight: bold;
+        color: #0d6efd;
     }
 </style>
 {% endblock %}

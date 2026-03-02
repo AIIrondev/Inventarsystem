@@ -25,7 +25,7 @@ Das System richtet sich insbesondere an Bildungseinrichtungen, Organisationen un
 - [Konfiguration](#konfiguration)
 - [Fehlerbehebung](#fehlerbehebung)
 - [Systemanforderungen](#systemanforderungen)
-- [Lizenz](#lizenz)
+- [Lizenz Rechtliches & Datenschutz](#lizenz-rechtliches--datenschutz)
 
 ---
 
@@ -423,9 +423,18 @@ sudo ./fix-all.sh --setup-cron
 
 ---
 
-## Lizenz
+## Lizenz Rechtliches & Datenschutz
 
-Dieses Projekt ist unter der Apache License 2.0 lizenziert. Siehe die [LICENSE](LICENSE)-Datei für Details.
+Dieses Projekt ist auf Transparenz und Datensparsamkeit ausgelegt. Um einen rechtskonformen Betrieb (insbesondere gemäß DSGVO) zu gewährleisten, wurden folgende Dokumente erstellt:
+
+* **[Lizenz](./Legal/LICENSE.md)** 
+
+* **[Datenschutzerklärung](./Legal/PRIVACY.md):** Erläutert, welche personenbezogenen Daten (z. B. Inventarzuordnungen, Logins) verarbeitet werden.
+* **[Datenverarbeitung & Dokumentation](./Legal/DATA_PROCESSING.md):** Details zu den technischen Abläufen und Speichermechanismen innerhalb des Systems.
+* **[Rechtsgrundlage](./Legal/LEGAL_BASIS.md):** Informationen für Administratoren zur rechtmäßigen Nutzung im geschäftlichen oder privaten Umfeld.
+* **[Sicherheit & Mechanismen](./Legal/SECURITY.md):** Übersicht der implementierten Schutzmaßnahmen (Hashing, Zugriffskontrolle).
+
+> **Wichtiger Hinweis:** Die bereitgestellten Dokumente dienen als Vorlage. Als Betreiber einer Instanz dieses Inventarsystems sind Sie selbst dafür verantwortlich, diese an Ihre spezifische Hosting-Umgebung und Ihre internen Prozesse anzupassen.
 
 ---
 

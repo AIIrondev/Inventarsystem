@@ -1,11 +1,10 @@
 /**
- * iOS Specific Enhancements for Inventarsystem
- * 
- * This file contains fixes specific to iOS devices for the Inventarsystem application,
- * focusing on upload and duplication functionality.
- * 
- * Copyright 2025 Maximilian Gründinger
- * Licensed under the Apache License, Version 2.0
+ * Copyright 2025-2026 AIIrondev
+ *
+ * Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
+ * See Legal/LICENSE for the full license text.
+ * Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
+ * For commercial licensing inquiries: https://github.com/AIIrondev
  */
 
 // Initialize when document is loaded
