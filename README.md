@@ -427,7 +427,7 @@ sudo ./fix-all.sh --setup-cron
 
 Dieses Projekt ist auf Transparenz und Datensparsamkeit ausgelegt. Um einen rechtskonformen Betrieb (insbesondere gemäß DSGVO) zu gewährleisten, wurden folgende Dokumente erstellt:
 
-* **[Lizenz](./Legal/LICENSE.md)** 
+* **[Lizenz](./Legal/LICENSE)** 
 
 * **[Datenschutzerklärung](./Legal/PRIVACY.md):** Erläutert, welche personenbezogenen Daten (z. B. Inventarzuordnungen, Logins) verarbeitet werden.
 * **[Datenverarbeitung & Dokumentation](./Legal/DATA_PROCESSING.md):** Details zu den technischen Abläufen und Speichermechanismen innerhalb des Systems.
