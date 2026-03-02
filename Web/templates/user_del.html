@@ -1,5 +1,5 @@
 <!--
-   Copyright 2025 Maximilian Gründinger
+   Copyright 2025-2026 Maximilian Gründinger
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -28,7 +28,8 @@
                 <thead class="thead-dark">
                     <tr>
                         <th>Benutzername</th>
-                        <th>Ganzer Name</th>
+                        <th>Vorname</th>
+                        <th>Nachname</th>
                         <th>Administrator</th>
                         <th>Aktionen</th>
                     </tr>
@@ -37,7 +38,8 @@
                     {% for user in users %}
                     <tr>
                         <td>{{ user.username }}</td>
-                        <td>{{ user.fullname if user.fullname else user.username }}</td>
+                        <td>{{ user.name if user.name else user.username }}</td>
+                        <td>{{ user.lastname if user.lastname else "" }}</td>
                         <td>{{ "Ja" if user.admin else "Nein" }}</td>
                         <td class="actions">
                             <form method="POST" action="{{ url_for('delete_user') }}" class="d-inline">
