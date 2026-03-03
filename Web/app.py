@@ -172,11 +172,62 @@ def update_appointment_statuses():
 
             # Wenn sich der Status geändert hat, aktualisiere in der Datenbank
             if new_status != old_status:
+                extra_fields = {}
+
+                # --- Conflict resolver: planned → active transition ---
+                # Check if the physical item is already borrowed by someone else
+                if old_status == 'planned' and new_status == 'active':
+                    items_col = db['items']
+                    item_id_str = appointment.get('Item')
+                    conflict_detected = False
+                    conflict_note = ''
+                    if item_id_str:
+                        try:
+                            item_doc = items_col.find_one(
+                                {'_id': ObjectId(item_id_str)},
+                                {'Verfuegbar': 1, 'User': 1, 'Name': 1, 'Exemplare': 1}
+                            )
+                            if item_doc:
+                                total_exemplare = int(item_doc.get('Exemplare', 1))
+                                # Count how many active (non-planned) borrows currently hold this item
+                                active_borrows = ausleihungen.count_documents({
+                                    'Item': item_id_str,
+                                    'Status': 'active',
+                                    '_id': {'$ne': appointment['_id']}
+                                })
+                                if active_borrows >= total_exemplare or item_doc.get('Verfuegbar') is False:
+                                    conflict_detected = True
+                                    borrower = item_doc.get('User', 'unbekannter Benutzer')
+                                    item_name = item_doc.get('Name', item_id_str)
+                                    conflict_note = (
+                                        f"Gegenstand '{item_name}' war beim Aktivieren von "
+                                        f"'{appointment.get('User', '?')}' bereits ausgeliehen "
+                                        f"von '{borrower}' (aktive Borrows: {active_borrows}/{total_exemplare})."
+                                    )
+                                    extra_fields['ConflictDetected'] = True
+                                    extra_fields['ConflictNote'] = conflict_note
+                                    extra_fields['ConflictAt'] = current_time
+                                    conflict_log = (
+                                        f"  [KONFLIKT] Termin {appointment['_id']}: "
+                                        f"planned → active, aber {conflict_note}"
+                                    )
+                                    print(conflict_log)
+                                    with open(log_file, 'a', encoding='utf-8') as f:
+                                        f.write(f"[{current_time}] {conflict_log}\n")
+                                else:
+                                    # No conflict — clear any previously stored conflict flag
+                                    extra_fields['ConflictDetected'] = False
+                                    extra_fields['ConflictNote'] = ''
+                        except Exception as conflict_err:
+                            print(f"  [WARN] Konfliktprüfung fehlgeschlagen für Termin "
+                                  f"{appointment['_id']}: {conflict_err}")
+
                 result = ausleihungen.update_one(
                     {'_id': appointment['_id']},
                     {'$set': {
                         'Status': new_status,
-                        'LastUpdated': current_time
+                        'LastUpdated': current_time,
+                        **extra_fields
                     }}
                 )
 
@@ -888,6 +939,47 @@ def get_item_json(id):
         return jsonify(item)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/booking_conflicts')
+def api_booking_conflicts():
+    """
+    Returns all active bookings that have a detected conflict
+    (i.e. the item was already borrowed when the planned booking activated).
+    Regular users see only their own conflicts; admins see all.
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    try:
+        is_admin = us.check_admin(session['username'])
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+
+        query = {'ConflictDetected': True, 'Status': 'active'}
+        if not is_admin:
+            query['User'] = session['username']
+
+        conflicts = list(ausleihungen.find(query))
+        result = []
+        for c in conflicts:
+            item_doc = it.get_item(c.get('Item'))
+            item_name = item_doc.get('Name', c.get('Item', '?')) if item_doc else c.get('Item', '?')
+            conflict_at = c.get('ConflictAt')
+            if isinstance(conflict_at, datetime.datetime):
+                conflict_at = conflict_at.strftime('%Y-%m-%d %H:%M')
+            result.append({
+                'id': str(c['_id']),
+                'Item': item_name,
+                'User': c.get('User', '?'),
+                'ConflictNote': c.get('ConflictNote', ''),
+                'ConflictAt': conflict_at,
+                'Status': c.get('Status', ''),
+            })
+        client.close()
+        return jsonify({'conflicts': result, 'count': len(result)})
+    except Exception as e:
+        return jsonify({'error': str(e), 'conflicts': []}), 500
 
 """Favorites management endpoints (persistent + session cache)."""
 def _ensure_session_favs():
@@ -3160,7 +3252,9 @@ def logs():
                 'End': end_date,
                 'Duration': duration,
                 'Status': display_status,
-                'id': str(ausleihung['_id'])
+                'id': str(ausleihung['_id']),
+                'ConflictDetected': ausleihung.get('ConflictDetected', False),
+                'ConflictNote': ausleihung.get('ConflictNote', ''),
             })
         except Exception as e:
             continue

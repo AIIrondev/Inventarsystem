@@ -13,6 +13,15 @@
 {% block content %}
 <div class="container">
     <h1>Ausleihungs-Protokoll</h1>
+
+    {% set conflicts = items | selectattr('ConflictDetected') | list %}
+    {% if conflicts %}
+    <div class="conflict-summary-banner" id="conflictSummaryBanner">
+        <strong>⚠ {{ conflicts | length }} Buchungskonflikt{{ 's' if conflicts | length > 1 else '' }} erkannt</strong> –
+        Geplante Reservierungen wurden aktiv, obwohl der Gegenstand bereits ausgeliehen war.
+        <button onclick="document.getElementById('conflictSummaryBanner').style.display='none'" class="banner-close">✕</button>
+    </div>
+    {% endif %}
     
     <div class="filter-controls">
         <input type="text" id="searchInput" placeholder="Suchen..." onkeyup="filterTable()">
@@ -36,6 +45,7 @@
                     <th onclick="sortTable(3)">Ausgeliehen am ↕</th>
                     <th onclick="sortTable(4)">Zurückgegeben am ↕</th>
                     <th>Dauer</th>
+                    <th>Hinweis</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,6 +59,11 @@
                     <td>{{ item.Start }}</td>
                     <td>{{ item.End }}</td>
                     <td>{{ item.Duration }}</td>
+                    <td>
+                        {% if item.ConflictDetected %}
+                        <span class="conflict-badge" title="{{ item.ConflictNote }}">⚠ Konflikt</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -238,6 +253,45 @@
     .status-active { background-color: #17a2b8; }
     .status-completed { background-color: #28a745; }
     .status-cancelled { background-color: #dc3545; }
+
+    .conflict-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+        cursor: help;
+        white-space: nowrap;
+    }
+
+    .conflict-summary-banner {
+        background-color: #fff3cd;
+        border: 1px solid #ffc107;
+        border-left: 4px solid #fd7e14;
+        color: #856404;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .banner-close {
+        background: none;
+        border: none;
+        font-size: 1rem;
+        cursor: pointer;
+        color: #856404;
+        flex-shrink: 0;
+        padding: 0 4px;
+    }
+
+    .banner-close:hover { color: #533f03; }
     
     .table-container {
         overflow-x: auto;

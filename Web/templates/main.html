@@ -265,6 +265,32 @@
     }
 </style>
 <div class="container">
+    <!-- Conflict warning banner (populated by JS) -->
+    <div id="conflict-banner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-left:4px solid #fd7e14; color:#856404; padding:12px 16px; border-radius:4px; margin-bottom:16px; position:relative;">
+        <strong>⚠ Reservierungskonflikt</strong>
+        <span id="conflict-banner-text"></span>
+        <button onclick="document.getElementById('conflict-banner').style.display='none'" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:1rem;cursor:pointer;color:#856404;">✕</button>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/booking_conflicts')
+            .then(r => r.json())
+            .then(data => {
+                if (data.conflicts && data.conflicts.length > 0) {
+                    const banner = document.getElementById('conflict-banner');
+                    const text = document.getElementById('conflict-banner-text');
+                    const c = data.conflicts[0];
+                    if (data.conflicts.length === 1) {
+                        text.textContent = ' Ihre Reservierung für "' + c.Item + '" ist aktiv, aber der Gegenstand ist bereits von jemand anderem ausgeliehen. Bitte wenden Sie sich an einen Administrator.';
+                    } else {
+                        text.textContent = ' ' + data.conflicts.length + ' Ihrer Reservierungen sind aktiv, aber die Gegenstände sind bereits ausgeliehen. Bitte wenden Sie sich an einen Administrator.';
+                    }
+                    banner.style.display = 'block';
+                }
+            })
+            .catch(() => {});
+    });
+    </script>
     <div class="content">
         <h1 style="position:relative;">Inventar Objekte
             <button id="toggle-favorites-view" title="Nur Merkliste anzeigen" style="position:absolute; right:0; top:0; background:none; border:none; font-size:1.4rem; cursor:pointer;">
