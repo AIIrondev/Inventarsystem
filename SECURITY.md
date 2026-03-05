@@ -19,4 +19,4 @@ The latest version will allways be supported the rest are old version that are n
 
 ## Reporting a Vulnerability
 
-To report a vulnerability contact me via. my E-Mail ** Iron.ai.dev@gmail.com ** or in insevere cases over an Issue.
+To report a vulnerability contact me via. my E-Mail Iron.ai.dev@gmail.com or in insevere cases over an Issue.
