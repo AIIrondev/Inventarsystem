@@ -2,7 +2,7 @@
 
 [![wakatime](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243.svg)](https://wakatime.com/badge/user/30b8509f-5e17-4d16-b6b8-3ca0f3f936d3/project/8a380b7f-389f-4a7e-8877-0fe9e1a4c243)
 
-**Aktuelle Version: 3.0.2**
+**Aktuelle Version: 3.1.0**
 
 Ein modernes webbasiertes Inventarverwaltungssystem zur Verwaltung, Ausleihe, Reservierung und Rückgabe von Gegenständen.
 Das System richtet sich insbesondere an Bildungseinrichtungen, Organisationen und Labore.
@@ -427,7 +427,7 @@ sudo ./fix-all.sh --setup-cron
 
 Dieses Projekt ist auf Transparenz und Datensparsamkeit ausgelegt. Um einen rechtskonformen Betrieb (insbesondere gemäß DSGVO) zu gewährleisten, wurden folgende Dokumente erstellt:
 
-* **[Lizenz](./Legal/LICENSE)** 
+* **[Lizenz](./LICENSE)** 
 
 * **[Datenschutzerklärung](./Legal/PRIVACY.md):** Erläutert, welche personenbezogenen Daten (z. B. Inventarzuordnungen, Logins) verarbeitet werden.
 * **[Datenverarbeitung & Dokumentation](./Legal/DATA_PROCESSING.md):** Details zu den technischen Abläufen und Speichermechanismen innerhalb des Systems.
