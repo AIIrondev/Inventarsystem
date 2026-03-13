@@ -6,7 +6,8 @@ The latest version will allways be supported the rest are old version that are n
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 3.1.x   | :white_check_mark: |
+| 3.2.x   | :white_check_mark: |
+| 3.1.x   | :x:                |
 | 3.0.x   | :white_check_mark: |
 | 2.6.x   | :x:                |
 | 2.4.x   | :x:                |
