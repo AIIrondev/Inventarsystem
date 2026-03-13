@@ -101,6 +101,47 @@ echo "========================================================"
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 apt_install() { sudo apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"; }
 
+write_nginx_wrapper_service() {
+    cat <<EOF | sudo tee /etc/systemd/system/inventarsystem-nginx.service >/dev/null
+[Unit]
+Description=Nginx for Inventarsystem
+After=network.target inventarsystem-gunicorn.service
+Requires=inventarsystem-gunicorn.service
+
+[Service]
+Type=forking
+PIDFile=/run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t
+ExecStart=/usr/sbin/nginx
+ExecReload=/usr/sbin/nginx -s reload
+ExecStop=/bin/kill -s QUIT \$MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+start_or_reload_standard_nginx() {
+    sudo systemctl enable nginx || true
+    echo "Starting/Reloading Nginx..."
+
+    if sudo systemctl is-active --quiet nginx; then
+        if [ -s /run/nginx.pid ]; then
+            sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload
+        else
+            echo "Nginx is active but PID file is missing/empty; stopping service before clean start..."
+            sudo systemctl stop nginx || true
+            sleep 1
+            sudo systemctl reset-failed nginx || true
+            sudo systemctl start nginx
+        fi
+    else
+        sudo systemctl reset-failed nginx || true
+        sudo systemctl start nginx || sudo systemctl restart nginx
+    fi
+}
+
 # Ensure directories and permissions
 sudo mkdir -p "$LOG_DIR" "$CERT_DIR"
 sudo chown -R "${SUDO_USER:-$USER}:${SUDO_USER:-$USER}" "$LOG_DIR" "$CERT_DIR"
@@ -561,11 +602,14 @@ echo "========================================================"
 echo " Enabling services"
 echo "========================================================"
 sudo mkdir -p /tmp && sudo chmod 1777 /tmp
+# Prefer standard nginx.service; allow opting into a wrapper with USE_NGINX_WRAPPER=true
+USE_WRAPPER="${USE_NGINX_WRAPPER:-false}"
+if [ "$USE_WRAPPER" = true ]; then
+    write_nginx_wrapper_service
+fi
 sudo systemctl daemon-reload
 sudo systemctl enable inventarsystem-gunicorn.service
 
-# Prefer standard nginx.service; allow opting into a wrapper with USE_NGINX_WRAPPER=true
-USE_WRAPPER="${USE_NGINX_WRAPPER:-false}"
 # If a legacy wrapper exists but wrapper not desired, disable it to avoid conflicts
 if [ "$USE_WRAPPER" != true ] && [ -f "/etc/systemd/system/inventarsystem-nginx.service" ]; then
     echo "Disabling legacy inventarsystem-nginx.service wrapper"
@@ -583,21 +627,7 @@ if [ "$USE_WRAPPER" = true ]; then
     echo "Reloading Nginx (wrapper)..."
     sudo systemctl reload inventarsystem-nginx.service || sudo systemctl restart inventarsystem-nginx.service
 else
-    sudo systemctl enable nginx || true
-    echo "Starting/Reloading Nginx..."
-    # If an nginx master is already running, prefer a direct reload to avoid bind() conflicts
-    if pgrep -x nginx >/dev/null 2>&1; then
-        # If PID file is present and non-empty, use nginx -s reload; otherwise do a managed restart
-        if [ -s /run/nginx.pid ]; then
-            sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
-        else
-            echo "Nginx PID file missing/empty; performing controlled restart..."
-            sudo systemctl restart nginx || { sudo pkill -TERM nginx || true; sleep 1; sudo systemctl start nginx || true; }
-        fi
-    else
-        # Start the service (or restart as fallback)
-        sudo systemctl start nginx || sudo systemctl restart nginx || true
-    fi
+    start_or_reload_standard_nginx
 fi
 
 echo "========================================================"
@@ -619,144 +649,3 @@ echo "Logs: $LOG_DIR (access.log, error.log)"
 echo "MongoDB (optional): mongodb://localhost:27017"
 echo "========================================================"
 echo "✓ Nginx configuration created and tested"
-
-if [ "$USE_WRAPPER" = true ]; then
-# Create the nginx service file (optional wrapper)
-sudo tee /etc/systemd/system/inventarsystem-nginx.service > /dev/null << EOF
-[Unit]
-Description=Nginx for Inventarsystem
-After=network.target inventarsystem-gunicorn.service
-Requires=inventarsystem-gunicorn.service
-
-[Service]
-Type=forking
-ExecStartPre=/usr/sbin/nginx -t
-ExecStart=/usr/sbin/nginx
-ExecReload=/usr/sbin/nginx -s reload
-Restart=always
-RestartSec=5
-KillMode=process
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Make sure socket directory has correct permissions
-sudo mkdir -p /tmp
-sudo chmod 1777 /tmp
-
-# Stop the standard nginx service first to avoid conflicts
-echo "Stopping standard nginx service if running..."
-sudo systemctl stop nginx 2>/dev/null || true
-
-# Reload systemd configuration
-echo "Reloading systemd configuration..."
-sudo systemctl daemon-reload
-
-# Enable and start the services
-echo "Enabling and starting services..."
-sudo systemctl enable inventarsystem-gunicorn.service
-sudo systemctl enable inventarsystem-nginx.service
-
-# Start gunicorn first
-sudo systemctl start inventarsystem-gunicorn.service || {
-    echo "ERROR: Failed to start gunicorn service. Check status with: sudo systemctl status inventarsystem-gunicorn.service"
-    exit 1
-}
-
-# Then start nginx 
-sudo systemctl start inventarsystem-nginx.service || {
-    echo "WARN: Failed to start inventarsystem-nginx.service (may already be running). Checking status..."
-    sudo systemctl status inventarsystem-nginx.service || true
-    echo "For more details run: sudo journalctl -xeu inventarsystem-nginx.service"
-
-    # Try to reload or start standard nginx as a fallback, but don't abort
-    echo "Attempting to (re)load standard nginx as fallback..."
-    if pgrep -x nginx >/dev/null 2>&1; then
-        sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
-    else
-        sudo systemctl start nginx || sudo systemctl restart nginx || true
-    fi
-}
-
-echo "✓ Services configured and started successfully"
-echo "To check status: sudo systemctl status inventarsystem-nginx.service"
-echo "To view logs: sudo journalctl -u inventarsystem-nginx.service -f"
-fi
-
-# Restart Nginx service
-if systemctl is-active --quiet inventarsystem-nginx.service; then
-    sudo systemctl restart inventarsystem-nginx.service || true
-else
-    # Fallback to standard nginx if wrapper isn’t active
-    if pgrep -x nginx >/dev/null 2>&1; then
-        if [ -s /run/nginx.pid ]; then
-            sudo /usr/sbin/nginx -t && sudo /usr/sbin/nginx -s reload || true
-        else
-            echo "Nginx PID file missing/empty; performing controlled restart..."
-            sudo systemctl restart nginx || { sudo pkill -TERM nginx || true; sleep 1; sudo systemctl start nginx || true; }
-        fi
-    else
-        sudo systemctl restart nginx || true
-    fi
-fi
-
-echo "✓ Nginx service restarted"
-
-# Make sure socket directory has correct permissions
-sudo mkdir -p /tmp
-sudo chmod 1777 /tmp
-
-# Reload systemd configuration
-sudo systemctl daemon-reload
-
-# Enable and start the services (standard path)
-sudo systemctl enable inventarsystem-gunicorn.service
-sudo systemctl start inventarsystem-gunicorn.service || true
-sudo systemctl enable nginx || true
-sudo systemctl start nginx || sudo systemctl restart nginx || true
-
-echo " ------------------------------------------"
-echo "             FIREWALL SETUP                "
-echo " ------------------------------------------"
-
-# Enable UFW and set default rules
-sudo apt update
-sudo apt install -y ufw
-
-# Reset to default settings (optional, clears all previous rules)
-sudo ufw --force reset
-
-# Deny all incoming by default, allow all outgoing
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-
-# Allow SSH (port 22)
-sudo ufw allow 22
-
-# Allow HTTPS (port 443)
-sudo ufw allow 443
-
-sudo ufw allow 80
-
-sudo ufw allow 8080
-
-# Enable UFW
-sudo ufw --force enable
-
-# Show status
-sudo ufw status verbose
-
-
-echo "✓ Services configured and started"
-echo "To check status: sudo systemctl status inventarsystem-gunicorn.service"
-echo "To view logs: sudo journalctl -u inventarsystem-gunicorn.service -f"
-
-echo "========================================================"
-echo "Access Information:"
-echo "========================================================"
-
-echo "Web Interface: https://$NETWORK_IP"
-echo "Web Interface (Unix Socket): http://unix:/tmp/inventarsystem.sock"
-echo "MongoDB: mongodb://localhost:27017"
-echo "========================================================"

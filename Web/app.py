@@ -440,6 +440,24 @@ def strip_whitespace(value):
     return value
 
 
+def sanitize_form_value(value):
+    """
+    Strip whitespace and escape HTML for a string or each string item in a list.
+
+    Args:
+        value: String, list of strings, or None
+
+    Returns:
+        Sanitized string, list of sanitized strings, or the original value if unsupported
+    """
+    value = strip_whitespace(value)
+    if isinstance(value, str):
+        return html.escape(value)
+    if isinstance(value, list):
+        return [html.escape(item) if isinstance(item, str) else item for item in value]
+    return value
+
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """
@@ -1071,19 +1089,19 @@ def upload_item():
     
     try:
         # Strip whitespace from all text fields
-        name = html.escape(strip_whitespace(request.form['name']))
-        ort = html.escape(strip_whitespace(request.form['ort']))
-        beschreibung = html.escape(strip_whitespace(request.form['beschreibung']))
+        name = sanitize_form_value(request.form['name'])
+        ort = sanitize_form_value(request.form['ort'])
+        beschreibung = sanitize_form_value(request.form['beschreibung'])
         
         # Check both possible image field names
         images = request.files.getlist('images') or request.files.getlist('new_images')
         
-        filter_upload = html.escape(strip_whitespace(request.form.getlist('filter')))
-        filter_upload2 = html.escape(strip_whitespace(request.form.getlist('filter2')))
-        filter_upload3 = html.escape(strip_whitespace(request.form.getlist('filter3')))
-        anschaffungs_jahr = html.escape(strip_whitespace(request.form.getlist('anschaffungsjahr')))
-        anschaffungs_kosten = html.escape(strip_whitespace(request.form.getlist('anschaffungskosten')))
-        code_4 = html.escape(strip_whitespace(request.form.getlist('code_4')))
+        filter_upload = sanitize_form_value(request.form.getlist('filter'))
+        filter_upload2 = sanitize_form_value(request.form.getlist('filter2'))
+        filter_upload3 = sanitize_form_value(request.form.getlist('filter3'))
+        anschaffungs_jahr = sanitize_form_value(request.form.getlist('anschaffungsjahr'))
+        anschaffungs_kosten = sanitize_form_value(request.form.getlist('anschaffungskosten'))
+        code_4 = sanitize_form_value(request.form.getlist('code_4'))
         
         # Check if this is a duplication
         is_duplicating = request.form.get('is_duplicating') == 'true'
@@ -2019,18 +2037,18 @@ def edit_item(id):
         return redirect(url_for('login'))
     
     # Strip whitespace from all text fields
-    name = html.escape(strip_whitespace(request.form.get('name')))
-    ort = html.escape(strip_whitespace(request.form.get('ort')))
-    beschreibung = html.escape(strip_whitespace(request.form.get('beschreibung')))
+    name = sanitize_form_value(request.form.get('name'))
+    ort = sanitize_form_value(request.form.get('ort'))
+    beschreibung = sanitize_form_value(request.form.get('beschreibung'))
     
     # Strip whitespace from all filter values
-    filter1 = html.escape(strip_whitespace(request.form.getlist('filter')))
-    filter2 = html.escape(strip_whitespace(request.form.getlist('filter2')))
-    filter3 = html.escape(strip_whitespace(request.form.getlist('filter3')))
+    filter1 = sanitize_form_value(request.form.getlist('filter'))
+    filter2 = sanitize_form_value(request.form.getlist('filter2'))
+    filter3 = sanitize_form_value(request.form.getlist('filter3'))
     
-    anschaffungs_jahr = html.escape(strip_whitespace(request.form.get('anschaffungsjahr')))
-    anschaffungs_kosten = html.escape(strip_whitespace(request.form.get('anschaffungskosten')))
-    code_4 = html.escape(strip_whitespace(request.form.get('code_4')))
+    anschaffungs_jahr = sanitize_form_value(request.form.get('anschaffungsjahr'))
+    anschaffungs_kosten = sanitize_form_value(request.form.get('anschaffungskosten'))
+    code_4 = sanitize_form_value(request.form.get('code_4'))
     reservierbar = 'reservierbar' in request.form
     
     # Check if code is unique (excluding the current item)
@@ -3338,7 +3356,7 @@ def add_filter_value(filter_num):
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
-    value = html.escape(strip_whitespace(request.form.get('value')))
+    value = sanitize_form_value(request.form.get('value'))
     
     if not value:
         flash('Bitte geben Sie einen Wert ein', 'error')
@@ -3818,7 +3836,7 @@ def add_location_value():
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
-    value = html.escape(strip_whitespace(request.form.get('value')))
+    value = sanitize_form_value(request.form.get('value'))
     
     if not value:
         flash('Bitte geben Sie einen Wert ein', 'error')
