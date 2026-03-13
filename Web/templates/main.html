@@ -3503,9 +3503,32 @@
             padding: 8px 0 !important;
         }
 
-        /* Hide filter labels on phones to keep controls compact */
+        .filter-header {
+            align-items: flex-start !important;
+        }
+
         .filter-header > label {
-            display: none !important;
+            display: block !important;
+            flex: 1 1 100% !important;
+            margin: 0 0 6px 0 !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            line-height: 1.35 !important;
+            color: #212529 !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+        }
+
+        .filter-option label,
+        .filter-tag,
+        .filter-tag-group {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+        }
+
+        .selected-filters {
+            gap: 6px !important;
         }
 
         .search-container {
