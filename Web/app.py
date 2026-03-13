@@ -4206,6 +4206,22 @@ def is_video_file(filename):
     return extension in video_extensions
 
 
+def normalize_image_orientation(img, log_prefix=""):
+    """
+    Normalize image orientation using EXIF metadata.
+
+    Many phone images are stored as "rotated + EXIF orientation tag".
+    Converting them to other formats (e.g. WebP) without applying the EXIF
+    transform can make portrait images appear sideways.
+    """
+    try:
+        return ImageOps.exif_transpose(img)
+    except Exception as exif_err:
+        if log_prefix:
+            app.logger.warning(f"{log_prefix} Could not apply EXIF orientation: {str(exif_err)}")
+        return img
+
+
 def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
     """
     Create a thumbnail for an image file, always converting to WebP format.
@@ -4229,6 +4245,8 @@ def create_image_thumbnail(image_path, thumbnail_path, size, debug_prefix=""):
             
         try:
             with Image.open(image_path) as img:
+                img = normalize_image_orientation(img, log_prefix)
+
                 if is_png and log_prefix:
                     app.logger.info(f"{log_prefix} PNG opened successfully: Format={img.format}, Mode={img.mode}, Size={img.size}")
                 
@@ -4468,6 +4486,8 @@ def generate_optimized_versions(filename, max_original_width=500, target_size_kb
     # Try to open and process the image
         try:
             with Image.open(original_path) as img:
+                img = normalize_image_orientation(img, log_prefix)
+
                 # Special handling for PNG
                 is_png = filename.lower().endswith('.png')
                 if is_png:

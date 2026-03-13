@@ -3478,6 +3478,109 @@
         .calendar-header { padding: 10px; }
         .calendar-header span { font-size: 1rem; }
     }
+
+    /* Smartphone-focused cleanup: remove heavy UI chrome and improve touch layout */
+    @media (max-width: 768px) {
+        body {
+            padding-bottom: 12px;
+        }
+
+        .container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 12px !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+
+        .filter-group {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            padding: 8px 0 !important;
+        }
+
+        /* Hide filter labels on phones to keep controls compact */
+        .filter-header > label {
+            display: none !important;
+        }
+
+        .search-container {
+            flex-direction: column !important;
+            gap: 8px !important;
+        }
+
+        .search-container input,
+        .search-container .search-button {
+            width: 100% !important;
+        }
+
+        .items-container {
+            padding: 6px 0 !important;
+            gap: 10px !important;
+        }
+
+        .item-card {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            padding: 12px 0 !important;
+        }
+
+        .item-card:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .item-card .image-container {
+            height: auto !important;
+            max-height: 220px !important;
+            border-radius: 6px !important;
+        }
+
+        .actions {
+            gap: 8px !important;
+            border-top: none !important;
+            padding-top: 8px !important;
+        }
+
+        .actions form,
+        .actions button,
+        .actions a {
+            width: 100% !important;
+        }
+
+        .bookmark-btn {
+            width: 40px !important;
+            height: 40px !important;
+            font-size: 1.35rem !important;
+            top: 6px !important;
+            right: 6px !important;
+        }
+
+        .modal-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 16px !important;
+        }
+
+        #conflict-banner {
+            border: none !important;
+            border-left: 4px solid #fd7e14 !important;
+            border-radius: 0 !important;
+            margin-left: -12px !important;
+            margin-right: -12px !important;
+        }
+    }
 </style>
 <script>
 let favoritesOnly = false;
