@@ -43,6 +43,7 @@ import time
 import traceback
 import re
 import io
+import html
 # QR Code functionality deactivated
 # import qrcode
 # from qrcode.constants import ERROR_CORRECT_L
@@ -850,9 +851,9 @@ def change_password():
         return redirect(url_for('login'))
     
     if request.method == 'POST':
-        current_password = request.form.get('current_password')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
+        current_password = html.escape(request.form.get('current_password'))
+        new_password = html.escape(request.form.get('new_password'))
+        confirm_password = html.escape(request.form.get('confirm_password'))
         
         # Validate inputs
         if not all([current_password, new_password, confirm_password]):
@@ -1070,19 +1071,19 @@ def upload_item():
     
     try:
         # Strip whitespace from all text fields
-        name = strip_whitespace(request.form['name'])
-        ort = strip_whitespace(request.form['ort'])
-        beschreibung = strip_whitespace(request.form['beschreibung'])
+        name = html.escape(strip_whitespace(request.form['name']))
+        ort = html.escape(strip_whitespace(request.form['ort']))
+        beschreibung = html.escape(strip_whitespace(request.form['beschreibung']))
         
         # Check both possible image field names
         images = request.files.getlist('images') or request.files.getlist('new_images')
         
-        filter_upload = strip_whitespace(request.form.getlist('filter'))
-        filter_upload2 = strip_whitespace(request.form.getlist('filter2'))
-        filter_upload3 = strip_whitespace(request.form.getlist('filter3'))
-        anschaffungs_jahr = strip_whitespace(request.form.getlist('anschaffungsjahr'))
-        anschaffungs_kosten = strip_whitespace(request.form.getlist('anschaffungskosten'))
-        code_4 = strip_whitespace(request.form.getlist('code_4'))
+        filter_upload = html.escape(strip_whitespace(request.form.getlist('filter')))
+        filter_upload2 = html.escape(strip_whitespace(request.form.getlist('filter2')))
+        filter_upload3 = html.escape(strip_whitespace(request.form.getlist('filter3')))
+        anschaffungs_jahr = html.escape(strip_whitespace(request.form.getlist('anschaffungsjahr')))
+        anschaffungs_kosten = html.escape(strip_whitespace(request.form.getlist('anschaffungskosten')))
+        code_4 = html.escape(strip_whitespace(request.form.getlist('code_4')))
         
         # Check if this is a duplication
         is_duplicating = request.form.get('is_duplicating') == 'true'
@@ -2018,18 +2019,18 @@ def edit_item(id):
         return redirect(url_for('login'))
     
     # Strip whitespace from all text fields
-    name = strip_whitespace(request.form.get('name'))
-    ort = strip_whitespace(request.form.get('ort'))
-    beschreibung = strip_whitespace(request.form.get('beschreibung'))
+    name = html.escape(strip_whitespace(request.form.get('name')))
+    ort = html.escape(strip_whitespace(request.form.get('ort')))
+    beschreibung = html.escape(strip_whitespace(request.form.get('beschreibung')))
     
     # Strip whitespace from all filter values
-    filter1 = strip_whitespace(request.form.getlist('filter'))
-    filter2 = strip_whitespace(request.form.getlist('filter2'))
-    filter3 = strip_whitespace(request.form.getlist('filter3'))
+    filter1 = html.escape(strip_whitespace(request.form.getlist('filter')))
+    filter2 = html.escape(strip_whitespace(request.form.getlist('filter2')))
+    filter3 = html.escape(strip_whitespace(request.form.getlist('filter3')))
     
-    anschaffungs_jahr = strip_whitespace(request.form.get('anschaffungsjahr'))
-    anschaffungs_kosten = strip_whitespace(request.form.get('anschaffungskosten'))
-    code_4 = strip_whitespace(request.form.get('code_4'))
+    anschaffungs_jahr = html.escape(strip_whitespace(request.form.get('anschaffungsjahr')))
+    anschaffungs_kosten = html.escape(strip_whitespace(request.form.get('anschaffungskosten')))
+    code_4 = html.escape(strip_whitespace(request.form.get('code_4')))
     reservierbar = 'reservierbar' in request.form
     
     # Check if code is unique (excluding the current item)
@@ -2598,13 +2599,13 @@ def plan_booking():
         
     try:
         # Extract form data
-        item_id = request.form.get('item_id')
-        start_date_str = request.form.get('booking_date')  # Changed from start_date to booking_date
-        end_date_str = request.form.get('booking_end_date')  # Changed from end_date to booking_end_date
-        period_start = request.form.get('period_start')
-        period_end = request.form.get('period_end')
-        notes = request.form.get('notes', '')
-        booking_type = request.form.get('booking_type', 'single')
+        item_id = html.escape(request.form.get('item_id'))
+        start_date_str = html.escape(request.form.get('booking_date'))  # Changed from start_date to booking_date
+        end_date_str = html.escape(request.form.get('booking_end_date'))  # Changed from end_date to booking_end_date
+        period_start = html.escape(request.form.get('period_start'))
+        period_end = html.escape(request.form.get('period_end'))
+        notes = html.escape(request.form.get('notes', ''))
+        booking_type = html.escape(request.form.get('booking_type', 'single'))
         
         # Validate inputs
         if not all([item_id, start_date_str, end_date_str, period_start]):
@@ -2763,7 +2764,7 @@ def add_booking():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
-    item_id = request.form.get('item_id')
+    item_id = html.escape(request.form.get('item_id'))
     
     # Check if item exists and is reservable
     item = it.get_item(item_id)
@@ -3134,7 +3135,7 @@ def admin_reset_user_password():
         return redirect(url_for('login'))
     
     username = request.form.get('username')
-    new_password = request.form.get('new_password', 'Password123')  # Default temporary password
+    new_password = html.escape(request.form.get('new_password', 'Password123'))  # Default temporary password
     
     if not username:
         flash('Kein Benutzer ausgewählt', 'error')
@@ -3174,8 +3175,8 @@ def admin_update_user_name():
         return redirect(url_for('login'))
         
     username = request.form.get('username')
-    name = request.form.get('name')
-    last_name = request.form.get('last_name')
+    name = html.escape(request.form.get('name'))
+    last_name = html.escape(request.form.get('last_name'))
     
     if not username:
         flash('Kein Benutzer ausgewählt', 'error')
@@ -3337,7 +3338,7 @@ def add_filter_value(filter_num):
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
-    value = strip_whitespace(request.form.get('value'))
+    value = html.escape(strip_whitespace(request.form.get('value')))
     
     if not value:
         flash('Bitte geben Sie einen Wert ein', 'error')
@@ -3817,7 +3818,7 @@ def add_location_value():
     if 'username' not in session or not us.check_admin(session['username']):
         return jsonify({'success': False, 'error': 'Not authorized'}), 403
     
-    value = strip_whitespace(request.form.get('value'))
+    value = html.escape(strip_whitespace(request.form.get('value')))
     
     if not value:
         flash('Bitte geben Sie einen Wert ein', 'error')
