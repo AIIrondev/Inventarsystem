@@ -9,3 +9,4 @@ apscheduler
 python-dateutil
 pytz
 requests
+flask_jwt_extended
