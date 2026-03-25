@@ -25,7 +25,8 @@ Features:
 - Booking and reservation of items
 """
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, set_access_cookies, unset_jwt_cookies
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response
 from werkzeug.utils import secure_filename
 import user as us
 import items as it
@@ -67,6 +68,13 @@ app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
 app.config['THUMBNAIL_FOLDER'] = cfg.THUMBNAIL_FOLDER
 app.config['PREVIEW_FOLDER'] = cfg.PREVIEW_FOLDER
 app.config['ALLOWED_EXTENSIONS'] = set(cfg.ALLOWED_EXTENSIONS)
+app.config["JWT_SECRET_KEY"] = cfg.SECRET_KEY
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # No expiration for session cookies
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]  # Store JWT in cookies
+app.config["JWT_COOKIE_SECURE"] = cfg.SSL_ENABLED or not cfg.DEBUG  # HTTPS in production or non-debug
+app.config["JWT_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access
+app.config["JWT_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+jwt = JWTManager(app)
 # app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
 
 # Thumbnail sizes
@@ -281,6 +289,25 @@ if cfg.SCHEDULER_ENABLED:
 # Register shutdown handler to stop scheduler when app is terminated
 import atexit
 atexit.register(lambda: scheduler.shutdown() if cfg.SCHEDULER_ENABLED else None)
+
+# JWT Error handlers
+@jwt.unauthorized_loader
+def missing_token_callback(error):
+    """Handle missing JWT token."""
+    flash('Login erforderlich. Bitte melden Sie sich an.', 'error')
+    return redirect(url_for('login'))
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error):
+    """Handle invalid JWT token."""
+    flash('Ungültiger Token. Bitte melden Sie sich erneut an.', 'error')
+    return redirect(url_for('login'))
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_data):
+    """Handle expired JWT token."""
+    flash('Token abgelaufen. Bitte melden Sie sich erneut an.', 'error')
+    return redirect(url_for('login'))
 
 def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     """
@@ -531,6 +558,7 @@ def thumbnail_file(filename):
 
 
 @app.route('/previews/<filename>')
+@jwt_required()
 def preview_file(filename):
     """
     Serve preview files from the previews directory.
@@ -675,6 +703,7 @@ def test_connection():
 
 
 @app.route('/user_status')
+@jwt_required()
 def user_status():
     """
     API endpoint to get the current user's status (username, admin status).
@@ -698,6 +727,7 @@ def user_status():
 
 
 @app.route('/')
+@jwt_required()
 def home():
     """
     Main route for the application homepage.
@@ -716,6 +746,7 @@ def home():
 
 
 @app.route('/home_admin')
+@jwt_required()
 def home_admin():
     """
     Admin homepage route.
@@ -734,6 +765,7 @@ def home_admin():
 
 
 @app.route('/upload_admin')
+@jwt_required()
 def upload_admin():
     """
     Admin upload page route.
@@ -826,8 +858,17 @@ def login():
             session['username'] = username
             if user['Admin']:
                 session['admin'] = True
-                return redirect(url_for('home_admin'))
-            return redirect(url_for('home'))
+                # Create JWT token and set as cookie
+                access_token = create_access_token(identity=username)
+                resp = make_response(redirect(url_for('home_admin')))
+                set_access_cookies(resp, access_token)
+                return resp
+            else:
+                # Create JWT token and set as cookie
+                access_token = create_access_token(identity=username)
+                resp = make_response(redirect(url_for('home')))
+                set_access_cookies(resp, access_token)
+                return resp
         else:
             flash('Ungültige Anmeldedaten', 'error')
             get_flashed_messages()
@@ -856,6 +897,7 @@ def license():
     return render_template('license.html')
 
 @app.route('/change_password', methods=['GET', 'POST'])
+@jwt_required()
 def change_password():
     """
     Change password route.
@@ -903,6 +945,7 @@ def change_password():
     return render_template('change_password.html')
 
 @app.route('/logout')
+@jwt_required()
 def logout():
     """
     User logout route.
@@ -913,10 +956,13 @@ def logout():
     """
     session.pop('username', None)
     session.pop('admin', None)
-    return redirect(url_for('login'))
+    resp = make_response(redirect(url_for('login')))
+    unset_jwt_cookies(resp)
+    return resp
 
 
 @app.route('/get_items', methods=['GET'])
+@jwt_required()
 def get_items():
     """Return items plus merged favorites (session + DB) and per-item favorite flag."""
     try:
@@ -947,6 +993,7 @@ def get_items():
 
 
 @app.route('/get_item/<id>')
+@jwt_required()
 def get_item_json(id):
     try:
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
@@ -961,6 +1008,7 @@ def get_item_json(id):
 
 
 @app.route('/api/booking_conflicts')
+@jwt_required()
 def api_booking_conflicts():
     """
     Returns all active bookings that have a detected conflict
@@ -1006,6 +1054,7 @@ def _ensure_session_favs():
         session['favorites'] = []
 
 @app.route('/favorites', methods=['GET'])
+@jwt_required()
 def list_favorites():
     _ensure_session_favs()
     username = session.get('username')
@@ -1019,6 +1068,7 @@ def list_favorites():
     return jsonify({'ok': True, 'favorites': session['favorites']})
 
 @app.route('/favorites/<item_id>', methods=['POST'])
+@jwt_required()
 def add_fav(item_id):
     _ensure_session_favs()
     if item_id not in session['favorites']:
@@ -1033,6 +1083,7 @@ def add_fav(item_id):
     return jsonify({'ok': True, 'favorites': session['favorites']})
 
 @app.route('/favorites/<item_id>', methods=['DELETE'])
+@jwt_required()
 def remove_fav(item_id):
     _ensure_session_favs()
     session['favorites'] = [f for f in session['favorites'] if f != item_id]
@@ -1046,6 +1097,7 @@ def remove_fav(item_id):
     return jsonify({'ok': True, 'favorites': session['favorites']})
 
 @app.route('/debug/favorites')
+@jwt_required()
 def debug_favorites():
     """Diagnostic endpoint: shows session favorites, DB favorites and merged output."""
     username = session.get('username')
@@ -1061,6 +1113,7 @@ def debug_favorites():
 
 
 @app.route('/upload_item', methods=['POST'])
+@jwt_required()
 def upload_item():
     """
     Route for adding new items to the inventory.
@@ -1863,6 +1916,7 @@ def upload_item():
 
 
 @app.route('/duplicate_item', methods=['POST'])
+@jwt_required()
 def duplicate_item():
     """
     Route for duplicating an existing item.
@@ -1974,6 +2028,7 @@ def duplicate_item():
 
 
 @app.route('/delete_item/<id>', methods=['POST', 'GET'])
+@jwt_required()
 def delete_item(id):
     """
     Route for deleting inventory items.
@@ -2019,6 +2074,7 @@ def delete_item(id):
 
 
 @app.route('/edit_item/<id>', methods=['POST'])
+@jwt_required()
 def edit_item(id):
     """
     Route for editing an existing inventory item.
@@ -2128,6 +2184,7 @@ def edit_item(id):
 
 
 @app.route('/get_ausleihungen', methods=['GET'])
+@jwt_required()
 def get_ausleihungen():
     """
     API endpoint to retrieve all borrowing records.
@@ -2140,6 +2197,7 @@ def get_ausleihungen():
 
 
 @app.route('/ausleihen/<id>', methods=['POST'])
+@jwt_required()
 def ausleihen(id):
     """
     Route for borrowing an item from inventory.
@@ -2277,6 +2335,7 @@ def ausleihen(id):
 
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])
+@jwt_required()
 def zurueckgeben(id): 
     """
     Route for returning a borrowed item.
@@ -2364,6 +2423,7 @@ def zurueckgeben(id):
     return redirect(url_for('home_admin'))
 
 @app.route('/get_filter', methods=['GET'])
+@jwt_required()
 def get_filter():
     """
     API endpoint to retrieve available item filters/categories.
@@ -2375,6 +2435,7 @@ def get_filter():
     
 
 @app.route('/get_ausleihung_by_item/<id>')
+@jwt_required()
 def get_ausleihung_by_item_route(id):
     """
     API endpoint to retrieve borrowing details for a specific item.
@@ -2417,6 +2478,7 @@ def get_ausleihung_by_item_route(id):
 
 
 @app.route('/get_planned_bookings/<item_id>')
+@jwt_required()
 def get_planned_bookings(item_id):
     """
     Return all planned bookings for a given item (admin only).
@@ -2446,6 +2508,7 @@ def get_planned_bookings(item_id):
 
 
 @app.route('/get_planned_bookings_public/<item_id>')
+@jwt_required()
 def get_planned_bookings_public(item_id):
     """
     Return planned bookings for a given item (normal users; limited fields, no notes).
@@ -2472,6 +2535,7 @@ def get_planned_bookings_public(item_id):
 
 
 @app.route('/check_availability')
+@jwt_required()
 def check_availability():
     """
     Check if a given item is available for the specified date and period range.
@@ -2608,6 +2672,7 @@ def check_availability():
 
 # Fix fromisoformat None value checks
 @app.route('/plan_booking', methods=['POST'])
+@jwt_required()
 def plan_booking():
     """
     Create a new planned booking or a range of bookings
@@ -2778,6 +2843,7 @@ def process_day_bookings(item_id, booking_date, periods, notes):
             
     return booking_ids, errors
 @app.route('/add_booking', methods=['POST'])
+@jwt_required()
 def add_booking():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -2825,6 +2891,7 @@ def add_booking():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/cancel_booking/<id>', methods=['POST'])
+@jwt_required()
 def cancel_booking(id):
     """
     Cancel a planned booking
@@ -2851,6 +2918,7 @@ def cancel_booking(id):
         return {"success": False, "error": "Failed to cancel booking"}
 
 @app.route('/terminplan', methods=['GET'])
+@jwt_required()
 def terminplan():
     """
     Route to display the booking calendar
@@ -2879,6 +2947,7 @@ def terminplan():
 '''-------------------------------------------------------------------------------------------------------------ADMIN ROUTES------------------------------------------------------------------------------------------------------------------'''
 
 @app.route('/register', methods=['GET', 'POST'])
+@jwt_required()
 def register():
     """
     User registration route.false
@@ -2914,6 +2983,7 @@ def register():
 
 
 @app.route('/user_del', methods=['GET'])
+@jwt_required()
 def user_del():
     """
     User deletion interface.
@@ -2968,6 +3038,7 @@ def user_del():
 
 
 @app.route('/delete_user', methods=['POST'])
+@jwt_required()
 def delete_user():
     """
     Process user deletion request.
@@ -3035,6 +3106,7 @@ def delete_user():
 
 
 @app.route('/admin/borrowings')
+@jwt_required()
 def admin_borrowings():
     """
     Admin view: list all active and planned borrowings with ability to reset.
@@ -3085,6 +3157,7 @@ def admin_borrowings():
 
 
 @app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
+@jwt_required()
 def admin_reset_borrowing(borrow_id):
     """
     Admin action: reset a single borrowing.
@@ -3135,6 +3208,7 @@ def admin_reset_borrowing(borrow_id):
 
 
 @app.route('/admin_reset_user_password', methods=['POST'])
+@jwt_required()
 def admin_reset_user_password():
     """
     Admin route to reset a user's password.
@@ -3181,6 +3255,7 @@ def admin_reset_user_password():
 
 
 @app.route('/admin_update_user_name', methods=['POST'])
+@jwt_required()
 def admin_update_user_name():
     """
     Admin route to update a user's name details.
@@ -3209,6 +3284,7 @@ def admin_update_user_name():
 
 
 @app.route('/logs')
+@jwt_required()
 def logs():
     """
     View system logs interface.
@@ -3282,6 +3358,7 @@ def logs():
 
 
 @app.route('/get_logs', methods=['GET'])
+@jwt_required()
 def get_logs():
     """
     API endpoint to retrieve all borrowing logs.
@@ -3296,6 +3373,7 @@ def get_logs():
 
 
 @app.route('/get_usernames', methods=['GET'])
+@jwt_required()
 def get_usernames():
     """
     API endpoint to retrieve all usernames from the system.
@@ -3319,6 +3397,7 @@ def get_usernames():
 # New routes for filter management
 
 @app.route('/manage_filters')
+@jwt_required()
 def manage_filters():
     """
 "
@@ -3343,6 +3422,7 @@ def manage_filters():
                           filter2_values=filter2_values)
 
 @app.route('/add_filter_value/<int:filter_num>', methods=['POST'])
+@jwt_required()
 def add_filter_value(filter_num):
     """
     Add a new predefined value to the specified filter.
@@ -3373,6 +3453,7 @@ def add_filter_value(filter_num):
     return redirect(url_for('manage_filters'))
 
 @app.route('/remove_filter_value/<int:filter_num>/<string:value>', methods=['POST'])
+@jwt_required()
 def remove_filter_value(filter_num, value):
     """
     Remove a predefined value from the specified filter.
@@ -3398,6 +3479,7 @@ def remove_filter_value(filter_num, value):
     return redirect(url_for('manage_filters'))
 
 @app.route('/get_predefined_filter_values/<int:filter_num>')
+@jwt_required()
 def get_predefined_filter_values(filter_num):
     """
     API endpoint to get predefined values for a specific filter.
@@ -3413,6 +3495,7 @@ def get_predefined_filter_values(filter_num):
     return jsonify({'values': values})
 
 @app.route('/search_word/<path:word>')
+@jwt_required()
 def search_word(word):
     """Search items by Titel (Name) and Beschreibung, case-insensitive.
 
@@ -3453,6 +3536,7 @@ def search_word(word):
         return jsonify({"success": False, "response": str(e)})
 
 @app.route('/fetch_book_info/<isbn>')
+@jwt_required()
 def fetch_book_info(isbn):
     """
     API endpoint to fetch book information by ISBN using Google Books API
@@ -3519,6 +3603,7 @@ def fetch_book_info(isbn):
         return jsonify({"error": f"Failed to fetch book information: {str(e)}"}), 500
 
 @app.route('/download_book_cover', methods=['POST'])
+@jwt_required()
 def download_book_cover():
     """
     API endpoint to download and save a book cover image from URL
@@ -3588,6 +3673,7 @@ def download_book_cover():
         return jsonify({"error": f"Failed to download image: {str(e)}"}), 500
 
 @app.route('/proxy_image')
+@jwt_required()
 def proxy_image():
     """
     Proxy endpoint to fetch images from external sources,
@@ -3675,6 +3761,7 @@ def get_period_times(booking_date, period_num):
         return None
 
 @app.route('/my_borrowed_items')
+@jwt_required()
 def my_borrowed_items():
     """
     Zeigt alle vom aktuellen Benutzer ausgeliehenen und geplanten Objekte an.
@@ -3815,6 +3902,7 @@ def favicon():
     return send_from_directory(app.static_folder, 'favicon.ico')
 
 @app.route('/get_predefined_locations')
+@jwt_required()
 def get_predefined_locations_route():
     """
     API endpoint to get predefined locations.
@@ -3826,6 +3914,7 @@ def get_predefined_locations_route():
     return jsonify({'locations': values})
 
 @app.route('/add_location_value', methods=['POST'])
+@jwt_required()
 def add_location_value():
     """
     Add a new predefined location value.
@@ -3853,6 +3942,7 @@ def add_location_value():
     return redirect(url_for('manage_locations'))
 
 @app.route('/remove_location_value/<string:value>', methods=['POST'])
+@jwt_required()
 def remove_location_value(value):
     """
     Remove a predefined location value.
@@ -3877,6 +3967,7 @@ def remove_location_value(value):
     return redirect(url_for('manage_locations'))
 
 @app.route('/manage_locations')
+@jwt_required()
 def manage_locations():
     """
     Admin page to manage predefined location values.
@@ -3898,6 +3989,7 @@ def manage_locations():
                           location_values=location_values)
 
 @app.route('/check_code_unique/<code>')
+@jwt_required()
 def check_code_unique(code):
     """
     API endpoint to check if a code is unique
@@ -3918,6 +4010,7 @@ def check_code_unique(code):
     })
 
 @app.route('/schedule_appointment', methods=['POST'])
+@jwt_required()
 def schedule_appointment():
     """
     Schedule an appointment for an item
@@ -4085,6 +4178,7 @@ def schedule_appointment():
         return jsonify({'success': False, 'message': f'Serverfehler aufgetreten: {str(e)}'}), 500
 
 @app.route('/cancel_ausleihung/<id>', methods=['POST'])
+@jwt_required()
 def cancel_ausleihung_route(id):
     """
     Route for canceling a planned or active ausleihung.
@@ -4150,6 +4244,7 @@ def cancel_ausleihung_route(id):
     return redirect(url_for('my_borrowed_items'))
 
 @app.route('/reset_item/<id>', methods=['POST'])
+@jwt_required()
 def reset_item(id):
     """
     Route for completely resetting an item's borrowing status.
