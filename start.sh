@@ -20,11 +20,37 @@ apt_install() {
     $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
 
+install_docker_engine() {
+    if command -v docker >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Docker not found. Trying distro package docker.io..."
+    if apt_install docker.io; then
+        return 0
+    fi
+
+    echo "docker.io install failed. Trying Docker CE package docker-ce..."
+    apt_install ca-certificates curl gnupg lsb-release
+
+    $SUDO install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | $SUDO gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    $SUDO chmod a+r /etc/apt/keyrings/docker.gpg
+
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+    $SUDO apt-get update -y
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
 ensure_runtime_dependencies() {
     local missing=()
 
     if ! command -v docker >/dev/null 2>&1; then
-        missing+=(docker.io)
+        install_docker_engine
     fi
 
     if ! docker compose version >/dev/null 2>&1; then
@@ -64,10 +90,21 @@ setup_scheduled_jobs() {
     update_line="0 3 * * * cd $SCRIPT_DIR && ./update.sh >> $SCRIPT_DIR/logs/update.log 2>&1"
     backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup-docker.sh >> $SCRIPT_DIR/logs/backup.log 2>&1"
 
+    local existing_cron
     if [ "$(id -u)" -eq 0 ]; then
-        (crontab -l 2>/dev/null | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh"; echo "$backup_line"; echo "$update_line") | crontab -
+        existing_cron="$(crontab -l 2>/dev/null || true)"
+        {
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            echo "$backup_line"
+            echo "$update_line"
+        } | crontab -
     else
-        ($SUDO crontab -l 2>/dev/null | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh"; echo "$backup_line"; echo "$update_line") | $SUDO crontab -
+        existing_cron="$($SUDO crontab -l 2>/dev/null || true)"
+        {
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            echo "$backup_line"
+            echo "$update_line"
+        } | $SUDO crontab -
     fi
 
     echo "Nightly backup scheduled at 02:30"

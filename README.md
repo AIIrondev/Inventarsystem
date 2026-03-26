@@ -42,6 +42,9 @@ Das Inventarsystem stellt folgende Wartungsskripte bereit:
 | `start.sh` | Dienste starten |
 | `stop.sh` | Dienste stoppen |
 | `restart.sh` | Dienste neu starten |
+| `build-nuitka.sh` | Standalone-Build der App mit Nuitka erstellen |
+| `init-admin.sh` | Initialisiert Admin-User wenn DB leer ist |
+| `create-user.sh` | Erstellt neue User per Kommandozeile |
 | `Backup-DB.py` | Manuelles DB-Backup |
 | `restore.sh` | Backup wiederherstellen |
 | `manage-version.sh` | Versionssteuerung |
@@ -163,6 +166,23 @@ https://[SERVER-IP]
 Wenn keine Zertifikate vorhanden sind, erstellt `start.sh` automatisch ein selbstsigniertes Zertifikat unter `certs/inventarsystem.crt` und `certs/inventarsystem.key`.
 
 Wenn Docker/Compose/OpenSSL fehlen, installiert `start.sh` die benoetigten Pakete automatisch.
+Dabei wird zuerst `docker.io` versucht. Falls das auf dem System nicht verfuegbar ist, richtet das Skript das Docker-Repository ein und installiert `docker-ce` inklusive Compose-Plugin.
+
+### App mit Nuitka neu bauen
+
+Fuer einen Standalone-Build der Flask-App steht folgendes Skript bereit:
+
+```bash
+./build-nuitka.sh
+```
+
+Das Skript:
+
+- verwendet die Python-Umgebung unter `.venv`
+- installiert/aktualisiert Nuitka Build-Abhaengigkeiten
+- baut `Web/app.py` als Standalone-Binary
+- bindet `Web/templates`, `Web/static` und `uploads` als Laufzeitdaten ein
+- schreibt das Ergebnis nach `dist/app.dist/`
 
 ### Stoppen
 
@@ -227,6 +247,45 @@ sudo ./start.sh
 
 ```
 https://[SERVER-IP]
+```
+
+### Admin-User erstellen
+
+Wenn die Datenbank leer ist (beim ersten Start), erstellen Sie einen Admin-User:
+
+**Option 1: Automatisiert beim Start**
+```bash
+./init-admin.sh
+```
+
+Mit benutzerdefinierten Daten:
+```bash
+./init-admin.sh myadmin mypassword123 Max Mustermann
+```
+
+**Option 2: Interaktiv**
+```bash
+cd Web && python3 generate_user.py
+```
+
+**Option 3: Per Kommandozeile**
+```bash
+./create-user.sh admin password123456 Admin User --admin
+```
+
+**Option 4: Direkt in MongoDB (Notlösung)**
+```bash
+docker exec inventarsystem-mongodb mongosh --eval "
+db.users.insertOne({
+  Username: 'admin',
+  Password: '\$(python3 -c \"import hashlib; print(hashlib.sha512(b\\\"deinPassword123\\\").hexdigest())\")' ,
+  Admin: true,
+  active_ausleihung: null,
+  name: 'Admin',
+  last_name: 'User',
+  favorites: []
+})
+" Inventarsystem
 ```
 
 ---
