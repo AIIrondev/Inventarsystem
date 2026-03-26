@@ -159,6 +159,77 @@ start_or_reload_standard_nginx() {
     sudo systemctl start nginx || sudo systemctl restart nginx
 }
 
+check_http_health() {
+    local url status
+
+    if ! have_cmd curl; then
+        echo "curl not found; skipping HTTP health check"
+        return 0
+    fi
+
+    url="https://${NETWORK_IP}/"
+    status="$(curl -k -sS -o /dev/null --connect-timeout 5 --max-time 10 -w '%{http_code}' "$url" || echo '000')"
+    echo "HTTP health check ($url) returned status: $status"
+
+    if [[ "$status" =~ ^5[0-9][0-9]$ ]] || [ "$status" = "000" ]; then
+        return 1
+    fi
+
+    return 0
+}
+
+restart_app_stack() {
+    echo "Restarting application services due to unhealthy HTTP response..."
+    sudo systemctl restart inventarsystem-gunicorn.service || true
+
+    if [ "${USE_WRAPPER:-false}" = true ]; then
+        sudo systemctl restart inventarsystem-nginx.service || true
+    else
+        start_or_reload_standard_nginx || true
+    fi
+
+    sleep 5
+}
+
+run_recovery_backup() {
+    echo "Creating fresh database backup after recovery restart..."
+
+    if [ ! -f "$PROJECT_ROOT/run-backup.sh" ]; then
+        echo "Backup script not found: $PROJECT_ROOT/run-backup.sh"
+        return 1
+    fi
+
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        sudo -u "$SUDO_USER" bash "$PROJECT_ROOT/run-backup.sh" || return 1
+    else
+        bash "$PROJECT_ROOT/run-backup.sh" || return 1
+    fi
+
+    return 0
+}
+
+post_start_self_heal_check() {
+    if check_http_health; then
+        echo "✓ HTTP health check passed"
+        return 0
+    fi
+
+    echo "Detected unhealthy HTTP response (for example 502). Initiating recovery..."
+    restart_app_stack
+
+    if run_recovery_backup; then
+        echo "✓ Recovery backup created"
+    else
+        echo "Warning: Recovery backup could not be created"
+    fi
+
+    if check_http_health; then
+        echo "✓ Service recovered after restart"
+    else
+        echo "Warning: Service still unhealthy after recovery restart"
+    fi
+}
+
 
 echo "========================================================"
 echo " Checking/creating Python virtual environment"
@@ -303,6 +374,7 @@ echo "========================================================"
 if ! have_cmd nginx; then apt_install nginx; fi
 if ! have_cmd openssl; then apt_install openssl; fi
 if ! have_cmd ufw; then apt_install ufw || true; fi
+if ! have_cmd curl; then apt_install curl || true; fi
 
 echo "========================================================"
 echo " Verifying MongoDB service (optional)"
@@ -501,5 +573,7 @@ echo "Web Interface: https://${NETWORK_IP}"
 echo "Gunicorn socket: /tmp/inventarsystem.sock"
 echo "Logs: $LOG_DIR (access.log, error.log)"
 echo "MongoDB (optional): mongodb://localhost:27017"
+echo "========================================================"
+post_start_self_heal_check
 echo "========================================================"
 echo "✓ Nginx configuration created and tested"
