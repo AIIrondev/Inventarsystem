@@ -13,13 +13,14 @@ Provides methods for creating, validating, and retrieving user information.
 from pymongo import MongoClient
 import hashlib
 from bson.objectid import ObjectId
+import settings as cfg
 
 
 # === FAVORITES MANAGEMENT ===
 def get_favorites(username):
     """Return a list of favorite item ObjectId strings for the user."""
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     user = users.find_one({'Username': username}) or users.find_one({'username': username})
     client.close()
@@ -32,8 +33,8 @@ def get_favorites(username):
 def add_favorite(username, item_id):
     """Add an item to user's favorites (idempotent)."""
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         users.update_one(
             {'$or': [{'Username': username}, {'username': username}]},
@@ -47,8 +48,8 @@ def add_favorite(username, item_id):
 def remove_favorite(username, item_id):
     """Remove an item from user's favorites."""
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         users.update_one(
             {'$or': [{'Username': username}, {'username': username}]},
@@ -100,8 +101,8 @@ def check_nm_pwd(username, password):
     Returns:
         dict: User document if credentials are valid, None otherwise
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     hashed_password = hashlib.sha512(password.encode()).hexdigest()
     user = users.find_one({'Username': username, 'Password': hashed_password})
@@ -120,8 +121,8 @@ def add_user(username, password, name, last_name):
     Returns:
         bool: True if user was added successfully, False if password was too weak
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     if not check_password_strength(password):
         return False
@@ -140,8 +141,8 @@ def make_admin(username):
     Returns:
         bool: True if user was promoted successfully
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     users.update_one({'Username': username}, {'$set': {'Admin': True}})
     client.close()
@@ -157,8 +158,8 @@ def remove_admin(username):
     Returns:
         bool: True if user was demoted successfully
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     users.update_one({'Username': username}, {'$set': {'Admin': False}})
     client.close()
@@ -174,8 +175,8 @@ def get_user(username):
     Returns:
         dict: User document or None if not found
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     users_return = users.find_one({'Username': username})
     client.close()
@@ -192,8 +193,8 @@ def check_admin(username):
     Returns:
         bool: True if user is an administrator, False otherwise
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     user = users.find_one({'Username': username})
     client.close()
@@ -212,8 +213,8 @@ def update_active_ausleihung(username, id_item, ausleihung):
     Returns:
         bool: True if successful
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     users.update_one({'Username': username}, {'$set': {'active_ausleihung': {'Item': id_item, 'Ausleihung': ausleihung}}})
     client.close()
@@ -230,8 +231,8 @@ def get_active_ausleihung(username):
     Returns:
         dict: Active borrowing information or None
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     user = users.find_one({'Username': username})
     return user['active_ausleihung']
@@ -248,8 +249,8 @@ def has_active_borrowing(username):
         bool: True if user has an active borrowing, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         
         user = users.find_one({'username': username})
@@ -279,15 +280,15 @@ def delete_user(username):
     Returns:
         bool: True if user was deleted successfully, False otherwise
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     result = users.delete_one({'username': username})
     client.close()
     if result.deleted_count == 0:
         # Try with different field name
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         result = users.delete_one({'Username': username})
         client.close()
@@ -308,8 +309,8 @@ def update_active_borrowing(username, item_id, status):
         bool: True if successful, False on error
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         result = users.update_one(
             {'username': username}, 
@@ -341,8 +342,8 @@ def get_name(username):
     Returns:
         str: String of name
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     user = users.find_one({'Username': username})
     name = user.get("name")
@@ -356,8 +357,8 @@ def get_last_name(username):
     Returns:
         str: String of last_name
     """
-    client = MongoClient('localhost', 27017)
-    db = client['Inventarsystem']
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
     users = db['users']
     user = users.find_one({'Username': username})
     name = user.get("last_name")
@@ -373,8 +374,8 @@ def get_all_users():
         list: List of all user documents
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         all_users = list(users.find())
         client.close()
@@ -397,8 +398,8 @@ def update_password(username, new_password):
         if not check_password_strength(new_password):
             return False
             
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         
         # Hash the new password
@@ -429,8 +430,8 @@ def update_user_name(username, name, last_name):
         bool: True if updated successfully, False otherwise
     """
     try:
-        client = MongoClient('localhost', 27017)
-        db = client['Inventarsystem']
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
         users = db['users']
         
         result = users.update_one(
