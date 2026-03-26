@@ -129,6 +129,19 @@ wget -O - https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/instal
 curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | sudo bash
 ```
 
+Legacy-MongoDB uebernehmen und altes Host-System aufraeumen:
+
+```bash
+curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.sh | \
+  sudo bash -s -- --migrate-legacy-db --remove-legacy-system
+```
+
+Optional kann ein alter Systempfad nach erfolgreicher Migration entfernt werden:
+
+```bash
+sudo ./install.sh --migrate-legacy-db --remove-legacy-system --legacy-system-dir /opt/Inventarsystem-alt
+```
+
 ---
 
 ## Docker Betrieb

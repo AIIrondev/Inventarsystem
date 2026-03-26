@@ -5,6 +5,13 @@ PROJECT_DIR="/opt/Inventarsystem"
 REPO_SLUG="AIIrondev/Inventarsystem"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
 BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
+LEGACY_DB_NAME="Inventarsystem"
+LEGACY_MONGO_URI="mongodb://127.0.0.1:27017"
+MIGRATE_LEGACY_DB=false
+REMOVE_LEGACY_SYSTEM=false
+LEGACY_SERVICE_CLEANUP=true
+LEGACY_SYSTEM_DIR=""
+LEGACY_BACKUP_ARCHIVE=""
 
 need_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -22,6 +29,161 @@ install_docker_if_missing() {
     sudo apt-get update
     sudo apt-get install -y docker.io docker-compose-v2 curl python3
     sudo systemctl enable --now docker
+}
+
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --migrate-legacy-db           Back up host MongoDB and import into Docker MongoDB
+  --remove-legacy-system        Remove old host MongoDB/system after successful import
+  --legacy-db-name <name>       Legacy database name (default: $LEGACY_DB_NAME)
+  --legacy-mongo-uri <uri>      Legacy Mongo URI (default: $LEGACY_MONGO_URI)
+  --legacy-system-dir <path>    Optional old system directory to remove after migration
+  -h, --help                    Show this help message
+EOF
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --migrate-legacy-db)
+                MIGRATE_LEGACY_DB=true
+                shift
+                ;;
+            --remove-legacy-system)
+                REMOVE_LEGACY_SYSTEM=true
+                shift
+                ;;
+            --legacy-db-name)
+                LEGACY_DB_NAME="$2"
+                shift 2
+                ;;
+            --legacy-mongo-uri)
+                LEGACY_MONGO_URI="$2"
+                shift 2
+                ;;
+            --legacy-system-dir)
+                LEGACY_SYSTEM_DIR="$2"
+                shift 2
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Error: unknown option '$1'"
+                usage
+                exit 2
+                ;;
+        esac
+    done
+}
+
+install_mongo_tools_if_missing() {
+    if command -v mongodump >/dev/null 2>&1 && command -v mongorestore >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Installing MongoDB database tools..."
+    sudo apt-get update
+    sudo apt-get install -y mongodb-database-tools || sudo apt-get install -y mongo-tools
+}
+
+backup_legacy_database() {
+    local backup_dir timestamp archive collection_count
+
+    if [ "$MIGRATE_LEGACY_DB" != "true" ]; then
+        return 0
+    fi
+
+    install_mongo_tools_if_missing
+
+    if ! command -v mongosh >/dev/null 2>&1; then
+        echo "Warning: mongosh not found, skipping legacy DB migration"
+        MIGRATE_LEGACY_DB=false
+        return 0
+    fi
+
+    if ! mongosh --quiet "$LEGACY_MONGO_URI/$LEGACY_DB_NAME" --eval "db.runCommand({ping:1}).ok" >/dev/null 2>&1; then
+        echo "No legacy MongoDB reachable at $LEGACY_MONGO_URI, skipping migration"
+        MIGRATE_LEGACY_DB=false
+        return 0
+    fi
+
+    collection_count="$(mongosh --quiet "$LEGACY_MONGO_URI/$LEGACY_DB_NAME" --eval "db.getCollectionNames().length" 2>/dev/null || echo 0)"
+    if [ "${collection_count:-0}" -eq 0 ]; then
+        echo "Legacy DB '$LEGACY_DB_NAME' has no collections, skipping migration"
+        MIGRATE_LEGACY_DB=false
+        return 0
+    fi
+
+    backup_dir="$PROJECT_DIR/backups/legacy-migration"
+    timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
+    archive="$backup_dir/${LEGACY_DB_NAME}-${timestamp}.archive.gz"
+
+    sudo mkdir -p "$backup_dir"
+    echo "Creating legacy MongoDB backup: $archive"
+    mongodump --uri "$LEGACY_MONGO_URI" --db "$LEGACY_DB_NAME" --archive="$archive" --gzip
+
+    if [ ! -s "$archive" ]; then
+        echo "Error: legacy backup archive was not created"
+        exit 1
+    fi
+
+    LEGACY_BACKUP_ARCHIVE="$archive"
+}
+
+restore_legacy_backup_into_docker() {
+    local i
+
+    if [ "$MIGRATE_LEGACY_DB" != "true" ] || [ -z "$LEGACY_BACKUP_ARCHIVE" ]; then
+        return 0
+    fi
+
+    echo "Waiting for Docker MongoDB to become ready..."
+    for i in $(seq 1 60); do
+        if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T mongodb mongosh --quiet --eval "db.adminCommand({ping:1}).ok" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$i" -eq 60 ]; then
+        echo "Error: Docker MongoDB did not become ready in time"
+        exit 1
+    fi
+
+    echo "Importing legacy backup into Docker MongoDB..."
+    sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" exec -T mongodb mongorestore --archive --gzip --drop --nsInclude "${LEGACY_DB_NAME}.*" < "$LEGACY_BACKUP_ARCHIVE"
+    echo "Legacy DB import completed."
+}
+
+cleanup_legacy_system() {
+    if [ "$REMOVE_LEGACY_SYSTEM" != "true" ] || [ "$MIGRATE_LEGACY_DB" != "true" ] || [ -z "$LEGACY_BACKUP_ARCHIVE" ]; then
+        return 0
+    fi
+
+    echo "Cleaning up old host MongoDB/system..."
+
+    if [ "$LEGACY_SERVICE_CLEANUP" = "true" ] && command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl stop mongod >/dev/null 2>&1 || true
+        sudo systemctl stop mongodb >/dev/null 2>&1 || true
+        sudo systemctl disable mongod >/dev/null 2>&1 || true
+        sudo systemctl disable mongodb >/dev/null 2>&1 || true
+    fi
+
+    sudo rm -rf /var/lib/mongodb /var/log/mongodb 2>/dev/null || true
+    sudo apt-get purge -y mongodb mongodb-server mongodb-org mongodb-org-server mongodb-org-shell mongodb-org-mongos mongodb-database-tools mongo-tools >/dev/null 2>&1 || true
+    sudo apt-get autoremove -y >/dev/null 2>&1 || true
+
+    if [ -n "$LEGACY_SYSTEM_DIR" ] && [ -d "$LEGACY_SYSTEM_DIR" ] && [ "$LEGACY_SYSTEM_DIR" != "$PROJECT_DIR" ]; then
+        echo "Removing legacy system directory: $LEGACY_SYSTEM_DIR"
+        sudo rm -rf "$LEGACY_SYSTEM_DIR"
+    fi
+
+    echo "Legacy cleanup complete."
 }
 
 latest_tag_and_bundle_url() {
@@ -47,6 +209,8 @@ PY
 }
 
 main() {
+    parse_args "$@"
+
     install_docker_if_missing
     need_cmd docker
     need_cmd tar
@@ -97,8 +261,13 @@ EOF
 
     echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
 
+    backup_legacy_database
+
     echo "Starting stack..."
     sudo bash "$PROJECT_DIR/start.sh"
+
+    restore_legacy_backup_into_docker
+    cleanup_legacy_system
 
     echo "Installation complete."
     echo "Open: https://localhost"
