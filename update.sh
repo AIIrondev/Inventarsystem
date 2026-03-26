@@ -162,8 +162,13 @@ download_and_extract_bundle() {
     mkdir -p "$PROJECT_DIR/docker/nginx"
     cp -f "$tmp_dir/docker-compose.yml" "$PROJECT_DIR/docker-compose.yml"
     cp -f "$tmp_dir/docker/nginx/default.conf" "$PROJECT_DIR/docker/nginx/default.conf"
-    cp -f "$tmp_dir/start-docker.sh" "$PROJECT_DIR/start-docker.sh"
-    cp -f "$tmp_dir/stop-docker.sh" "$PROJECT_DIR/stop-docker.sh"
+    cp -f "$tmp_dir/start.sh" "$PROJECT_DIR/start.sh"
+    cp -f "$tmp_dir/stop.sh" "$PROJECT_DIR/stop.sh"
+
+    if [ -f "$tmp_dir/restart.sh" ]; then
+        cp -f "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
+    fi
+
     if [ -f "$tmp_dir/backup-docker.sh" ]; then
         cp -f "$tmp_dir/backup-docker.sh" "$PROJECT_DIR/backup-docker.sh"
     fi
@@ -171,7 +176,7 @@ download_and_extract_bundle() {
         cp -f "$tmp_dir/update.sh" "$PROJECT_DIR/update.sh"
     fi
 
-    chmod +x "$PROJECT_DIR/start-docker.sh" "$PROJECT_DIR/stop-docker.sh" "$PROJECT_DIR/backup-docker.sh" "$PROJECT_DIR/update.sh"
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/backup-docker.sh" "$PROJECT_DIR/update.sh"
 }
 
 deploy() {
@@ -179,7 +184,8 @@ deploy() {
     if [ ! -f "$ENV_FILE" ]; then
         cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=0
-INVENTAR_HTTPS_PORT=442
+INVENTAR_HTTP_PORT=80
+INVENTAR_HTTPS_PORT=443
 EOF
     fi
 

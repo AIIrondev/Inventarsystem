@@ -74,39 +74,31 @@ main() {
     curl -fL "$bundle_url" -o "$tmp_dir/$BUNDLE_ASSET"
     sudo tar -xzf "$tmp_dir/$BUNDLE_ASSET" -C "$PROJECT_DIR"
 
-    sudo chmod +x "$PROJECT_DIR/start-docker.sh" "$PROJECT_DIR/stop-docker.sh"
-
-    # Local wrappers for compatibility
-    cat > "$tmp_dir/start.sh" <<'EOF'
+    if [ ! -f "$PROJECT_DIR/start.sh" ]; then
+        echo "Error: release bundle is missing start.sh"
+        exit 1
+    fi
+    if [ ! -f "$PROJECT_DIR/stop.sh" ]; then
+        echo "Error: release bundle is missing stop.sh"
+        exit 1
+    fi
+    if [ ! -f "$PROJECT_DIR/restart.sh" ]; then
+        cat > "$tmp_dir/restart.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/start-docker.sh"
+"$SCRIPT_DIR/stop.sh"
+"$SCRIPT_DIR/start.sh"
 EOF
+        sudo install -m 755 "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
+    fi
 
-    cat > "$tmp_dir/stop.sh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/stop-docker.sh"
-EOF
-
-    cat > "$tmp_dir/restart.sh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$SCRIPT_DIR/stop-docker.sh"
-"$SCRIPT_DIR/start-docker.sh"
-EOF
-
-    sudo install -m 755 "$tmp_dir/start.sh" "$PROJECT_DIR/start.sh"
-    sudo install -m 755 "$tmp_dir/stop.sh" "$PROJECT_DIR/stop.sh"
-    sudo install -m 755 "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
+    sudo chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh"
 
     echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
 
     echo "Starting stack..."
-    sudo bash "$PROJECT_DIR/start-docker.sh"
+    sudo bash "$PROJECT_DIR/start.sh"
 
     echo "Installation complete."
     echo "Open: https://localhost"

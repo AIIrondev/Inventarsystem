@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Copyright 2025-2026 Maximilian Gruendinger
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-exec "$SCRIPT_DIR/stop-docker.sh"
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: docker command not found. Install Docker first."
+    exit 1
+fi
+
+echo "Stopping Inventarsystem Docker stack..."
+docker compose down
+
+echo "Stack stopped."

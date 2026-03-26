@@ -67,7 +67,8 @@ jobs:
               depends_on:
                 - app
               ports:
-                - "${INVENTAR_HTTPS_PORT:-442}:443"
+                - "${INVENTAR_HTTP_PORT:-80}:80"
+                - "${INVENTAR_HTTPS_PORT:-443}:443"
               volumes:
                 - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
                 - ./certs:/etc/nginx/certs:ro
@@ -121,12 +122,13 @@ jobs:
           EOF
 
           cp docker/nginx/default.conf release-bundle/docker/nginx/default.conf
-          cp start-docker.sh release-bundle/start-docker.sh
-          cp stop-docker.sh release-bundle/stop-docker.sh
+          cp start.sh release-bundle/start.sh
+          cp stop.sh release-bundle/stop.sh
+          cp restart.sh release-bundle/restart.sh
           cp backup-docker.sh release-bundle/backup-docker.sh
           cp update.sh release-bundle/update.sh
 
-          chmod +x release-bundle/start-docker.sh release-bundle/stop-docker.sh release-bundle/backup-docker.sh release-bundle/update.sh
+          chmod +x release-bundle/start.sh release-bundle/stop.sh release-bundle/restart.sh release-bundle/backup-docker.sh release-bundle/update.sh
           tar -czf inventarsystem-docker-bundle.tar.gz -C release-bundle .
 
       - name: Create or update GitHub Release

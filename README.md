@@ -42,8 +42,6 @@ Das Inventarsystem stellt folgende Wartungsskripte bereit:
 | `start.sh` | Dienste starten |
 | `stop.sh` | Dienste stoppen |
 | `restart.sh` | Dienste neu starten |
-| `start-docker.sh` | Docker Stack starten |
-| `stop-docker.sh` | Docker Stack stoppen |
 | `Backup-DB.py` | Manuelles DB-Backup |
 | `restore.sh` | Backup wiederherstellen |
 | `manage-version.sh` | Versionssteuerung |
@@ -153,7 +151,7 @@ docker compose up -d
 Oder mit Hilfsskript:
 
 ```bash
-./start-docker.sh
+./start.sh
 ```
 
 Danach ist die Web-App erreichbar unter:
@@ -162,9 +160,9 @@ Danach ist die Web-App erreichbar unter:
 https://[SERVER-IP]
 ```
 
-Wenn keine Zertifikate vorhanden sind, erstellt `start-docker.sh` automatisch ein selbstsigniertes Zertifikat unter `certs/inventarsystem.crt` und `certs/inventarsystem.key`.
+Wenn keine Zertifikate vorhanden sind, erstellt `start.sh` automatisch ein selbstsigniertes Zertifikat unter `certs/inventarsystem.crt` und `certs/inventarsystem.key`.
 
-Wenn Docker/Compose/OpenSSL fehlen, installiert `start-docker.sh` die benötigten Pakete automatisch.
+Wenn Docker/Compose/OpenSSL fehlen, installiert `start.sh` die benoetigten Pakete automatisch.
 
 ### Stoppen
 
@@ -175,7 +173,7 @@ docker compose down
 Oder mit Hilfsskript:
 
 ```bash
-./stop-docker.sh
+./stop.sh
 ```
 
 ### Logs ansehen
