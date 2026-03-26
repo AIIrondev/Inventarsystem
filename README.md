@@ -14,6 +14,7 @@ Das System richtet sich insbesondere an Bildungseinrichtungen, Organisationen un
 - [Systemübersicht](#systemübersicht)
 - [Hauptfunktionen](#hauptfunktionen)
 - [Installation](#installation)
+- [Docker Betrieb](#docker-betrieb)
 - [Erste Einrichtung](#erste-einrichtung)
 - [Systembetrieb](#systembetrieb)
 - [Benutzerverwaltung](#benutzerverwaltung)
@@ -35,12 +36,14 @@ Das Inventarsystem stellt folgende Wartungsskripte bereit:
 
 | Skript | Beschreibung |
 |---|---|
-| `update.sh` | Aktualisiert System + Backup |
+| `update.sh` | Aktualisiert Docker-Deployment aus GitHub Releases |
 | `fix-all.sh` | Intelligentes Reparaturskript |
-| `rebuild-venv.sh` | Python-Umgebung neu erstellen |
+| `rebuild-venv.sh` | Python-Umgebung neu erstellen (nur Quellcode-Entwicklung) |
 | `start.sh` | Dienste starten |
 | `stop.sh` | Dienste stoppen |
 | `restart.sh` | Dienste neu starten |
+| `start-docker.sh` | Docker Stack starten |
+| `stop-docker.sh` | Docker Stack stoppen |
 | `Backup-DB.py` | Manuelles DB-Backup |
 | `restore.sh` | Backup wiederherstellen |
 | `manage-version.sh` | Versionssteuerung |
@@ -127,6 +130,92 @@ curl -s https://raw.githubusercontent.com/aiirondev/Inventarsystem/main/install.
 
 ---
 
+## Docker Betrieb
+
+Das System läuft produktiv Docker-first. Deployments und Updates erfolgen über Release-Artefakte (Build-only), nicht über Quellcode-Pulls.
+
+- Laufzeit-Stack: [docker-compose.yml](docker-compose.yml)
+- Build-Pipeline: [Dockerfile](Dockerfile)
+- Release-Pipeline: [.github/workflows/release-docker.yml](.github/workflows/release-docker.yml)
+- Frontend/Reverse Proxy: Nginx (Container)
+
+### Voraussetzungen
+
+- Docker Engine
+- Docker Compose Plugin
+
+### Starten (portabel auf jedem Docker-Host)
+
+```bash
+docker compose up -d
+```
+
+Oder mit Hilfsskript:
+
+```bash
+./start-docker.sh
+```
+
+Danach ist die Web-App erreichbar unter:
+
+```text
+https://[SERVER-IP]
+```
+
+Wenn keine Zertifikate vorhanden sind, erstellt `start-docker.sh` automatisch ein selbstsigniertes Zertifikat unter `certs/inventarsystem.crt` und `certs/inventarsystem.key`.
+
+Wenn Docker/Compose/OpenSSL fehlen, installiert `start-docker.sh` die benötigten Pakete automatisch.
+
+### Stoppen
+
+```bash
+docker compose down
+```
+
+Oder mit Hilfsskript:
+
+```bash
+./stop-docker.sh
+```
+
+### Logs ansehen
+
+```bash
+docker compose logs -f app
+docker compose logs -f mongodb
+docker compose logs -f nginx
+```
+
+### Persistente Daten
+
+Die Volumes sind in [docker-compose.yml](docker-compose.yml) definiert:
+
+- MongoDB Daten
+- Uploads / Thumbnails / Previews / QRCodes
+- Backups und Logs
+
+Hinweis: Für Container-Deployments werden MongoDB- und Speicherpfade via Umgebungsvariablen in [Web/settings.py](Web/settings.py) überschrieben.
+
+### Updates (nur aus Releases)
+
+```bash
+sudo ./update.sh
+```
+
+`update.sh` lädt ausschließlich das Release-Asset `inventarsystem-docker-bundle.tar.gz` aus dem neuesten GitHub Release und führt danach `docker compose up -d` aus.
+
+### Release-Erstellung (Build-only)
+
+Beim Push eines Tags `v*` erstellt GitHub Actions automatisch:
+
+- Container-Image in GHCR: `ghcr.io/aiirondev/inventarsystem:<tag>`
+- Release-Asset `inventarsystem-docker-bundle.tar.gz` (nur Docker-Deployment-Dateien)
+- Release-Asset `inventarsystem-image-<tag>.tar.gz` (offline Docker image export)
+
+Damit enthalten Releases nur Build-Artefakte für Docker, nicht den produktiven Updatepfad über Roh-Quellcode.
+
+---
+
 ## Erste Einrichtung
 
 Nach der Installation:
@@ -167,8 +256,8 @@ sudo ./restart.sh
 ### Status prüfen
 
 ```bash
-sudo systemctl status inventarsystem-gunicorn.service
-sudo systemctl status inventarsystem-nginx.service
+docker compose ps
+docker compose logs -f app
 ```
 
 ---
@@ -277,13 +366,7 @@ sudo ./restart.sh
 sudo ./update.sh
 ```
 
-Optionen:
-
-```bash
---restart-server
---compression-level=5
---help
-```
+Hinweis: Updatepfad ist release-only. Es wird kein `git pull` verwendet.
 
 ### Virtuelle Umgebung neu erstellen
 
@@ -363,14 +446,16 @@ sudo chmod 644 certs/inventarsystem.crt
 ### Webserver startet nicht
 
 ```bash
-sudo systemctl status inventarsystem-gunicorn.service
-sudo systemctl status inventarsystem-nginx.service
+docker compose ps
+docker compose logs -f nginx
+docker compose logs -f app
 ```
 
 ### MongoDB-Probleme
 
 ```bash
-sudo systemctl restart mongodb
+docker compose restart mongodb
+docker compose logs -f mongodb
 ```
 
 ### PyMongo/BSON-Konflikt

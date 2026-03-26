@@ -1,52 +1,115 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-sudo apt-get update
-sudo apt-get install -y curl wget git
+PROJECT_DIR="/opt/Inventarsystem"
+REPO_SLUG="AIIrondev/Inventarsystem"
+API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
+BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
 
-echo "Installing Inventarsystem..."
-# Clone the repository to /var
-git clone https://github.com/AIIrondev/Inventarsystem.git /opt/Inventarsystem || {
-    echo "Failed to clone repository to /var/Inventarsystem. Exiting."
-    exit 1
+need_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Error: missing command: $1"
+        exit 1
+    fi
 }
 
-cd /opt/Inventarsystem
-# Check if the start.sh script exists
-if [ ! -f "./start.sh" ]; then
-    echo "start.sh script not found in /opt/Inventarsystem"
-    exit 1
-fi
+install_docker_if_missing() {
+    if command -v docker >/dev/null 2>&1; then
+        return 0
+    fi
 
-# Make the script executable
-chmod +x ./start.sh
+    echo "Installing Docker..."
+    sudo apt-get update
+    sudo apt-get install -y docker.io docker-compose-v2 curl python3
+    sudo systemctl enable --now docker
+}
 
-echo "========================================================"
-echo "                  INSTALLATION COMPLETE                 "
-echo "========================================================"
+latest_tag_and_bundle_url() {
+    local meta_file
+    meta_file="$1"
 
-cd /opt/Inventarsystem
-# Run the script
-# Ask the user if they want to run the script now
-echo "Running the script now..."
-./start.sh
-if [ $? -ne 0 ]; then
-    echo "Failed to run the script. Please check the logs for more details."
-    exit 1
-fi
-echo "Script executed successfully!"
+    curl -fsSL "$API_URL" -o "$meta_file"
 
-echo "========================================================"
-echo "                   AUTOSTART INSTALLATION                   "
-echo "========================================================"
+    python3 - <<'PY' "$meta_file" "$BUNDLE_ASSET"
+import json, sys
+meta_file, asset_name = sys.argv[1], sys.argv[2]
+with open(meta_file, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+tag = data.get('tag_name', '').strip()
+url = ''
+for asset in data.get('assets', []):
+    if asset.get('name') == asset_name:
+        url = asset.get('browser_download_url', '').strip()
+        break
+print(tag)
+print(url)
+PY
+}
 
-./update.sh
-if [ $? -ne 0 ]; then
-    echo "Failed to set up autostart. Please check the logs for more details."
-    exit 1
-fi
-echo "Autostart setup successfully!"
-echo "========================================================"
-echo "              AUTOSTART INSTALLATION COMPLETED          "
-echo "========================================================"
+main() {
+    install_docker_if_missing
+    need_cmd docker
+    need_cmd tar
+    need_cmd python3
+    need_cmd curl
 
-curl -s https://raw.githubusercontent.com/aiirondev/admin_Inventarsystem/master/install.sh | sudo bash
+    local tmp_dir meta_file tag bundle_url
+    tmp_dir="$(mktemp -d)"
+    meta_file="$tmp_dir/release.json"
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    mapfile -t release_info < <(latest_tag_and_bundle_url "$meta_file")
+    tag="${release_info[0]:-}"
+    bundle_url="${release_info[1]:-}"
+
+    if [ -z "$tag" ] || [ -z "$bundle_url" ]; then
+        echo "Error: latest release metadata is incomplete."
+        echo "Expected release asset: $BUNDLE_ASSET"
+        exit 1
+    fi
+
+    echo "Installing Inventarsystem release $tag into $PROJECT_DIR"
+    sudo mkdir -p "$PROJECT_DIR"
+
+    curl -fL "$bundle_url" -o "$tmp_dir/$BUNDLE_ASSET"
+    sudo tar -xzf "$tmp_dir/$BUNDLE_ASSET" -C "$PROJECT_DIR"
+
+    sudo chmod +x "$PROJECT_DIR/start-docker.sh" "$PROJECT_DIR/stop-docker.sh"
+
+    # Local wrappers for compatibility
+    cat > "$tmp_dir/start.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/start-docker.sh"
+EOF
+
+    cat > "$tmp_dir/stop.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/stop-docker.sh"
+EOF
+
+    cat > "$tmp_dir/restart.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/stop-docker.sh"
+"$SCRIPT_DIR/start-docker.sh"
+EOF
+
+    sudo install -m 755 "$tmp_dir/start.sh" "$PROJECT_DIR/start.sh"
+    sudo install -m 755 "$tmp_dir/stop.sh" "$PROJECT_DIR/stop.sh"
+    sudo install -m 755 "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
+
+    echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
+
+    echo "Starting stack..."
+    sudo bash "$PROJECT_DIR/start-docker.sh"
+
+    echo "Installation complete."
+    echo "Open: https://localhost"
+}
+
+main "$@"

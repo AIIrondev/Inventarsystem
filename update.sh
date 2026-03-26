@@ -1,395 +1,250 @@
-#!/bin/bash
-# Daily updater for Inventarsystem
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Configuration
-PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
-BACKUP_BASE_DIR="/var/backups"
-LOG_FILE="$PROJECT_DIR/logs/update.log"
-# Compression level for tar.gz backups (0 to disable compression)
-COMPRESSION_LEVEL=${COMPRESSION_LEVEL:-1}
-# Whether to reboot server after update (set RESTART_SERVER=true to enable)
-RESTART_SERVER=${RESTART_SERVER:-false}
-# Marker to detect cron; leave empty by default
-CRONARG=${CRONARG:-}
+# Release-only updater for Docker deployment.
+# Updates are pulled exclusively from GitHub Releases assets.
 
-# Ensure logs directory exists with permissive perms for various users/cron
-mkdir -p "$PROJECT_DIR/logs"
-chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="$PROJECT_DIR/logs"
+LOG_FILE="$LOG_DIR/update.log"
+STATE_FILE="$PROJECT_DIR/.release-version"
+REPO_SLUG="AIIrondev/Inventarsystem"
+API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
+BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
+ENV_FILE="$PROJECT_DIR/.docker-build.env"
 
-update_from_git() {
-    log_message "Updating from git repository..."
+mkdir -p "$LOG_DIR"
+chmod 777 "$LOG_DIR" 2>/dev/null || true
 
-    # Navigate to project directory
-    cd "$PROJECT_DIR" || {
-        log_message "ERROR: Could not navigate to project directory"
-        return 1
-    }
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
 
-    # Set git repository as safe directory before pulling
-    git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
-        log_message "WARNING: Failed to add repository to git safe.directory. Trying with sudo..."
-        sudo git config --global --add safe.directory "$PROJECT_DIR" 2>/dev/null || {
-            log_message "WARNING: Failed to set repository as safe directory. Git operations may fail."
-        }
-    }
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        log_message "ERROR: Required command not found: $1"
+        exit 1
+    fi
+}
 
-    # Fix ownership if needed
-    current_owner=$(stat -c '%U' "$PROJECT_DIR")
-    if [ "$current_owner" != "$(whoami)" ]; then
-        log_message "Fixing repository ownership..."
-        sudo chown -R $(whoami) "$PROJECT_DIR" 2>/dev/null || {
-            log_message "WARNING: Failed to fix ownership. Git operations may fail."
-        }
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+fi
+
+apt_install() {
+    $SUDO apt-get update -y
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+}
+
+ensure_runtime_dependencies() {
+    local missing=()
+
+    if ! command -v docker >/dev/null 2>&1; then
+        missing+=(docker.io)
     fi
 
-    # Stash local changes to avoid merge conflicts
-    log_message "Stashing local changes..."
-    git stash push -m "auto-stash-$(date +%s)" --include-untracked > /dev/null 2>&1 || {
-        log_message "WARNING: Could not stash changes, attempting force pull..."
-    }
+    if ! docker compose version >/dev/null 2>&1; then
+        missing+=(docker-compose-v2)
+    fi
 
-    # If a version lock exists, ensure manage-version.sh is present (self-healing)
-    if [ -f "$PROJECT_DIR/.version-lock" ]; then
-        if [ ! -x "$PROJECT_DIR/manage-version.sh" ]; then
-            log_message "WARNING: .version-lock present but manage-version.sh missing. Attempting to restore from origin/main..."
-            git fetch origin main || true
-            git show origin/main:manage-version.sh > "$PROJECT_DIR/manage-version.sh" 2>/dev/null && \
-                chmod +x "$PROJECT_DIR/manage-version.sh"
-            if [ ! -x "$PROJECT_DIR/manage-version.sh" ]; then
-                log_message "ERROR: Could not restore manage-version.sh from origin/main. Proceeding with normal update."
-            else
-                log_message "Restored manage-version.sh from origin/main."
-            fi
-        fi
-        if [ -x "$PROJECT_DIR/manage-version.sh" ]; then
-            log_message "Version lock detected (.version-lock). Applying pinned version..."
-            "$PROJECT_DIR/manage-version.sh" apply || {
-                log_message "ERROR: Failed to apply version lock"
-                return 1
-            }
-            log_message "Pinned version applied successfully"
+    if ! command -v openssl >/dev/null 2>&1; then
+        missing+=(openssl)
+    fi
+
+    if ! command -v curl >/dev/null 2>&1; then
+        missing+=(curl)
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        missing+=(python3)
+    fi
+
+    if [ "${#missing[@]}" -gt 0 ]; then
+        log_message "Installing missing dependencies: ${missing[*]}"
+        apt_install "${missing[@]}"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
+    fi
+}
+
+ensure_tls_certificates() {
+    local cert_dir cert_path key_path cn
+    cert_dir="$PROJECT_DIR/certs"
+    cert_path="$cert_dir/inventarsystem.crt"
+    key_path="$cert_dir/inventarsystem.key"
+
+    mkdir -p "$cert_dir"
+
+    if [ -f "$cert_path" ] && [ -f "$key_path" ]; then
+        return 0
+    fi
+
+    cn="${TLS_CN:-localhost}"
+    log_message "No TLS certificates found. Generating self-signed certificate for CN=$cn"
+
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout "$key_path" \
+        -out "$cert_path" \
+        -subj "/C=DE/ST=NA/L=NA/O=Inventarsystem/OU=IT/CN=$cn" >/dev/null 2>&1
+
+    chmod 600 "$key_path"
+    chmod 644 "$cert_path"
+}
+
+create_backup() {
+    log_message "Creating database backup before update..."
+    if [ -x "$PROJECT_DIR/backup-docker.sh" ]; then
+        if "$PROJECT_DIR/backup-docker.sh" >> "$LOG_FILE" 2>&1; then
+            log_message "Docker backup completed"
             return 0
         else
-            log_message "WARNING: .version-lock present but manage-version.sh not found; proceeding with normal update"
+            log_message "WARNING: Docker backup failed; trying legacy backup path"
         fi
     fi
 
-    # Ensure refs/tags are up to date before pull
-    git fetch --all --tags --prune || {
-        log_message "ERROR: Git fetch failed"
-        return 1
-    }
-
-    # Pull latest changes on current branch
-    git pull --ff-only || {
-        log_message "ERROR: Git pull failed"
-        return 1
-    }
-
-    log_message "Git update completed successfully"
-    return 0
-}
-
-
-# Function to log messages
-log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-}
-
-# Function to create backup
-create_backup() {
-    log_message "Starting backup process..."
-    
-    # Create date-formatted directory name
-    CURRENT_DATE=$(date +"%Y-%m-%d")
-    BACKUP_NAME="Inventarsystem-$CURRENT_DATE"
-    BACKUP_DIR="$BACKUP_BASE_DIR/$BACKUP_NAME"
-    BACKUP_ARCHIVE="$BACKUP_BASE_DIR/$BACKUP_NAME.tar.gz"
-    
-    # Create backup directory if it doesn't exist
-    if [ ! -d "$BACKUP_BASE_DIR" ]; then
-        sudo mkdir -p "$BACKUP_BASE_DIR"
-        sudo chmod 755 "$BACKUP_BASE_DIR"
-    fi
-    
-    # Remove existing backup with same date if it exists
-    if [ -d "$BACKUP_DIR" ]; then
-        log_message "Removing existing backup directory at $BACKUP_DIR"
-        sudo rm -rf "$BACKUP_DIR"
-    fi
-    
-    if [ -f "$BACKUP_ARCHIVE" ]; then
-        log_message "Removing existing backup archive at $BACKUP_ARCHIVE"
-        sudo rm -f "$BACKUP_ARCHIVE"
-    fi
-    
-    # Create a temporary directory for backup
-    log_message "Creating backup at $BACKUP_DIR"
-    sudo mkdir -p "$BACKUP_DIR"
-    sudo cp -r "$PROJECT_DIR"/* "$BACKUP_DIR"
-    
-    # Create database backup using Backup-DB.py
-    log_message "Running database backup..."
-    # Create mongodb_backup directory with appropriate permissions first
-    sudo mkdir -p "$BACKUP_DIR/mongodb_backup"
-    sudo chmod 777 "$BACKUP_DIR/mongodb_backup"  # Temporarily give write permissions
-    
-    # Create Backup_db.log and ensure it's writable
-    touch "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null
-    chmod 666 "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null || {
-        log_message "WARNING: Failed to set permissions on Backup_db.log. Trying with sudo..."
-        sudo touch "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null
-        sudo chmod 666 "$PROJECT_DIR/logs/Backup_db.log" 2>/dev/null || {
-            log_message "WARNING: Failed to create writable Backup_db.log. Redirecting output to /dev/null instead."
-            # Create a flag variable to use /dev/null instead of Backup_db.log if needed
-            USE_NULL_OUTPUT=true
-        }
-    }
-    
-    # Install pymongo if not already installed
-    log_message "Checking pymongo installation..."
-    if ! python3 -c "import pymongo" &>/dev/null; then
-        log_message "Installing pymongo..."
-        # Try multiple installation methods
-        if [ -f "$PROJECT_DIR/.venv/bin/pip" ]; then
-            if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
-                "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 > /dev/null 2>&1 || {
-                    log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
-                    pip install pymongo==4.6.3 > /dev/null 2>&1 || {
-                        log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                        pip3 install pymongo==4.6.3 > /dev/null 2>&1 || {
-                            log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
-                        }
-                    }
-                }
-            else
-                "$PROJECT_DIR/.venv/bin/pip" install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                    log_message "WARNING: Failed to install pymongo with virtualenv pip. Trying system pip."
-                    pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                        log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                        pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                            log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
-                        }
-                    }
-                }
-            fi
+    if [ -x "$PROJECT_DIR/run-backup.sh" ]; then
+        if "$PROJECT_DIR/run-backup.sh" >> "$LOG_FILE" 2>&1; then
+            log_message "Backup completed"
         else
-            if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
-                pip install pymongo==4.6.3 > /dev/null 2>&1 || {
-                    log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                    pip3 install pymongo==4.6.3 > /dev/null 2>&1 || {
-                        log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
-                    }
-                }
-            else
-                pip install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                    log_message "WARNING: Failed to install pymongo with pip. Trying pip3."
-                    pip3 install pymongo==4.6.3 >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-                        log_message "WARNING: All attempts to install pymongo failed. Will try to continue."
-                    }
-                }
-            fi
-        fi
-    fi
-    
-    # Run database backup with our helper script
-    log_message "Executing database backup script..."
-    if [ "${USE_NULL_OUTPUT:-false}" = true ]; then
-        sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" > /dev/null 2>&1 || {
-            log_message "ERROR: Failed to backup database with original path"
-            
-            # Try an alternative approach - use a temporary directory
-            log_message "Attempting backup via temporary directory..."
-            tmp_backup_dir="/tmp/mongodb_backup_$$"
-            mkdir -p "$tmp_backup_dir"
-            
-            "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" > /dev/null 2>&1 && {
-                # Copy temporary backup files to the actual backup directory
-                log_message "Copying backup files from temporary directory..."
-                cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/"
-            } || {
-                log_message "ERROR: All attempts to backup database failed"
-            }
-        }
-    else
-        sudo -E "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$BACKUP_DIR/mongodb_backup" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 || {
-            log_message "ERROR: Failed to backup database with original path"
-            
-            # Try an alternative approach - use a temporary directory
-            log_message "Attempting backup via temporary directory..."
-            tmp_backup_dir="/tmp/mongodb_backup_$$"
-            mkdir -p "$tmp_backup_dir"
-            
-            "$PROJECT_DIR/run-backup.sh" --db Inventarsystem --uri mongodb://localhost:27017/ --out "$tmp_backup_dir" >> "$PROJECT_DIR/logs/Backup_db.log" 2>&1 && {
-                # Copy temporary backup files to the actual backup directory
-                log_message "Copying backup files from temporary directory..."
-                cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/"
-            } || {
-                log_message "ERROR: All attempts to backup database failed"
-            }
-        }
-    fi
-    
-    # Check if any CSV files were created during backup
-    if ! find "$BACKUP_DIR/mongodb_backup" -name "*.csv" -quit; then
-        log_message "WARNING: No CSV files found in backup directory"
-        
-        # If we used a temporary directory earlier and it still exists, try to use its contents
-        if [ -d "$tmp_backup_dir" ]; then
-            log_message "Backup created in temporary directory, moving to backup location..."
-            sudo cp -r "$tmp_backup_dir"/* "$BACKUP_DIR/mongodb_backup/" 
-            rm -rf "$tmp_backup_dir"
-        fi
-    fi
-    
-    # Reset to more restrictive permissions after backup completes
-    sudo chmod -R 755 "$BACKUP_DIR/mongodb_backup"
-    
-    # Verify that backup files were created
-    csv_count=$(find "$BACKUP_DIR/mongodb_backup" -name "*.csv" 2>/dev/null | wc -l)
-    if [ "$csv_count" -gt 0 ]; then
-        log_message "Database backup successful: $csv_count collection(s) backed up"
-    else
-        log_message "WARNING: No CSV files found in backup directory, database backup may have failed"
-    fi
-    
-    # Compress the backup
-    if [ "$COMPRESSION_LEVEL" -gt 0 ]; then
-        log_message "Compressing backup with level $COMPRESSION_LEVEL..."
-        
-        # Create compressed archive
-        # Using standard tar without compression level option (not all tar versions support it)
-        sudo tar -czf "$BACKUP_ARCHIVE" -C "$BACKUP_BASE_DIR" "$BACKUP_NAME" || {
-            log_message "ERROR: Failed to compress backup"
-            return 1
-        }
-        
-        # Remove uncompressed directory after successful compression
-        if [ -f "$BACKUP_ARCHIVE" ]; then
-            log_message "Backup compressed successfully to $BACKUP_ARCHIVE"
-            log_message "Removing uncompressed backup directory"
-            sudo rm -rf "$BACKUP_DIR"
-        else
-            log_message "ERROR: Compressed backup file not found"
-            return 1
+            log_message "WARNING: Backup failed; continuing with release update"
         fi
     else
-        log_message "Compression disabled, keeping uncompressed backup"
-    fi
-    
-    # Set appropriate permissions
-    if [ "$COMPRESSION_LEVEL" -gt 0 ]; then
-        sudo chmod 644 "$BACKUP_ARCHIVE"
-    else
-        sudo chmod -R 755 "$BACKUP_DIR"
-    fi
-    
-    # Clean up old backups (keep last 7 days)
-    log_message "Cleaning up old backups..."
-    # Clean up compressed backups
-    find "$BACKUP_BASE_DIR" -maxdepth 1 -name "Inventarsystem-*.tar.gz" -type f -mtime +7 -exec sudo rm -f {} \;
-    # Clean up uncompressed backups
-    find "$BACKUP_BASE_DIR" -maxdepth 1 -name "Inventarsystem-*" -type d -mtime +7 -exec sudo rm -rf {} \;
-    
-    log_message "Backup completed successfully"
-    return 0
-}
-
-
-# Function to restart services
-restart_services() {
-    log_message "Restarting services..."
-    
-    # Navigate to project directory
-    cd "$PROJECT_DIR" || {
-        log_message "ERROR: Could not navigate to project directory"
-        return 1
-    }
-    
-    # Execute restart script
-    ./restart.sh || {
-        log_message "ERROR: Failed to restart services"
-        return 1
-    }
-    
-    log_message "Services restarted successfully"
-    return 0
-}
-
-# Function to restart the server
-restart_server() {
-    log_message "Preparing for server restart..."
-    
-    # Make sure all buffers are written to disk
-    sync
-    
-    # Schedule a reboot
-    log_message "Initiating server reboot..."
-    sudo shutdown -r +1 "Server restart initiated by daily update script" || {
-        log_message "ERROR: Failed to initiate server restart"
-        return 1
-    }
-    
-    log_message "Server restart scheduled in 1 minute"
-    return 0
-}
-
-# Function to setup cron job
-setup_cron_job() {
-    log_message "Checking cron job configuration..."
-    
-    # Define cron job to run daily at 2:00 AM
-    CRON_JOB="0 2 * * * $PROJECT_DIR/update.sh"
-    
-    # Check if cron job already exists
-    EXISTING_CRON=$(crontab -l 2>/dev/null | grep -F "$PROJECT_DIR/update.sh")
-    
-    if [ -z "$EXISTING_CRON" ]; then
-        log_message "Setting up daily cron job..."
-        
-        # Add to crontab
-        (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-        
-        if [ $? -eq 0 ]; then
-            log_message "Cron job set up successfully"
-        else
-            log_message "ERROR: Failed to set up cron job"
-        fi
-    else
-        log_message "Cron job already exists, skipping setup"
+        log_message "WARNING: run-backup.sh not found; skipping backup"
     fi
 }
 
-# Main execution
-log_message "====== Starting daily update process ======"
+fetch_release_metadata() {
+    local meta_file
+    meta_file="$1"
+    curl -fsSL "$API_URL" -o "$meta_file"
+}
 
-# Create backup
-create_backup
+parse_latest_tag() {
+    local meta_file
+    meta_file="$1"
+    python3 - <<'PY' "$meta_file"
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data.get('tag_name', '').strip())
+PY
+}
 
-# Update from git
-if update_from_git; then
-    # Restart services if update successful
-    restart_services
-else
-    log_message "WARNING: Skipping service restart due to git update failure"
-fi
+parse_asset_url() {
+    local meta_file asset_name
+    meta_file="$1"
+    asset_name="$2"
+    python3 - <<'PY' "$meta_file" "$asset_name"
+import json, sys
+meta_file, asset_name = sys.argv[1], sys.argv[2]
+with open(meta_file, 'r', encoding='utf-8') as f:
+    data = json.load(f)
+for asset in data.get('assets', []):
+    if asset.get('name') == asset_name:
+        print(asset.get('browser_download_url', '').strip())
+        break
+PY
+}
 
-# Setup cron job if running manually (not from cron)
-if [ -z "$CRONARG" ]; then
-    setup_cron_job
-fi
+download_and_extract_bundle() {
+    local url tmp_dir archive
+    url="$1"
+    tmp_dir="$2"
+    archive="$tmp_dir/$BUNDLE_ASSET"
 
-# Restart server if requested
-if [ "$RESTART_SERVER" = true ]; then
-    log_message "Server restart was requested"
-    restart_server
-    if [ $? -eq 0 ]; then
-        log_message "====== Daily update process completed - SERVER WILL RESTART SOON ======"
-        echo "SERVER WILL RESTART IN 1 MINUTE"
+    curl -fL "$url" -o "$archive"
+    tar -xzf "$archive" -C "$tmp_dir"
+
+    # The bundle must contain docker deployment files only.
+    mkdir -p "$PROJECT_DIR/docker/nginx"
+    cp -f "$tmp_dir/docker-compose.yml" "$PROJECT_DIR/docker-compose.yml"
+    cp -f "$tmp_dir/docker/nginx/default.conf" "$PROJECT_DIR/docker/nginx/default.conf"
+    cp -f "$tmp_dir/start-docker.sh" "$PROJECT_DIR/start-docker.sh"
+    cp -f "$tmp_dir/stop-docker.sh" "$PROJECT_DIR/stop-docker.sh"
+    if [ -f "$tmp_dir/backup-docker.sh" ]; then
+        cp -f "$tmp_dir/backup-docker.sh" "$PROJECT_DIR/backup-docker.sh"
+    fi
+    if [ -f "$tmp_dir/update.sh" ]; then
+        cp -f "$tmp_dir/update.sh" "$PROJECT_DIR/update.sh"
+    fi
+
+    chmod +x "$PROJECT_DIR/start-docker.sh" "$PROJECT_DIR/stop-docker.sh" "$PROJECT_DIR/backup-docker.sh" "$PROJECT_DIR/update.sh"
+}
+
+deploy() {
+    cd "$PROJECT_DIR"
+    if [ ! -f "$ENV_FILE" ]; then
+        cat > "$ENV_FILE" <<EOF
+NUITKA_BUILD=0
+INVENTAR_HTTPS_PORT=442
+EOF
+    fi
+
+    docker compose --env-file "$ENV_FILE" up -d --build --remove-orphans >> "$LOG_FILE" 2>&1
+}
+
+main() {
+    ensure_runtime_dependencies
+    ensure_tls_certificates
+
+    require_cmd curl
+    require_cmd tar
+    require_cmd docker
+    require_cmd python3
+
+    create_backup
+
+    local tmp_dir meta_file latest_tag current_tag bundle_url
+    tmp_dir="$(mktemp -d)"
+    meta_file="$tmp_dir/release.json"
+
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    log_message "Checking latest GitHub release for $REPO_SLUG..."
+    if ! fetch_release_metadata "$meta_file"; then
+        log_message "WARNING: Could not fetch release metadata. Falling back to local rebuild deployment."
+        deploy
+        log_message "Local rebuild deployment completed"
         exit 0
-    else
-        log_message "====== Daily update process completed with SERVER RESTART FAILURE ======"
     fi
-else
-    log_message "====== Daily update process completed ======"
-fi
+
+    latest_tag="$(parse_latest_tag "$meta_file")"
+    if [ -z "$latest_tag" ]; then
+        log_message "WARNING: Could not determine latest release tag. Falling back to local rebuild deployment."
+        deploy
+        log_message "Local rebuild deployment completed"
+        exit 0
+    fi
+
+    current_tag=""
+    if [ -f "$STATE_FILE" ]; then
+        current_tag="$(cat "$STATE_FILE")"
+    fi
+
+    if [ "$current_tag" = "$latest_tag" ]; then
+        log_message "Already on latest release ($latest_tag). Running local rebuild deploy for current sources."
+        deploy
+        log_message "Local rebuild deployment completed"
+        exit 0
+    fi
+
+    bundle_url="$(parse_asset_url "$meta_file" "$BUNDLE_ASSET")"
+    if [ -z "$bundle_url" ]; then
+        log_message "WARNING: Release asset not found: $BUNDLE_ASSET. Falling back to local rebuild deployment."
+        deploy
+        log_message "Local rebuild deployment completed"
+        exit 0
+    fi
+
+    log_message "Updating from release $latest_tag"
+    download_and_extract_bundle "$bundle_url" "$tmp_dir"
+    deploy
+
+    echo "$latest_tag" > "$STATE_FILE"
+    log_message "Update completed successfully to release $latest_tag"
+}
+
+main "$@"

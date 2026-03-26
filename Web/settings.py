@@ -100,6 +100,11 @@ MONGODB_HOST = _get(_conf, ['mongodb', 'host'], DEFAULTS['mongodb']['host'])
 MONGODB_PORT = _get(_conf, ['mongodb', 'port'], DEFAULTS['mongodb']['port'])
 MONGODB_DB = _get(_conf, ['mongodb', 'db'], DEFAULTS['mongodb']['db'])
 
+# Optional environment overrides for containerized/runtime deployments.
+MONGODB_HOST = os.getenv('INVENTAR_MONGODB_HOST', MONGODB_HOST)
+MONGODB_PORT = int(os.getenv('INVENTAR_MONGODB_PORT', str(MONGODB_PORT)))
+MONGODB_DB = os.getenv('INVENTAR_MONGODB_DB', MONGODB_DB)
+
 # Scheduler
 SCHEDULER_INTERVAL_MIN = _get(_conf, ['scheduler', 'interval_minutes'], DEFAULTS['scheduler']['interval_minutes'])
 BACKUP_INTERVAL_HOURS = _get(_conf, ['scheduler', 'backup_interval_hours'], DEFAULTS['scheduler']['backup_interval_hours'])
@@ -140,6 +145,10 @@ PREVIEW_SIZE = (int(PREVIEW_SIZE_LIST[0]), int(PREVIEW_SIZE_LIST[1])) if isinsta
 
 BACKUP_FOLDER = _get(_conf, ['paths', 'backups'], DEFAULTS['paths']['backups'])
 LOGS_FOLDER = _get(_conf, ['paths', 'logs'], DEFAULTS['paths']['logs'])
+
+# Optional environment overrides for writable storage mounts.
+BACKUP_FOLDER = os.getenv('INVENTAR_BACKUP_FOLDER', BACKUP_FOLDER)
+LOGS_FOLDER = os.getenv('INVENTAR_LOGS_FOLDER', LOGS_FOLDER)
 
 # Normalize backup and logs paths to absolute paths (similar to upload folders) to avoid
 # permission issues caused by relative paths resolving to unintended working dirs.
