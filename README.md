@@ -142,6 +142,19 @@ Optional kann ein alter Systempfad nach erfolgreicher Migration entfernt werden:
 sudo ./install.sh --migrate-legacy-db --remove-legacy-system --legacy-system-dir /opt/Inventarsystem-alt
 ```
 
+Ab dieser Version wird nach der Installation standardmaessig ein Alt-System-Cleanup ausgefuehrt
+(u. a. alte Inventarsystem/Admin-Systemd-Dienste stoppen/deaktivieren, Restprozesse und stale Sockets entfernen).
+
+Optionales Verhalten beim Install:
+
+```bash
+# Alt-System-Cleanup komplett ueberspringen
+sudo ./install.sh --skip-cleanup-old
+
+# Beim Alt-System-Cleanup auch passende Cron-Eintraege entfernen
+sudo ./install.sh --cleanup-old-remove-cron
+```
+
 ---
 
 ## Docker Betrieb

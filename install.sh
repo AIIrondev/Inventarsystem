@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="/opt/Inventarsystem"
 REPO_SLUG="AIIrondev/Inventarsystem"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
@@ -12,6 +13,8 @@ REMOVE_LEGACY_SYSTEM=false
 LEGACY_SERVICE_CLEANUP=true
 LEGACY_SYSTEM_DIR=""
 LEGACY_BACKUP_ARCHIVE=""
+CLEANUP_OLD_SERVICES=true
+CLEANUP_OLD_REMOVE_CRON=false
 
 need_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -38,6 +41,8 @@ Usage: $0 [options]
 Options:
   --migrate-legacy-db           Back up host MongoDB and import into Docker MongoDB
   --remove-legacy-system        Remove old host MongoDB/system after successful import
+    --skip-cleanup-old            Do not run cleanup-old.sh after install
+    --cleanup-old-remove-cron     Also remove matching cron entries during old-system cleanup
   --legacy-db-name <name>       Legacy database name (default: $LEGACY_DB_NAME)
   --legacy-mongo-uri <uri>      Legacy Mongo URI (default: $LEGACY_MONGO_URI)
   --legacy-system-dir <path>    Optional old system directory to remove after migration
@@ -54,6 +59,14 @@ parse_args() {
                 ;;
             --remove-legacy-system)
                 REMOVE_LEGACY_SYSTEM=true
+                shift
+                ;;
+            --skip-cleanup-old)
+                CLEANUP_OLD_SERVICES=false
+                shift
+                ;;
+            --cleanup-old-remove-cron)
+                CLEANUP_OLD_REMOVE_CRON=true
                 shift
                 ;;
             --legacy-db-name)
@@ -186,6 +199,27 @@ cleanup_legacy_system() {
     echo "Legacy cleanup complete."
 }
 
+cleanup_old_services() {
+    local cleanup_script
+    cleanup_script="$PROJECT_DIR/cleanup-old.sh"
+
+    if [ "$CLEANUP_OLD_SERVICES" != "true" ]; then
+        return 0
+    fi
+
+    if [ ! -x "$cleanup_script" ]; then
+        echo "Warning: cleanup script not found at $cleanup_script, skipping old-system service cleanup"
+        return 0
+    fi
+
+    echo "Cleaning up old services/processes..."
+    if [ "$CLEANUP_OLD_REMOVE_CRON" = "true" ]; then
+        sudo bash "$cleanup_script" --remove-cron || true
+    else
+        sudo bash "$cleanup_script" || true
+    fi
+}
+
 latest_tag_and_bundle_url() {
     local meta_file
     meta_file="$1"
@@ -257,7 +291,12 @@ EOF
         sudo install -m 755 "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
     fi
 
+    if [ ! -f "$PROJECT_DIR/cleanup-old.sh" ] && [ -f "$INSTALLER_DIR/cleanup-old.sh" ]; then
+        sudo install -m 755 "$INSTALLER_DIR/cleanup-old.sh" "$PROJECT_DIR/cleanup-old.sh"
+    fi
+
     sudo chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh"
+    [ -f "$PROJECT_DIR/cleanup-old.sh" ] && sudo chmod +x "$PROJECT_DIR/cleanup-old.sh"
 
     echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
 
@@ -267,6 +306,7 @@ EOF
     sudo bash "$PROJECT_DIR/start.sh"
 
     restore_legacy_backup_into_docker
+    cleanup_old_services
     cleanup_legacy_system
 
     echo "Installation complete."
