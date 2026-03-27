@@ -181,6 +181,9 @@ Wenn keine Zertifikate vorhanden sind, erstellt `start.sh` automatisch ein selbs
 Wenn Docker/Compose/OpenSSL fehlen, installiert `start.sh` die benoetigten Pakete automatisch.
 Dabei wird zuerst `docker.io` versucht. Falls das auf dem System nicht verfuegbar ist, richtet das Skript das Docker-Repository ein und installiert `docker-ce` inklusive Compose-Plugin.
 
+Standardmaessig richtet `start.sh` zusaetzlich die taeglichen Cron-Jobs fuer Backup (02:30) und Update (03:00) ein.
+Das kann bei Bedarf deaktiviert werden mit `./start.sh --no-cron` oder per Umgebungsvariable `INVENTAR_SETUP_CRON=0 ./start.sh`.
+
 ### App mit Nuitka neu bauen
 
 Fuer einen Standalone-Build der Flask-App steht folgendes Skript bereit:

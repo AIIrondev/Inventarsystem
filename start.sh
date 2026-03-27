@@ -14,6 +14,53 @@ fi
 NUITKA_BUILD_VALUE="0"
 HTTP_PORT_VALUE="80"
 HTTPS_PORT_VALUE="443"
+CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
+
+usage() {
+    cat <<EOF
+Usage: $0 [options]
+
+Options:
+  --no-cron         Do not create or update cron jobs
+  --with-cron       Create/update cron jobs (default)
+  -h, --help        Show this help message
+EOF
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-cron)
+                CRON_SETUP_VALUE="0"
+                shift
+                ;;
+            --with-cron)
+                CRON_SETUP_VALUE="1"
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Error: unknown option '$1'"
+                usage
+                exit 2
+                ;;
+        esac
+    done
+}
+
+cron_setup_enabled() {
+    case "${CRON_SETUP_VALUE,,}" in
+        0|false|no|off)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 apt_install() {
     $SUDO apt-get update -y
@@ -65,7 +112,7 @@ ensure_runtime_dependencies() {
         missing+=(curl)
     fi
 
-    if ! command -v crontab >/dev/null 2>&1; then
+    if cron_setup_enabled && ! command -v crontab >/dev/null 2>&1; then
         missing+=(cron)
     fi
 
@@ -76,11 +123,18 @@ ensure_runtime_dependencies() {
 
     if command -v systemctl >/dev/null 2>&1; then
         $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
-        $SUDO systemctl enable --now cron >/dev/null 2>&1 || true
+        if cron_setup_enabled; then
+            $SUDO systemctl enable --now cron >/dev/null 2>&1 || true
+        fi
     fi
 }
 
 setup_scheduled_jobs() {
+    if ! cron_setup_enabled; then
+        echo "Cron job setup disabled (INVENTAR_SETUP_CRON=$CRON_SETUP_VALUE)"
+        return 0
+    fi
+
     if ! command -v crontab >/dev/null 2>&1; then
         echo "Warning: crontab not available, skipping nightly update setup"
         return 0
@@ -273,6 +327,8 @@ INVENTAR_HTTP_PORT=$HTTP_PORT_VALUE
 INVENTAR_HTTPS_PORT=$HTTPS_PORT_VALUE
 EOF
 }
+
+parse_args "$@"
 
 ensure_runtime_dependencies
 ensure_tls_certificates
