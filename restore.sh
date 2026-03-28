@@ -1,595 +1,527 @@
-#!/bin/bash
-# filepath: /home/max/Dokumente/repos/Inventarsystem/restore.sh.fixed
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Configuration
-PROJECT_DIR="$(dirname "$(readlink -f "$0")")"
-BACKUP_BASE_DIR="/var/backups"
-LOG_FILE="$PROJECT_DIR/logs/restore.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="$SCRIPT_DIR/logs"
+LOG_FILE="$LOG_DIR/restore.log"
+WORK_DIR="$(mktemp -d /tmp/inventarsystem-restore-XXXXXX)"
 
-# Create logs directory if it doesn't exist
-mkdir -p "$PROJECT_DIR/logs"
-# Ensure proper permissions for logs directory
-if [ -d "$PROJECT_DIR/logs" ]; then
-    chmod 777 "$PROJECT_DIR/logs" 2>/dev/null || true
+DB_NAME="${INVENTAR_MONGODB_DB:-Inventarsystem}"
+SOURCE_PATH=""
+BACKUP_DATE=""
+DROP_DATABASE=false
+RESTART_SERVICES=false
+STAGED_PATH=""
+
+BACKUP_ROOT_LOCAL="$SCRIPT_DIR/backups"
+BACKUP_ROOT_SYSTEM="/var/backups"
+
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
 fi
 
-# Function to log messages
-log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+DOCKER_COMPOSE=()
+
+cleanup() {
+    rm -rf "$WORK_DIR" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+mkdir -p "$LOG_DIR"
+
+log() {
+    local msg="$1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" | tee -a "$LOG_FILE"
 }
 
-# Parse command line arguments
-BACKUP_DATE=""
-RESTART_SERVICES=false
-RESTORE_DB=true
-DROP_DATABASE=false  # Default is not to drop the database
-
-# Display help
 show_help() {
-    echo "Inventory System Backup Restoration Tool"
-    echo "Usage: $0 --date=YYYY-MM-DD [options]"
-    echo ""
-    echo "Options:"
-    echo "  --date=YYYY-MM-DD     Required: Date of backup to restore"
-    echo "  --no-db               Skip database restoration"
-    echo "  --drop-database       Drop the entire database before restoring (USE WITH CAUTION!)"
-    echo "  --restart-services    Restart services after restoration"
-    echo "  --list                List available backups"
-    echo "  --help                Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  $0 --date=2025-07-14          # Restore backup from July 14, 2025"
-    echo "  $0 --date=latest              # Restore most recent backup"
-    echo "  $0 --date=latest --drop-database  # Restore latest backup with clean database"
-    echo "  $0 --list                     # Show available backups"
+    cat <<EOF
+Inventarsystem Restore / Porting Tool (Docker-first)
+
+Usage:
+  $0 --source <path> [options]
+  $0 --date <YYYY-MM-DD|latest> [options]
+  $0 --list
+
+Options:
+  --source <path>         Backup source path.
+                          Supported:
+                          - old folder with CSV files
+                          - old Inventarsystem-*.tar.gz backup
+                          - new mongodb-*.archive.gz backup
+                          - folder containing mongodb-*.archive.gz
+  --date <value>          Resolve source from known backup locations.
+                          - YYYY-MM-DD: checks backups/YYYY-MM-DD and /var/backups/Inventarsystem-YYYY-MM-DD(.tar.gz)
+                          - latest: newest from local/system backup roots
+  --drop-database         Drop target DB before import (recommended for full restore)
+  --restart-services      Restart stack after restore
+  --list                  List detected backup candidates
+  --help                  Show this help
+
+Notes:
+  - Always restores into current DB name: $DB_NAME
+  - Supports both legacy CSV and new archive backups
+  - Normalizes collection names to current structure (users, items, ausleihungen, filter_presets, settings)
+EOF
 }
 
-# List available backups
-list_backups() {
-    log_message "Listing available backups..."
-    echo "Available backups:"
-    
-    # Check for compressed backups
-    COMPRESSED_BACKUPS=$(find "$BACKUP_BASE_DIR" -maxdepth 1 -name "Inventarsystem-*.tar.gz" | sort -r)
-    
-    # Check for uncompressed backup directories
-    UNCOMPRESSED_BACKUPS=$(find "$BACKUP_BASE_DIR" -maxdepth 1 -type d -name "Inventarsystem-*" | sort -r)
-    
-    if [ -z "$COMPRESSED_BACKUPS" ] && [ -z "$UNCOMPRESSED_BACKUPS" ]; then
-        echo "No backups found in $BACKUP_BASE_DIR"
-        return 1
-    fi
-    
-    echo "Compressed backups:"
-    if [ -z "$COMPRESSED_BACKUPS" ]; then
-        echo "  None"
-    else
-        for backup in $COMPRESSED_BACKUPS; do
-            filename=$(basename "$backup")
-            date=${filename#Inventarsystem-}
-            date=${date%.tar.gz}
-            size=$(du -h "$backup" | cut -f1)
-            echo "  $date ($size)"
-        done
-    fi
-    
-    echo "Uncompressed backups:"
-    if [ -z "$UNCOMPRESSED_BACKUPS" ]; then
-        echo "  None"
-    else
-        for backup in $UNCOMPRESSED_BACKUPS; do
-            dirname=$(basename "$backup")
-            date=${dirname#Inventarsystem-}
-            size=$(du -sh "$backup" | cut -f1)
-            echo "  $date ($size)"
-        done
-    fi
-}
-
-# Find the most recent backup
-get_latest_backup() {
-    # First check for compressed backups
-    LATEST=$(find "$BACKUP_BASE_DIR" -maxdepth 1 -name "Inventarsystem-*.tar.gz" | sort -r | head -n 1)
-    
-    # If no compressed backups, check for directories
-    if [ -z "$LATEST" ]; then
-        LATEST=$(find "$BACKUP_BASE_DIR" -maxdepth 1 -type d -name "Inventarsystem-*" | sort -r | head -n 1)
-    fi
-    
-    if [ -z "$LATEST" ]; then
-        log_message "ERROR: No backups found"
-        return 1
-    fi
-    
-    basename=$(basename "$LATEST")
-    if [[ "$basename" == *.tar.gz ]]; then
-        echo "${basename#Inventarsystem-}" | sed 's/\.tar\.gz$//'
-    else
-        echo "${basename#Inventarsystem-}"
-    fi
-}
-
-# Restore files from backup
-restore_files() {
-    local backup_date=$1
-    local temp_dir="/tmp/inventarsystem_restore_$$"
-    
-    log_message "Restoring files from backup dated $backup_date..."
-    
-    # Check for compressed backup first
-    compressed_backup="$BACKUP_BASE_DIR/Inventarsystem-$backup_date.tar.gz"
-    uncompressed_backup="$BACKUP_BASE_DIR/Inventarsystem-$backup_date"
-    
-    if [ -f "$compressed_backup" ]; then
-        log_message "Found compressed backup: $compressed_backup"
-        
-        # Create temporary extraction directory
-        mkdir -p "$temp_dir"
-        
-        # Extract the archive
-        log_message "Extracting backup archive..."
-        sudo tar -xzf "$compressed_backup" -C "$temp_dir" || {
-            log_message "ERROR: Failed to extract backup archive"
-            sudo rm -rf "$temp_dir"
-            return 1
-        }
-        
-        # Set the source directory to the extracted folder
-        source_dir="$temp_dir/Inventarsystem-$backup_date"
-    elif [ -d "$uncompressed_backup" ]; then
-        log_message "Found uncompressed backup: $uncompressed_backup"
-        source_dir="$uncompressed_backup"
-    else
-        log_message "ERROR: No backup found for date $backup_date"
-        return 1
-    fi
-    
-    # Create a temporary backup of current files
-    current_backup_dir="/tmp/inventarsystem_current_$$"
-    log_message "Creating temporary backup of current files to $current_backup_dir"
-    mkdir -p "$current_backup_dir"
-    cp -r "$PROJECT_DIR"/* "$current_backup_dir/" || {
-        log_message "WARNING: Failed to create temporary backup of current files"
-    }
-    
-    # Copy files from backup to project directory
-    log_message "Copying files from backup to project directory..."
-    
-    # Exclude certain directories from restoration
-    sudo rsync -av --exclude="logs" --exclude=".git" --exclude="mongodb_backup" "$source_dir/" "$PROJECT_DIR/" || {
-        log_message "ERROR: Failed to restore files"
-        return 1
-    }
-    
-    # Clean up
-    if [ -d "$temp_dir" ]; then
-        sudo rm -rf "$temp_dir"
-    fi
-    
-    log_message "Files restored successfully"
-    return 0
-}
-
-# Restore database
-restore_db() {
-    local backup_date=$1
-    local temp_dir="/tmp/inventarsystem_restore_$$"
-    
-    # Ensure temporary directory exists
-    mkdir -p "$temp_dir"
-    
-    log_message "Restoring database from backup dated $backup_date..."
-    
-    # Determine the location of database backup files
-    db_backup_location=""
-    
-    # Check compressed backup first
-    compressed_backup="$BACKUP_BASE_DIR/Inventarsystem-$backup_date.tar.gz"
-    uncompressed_backup="$BACKUP_BASE_DIR/Inventarsystem-$backup_date"
-    
-    if [ -f "$compressed_backup" ]; then
-        # Need to extract the database files
-        mkdir -p "$temp_dir"
-        
-        log_message "Extracting database files from compressed backup..."
-        # Extract the whole archive - safer than trying to extract just the mongodb_backup directory
-        sudo tar -xzf "$compressed_backup" -C "$temp_dir" || {
-            log_message "ERROR: Failed to extract backup archive"
-            sudo rm -rf "$temp_dir"
-            return 1
-        }
-        
-        # Check both standard location and top-level location
-        if [ -d "$temp_dir/Inventarsystem-$backup_date/mongodb_backup" ]; then
-            db_backup_location="$temp_dir/Inventarsystem-$backup_date/mongodb_backup"
-        elif [ -d "$temp_dir/mongodb_backup" ]; then
-            db_backup_location="$temp_dir/mongodb_backup"
-        else
-            log_message "WARNING: Could not find mongodb_backup directory in extracted archive"
-        fi
-    elif [ -d "$uncompressed_backup" ]; then
-        # Use the uncompressed backup
-        # Check both standard location and top-level location
-        if [ -d "$uncompressed_backup/mongodb_backup" ]; then
-            db_backup_location="$uncompressed_backup/mongodb_backup"
-        elif [ -d "$BACKUP_BASE_DIR/mongodb_backup" ]; then
-            db_backup_location="$BACKUP_BASE_DIR/mongodb_backup"
-        else
-            log_message "WARNING: Could not find mongodb_backup directory in uncompressed backup"
-        fi
-    else
-        log_message "ERROR: No backup found for date $backup_date"
-        return 1
-    fi
-    
-    # Try to locate the MongoDB backup directory if it wasn't found
-    if [ -z "$db_backup_location" ] || [ ! -d "$db_backup_location" ]; then
-        log_message "Searching for MongoDB backup directory..."
-        
-        # Search recursively for CSV files that could be part of the backup
-        possible_locations=$(find "$BACKUP_BASE_DIR" -name "*.csv" -type f -print 2>/dev/null | xargs -r dirname 2>/dev/null | sort -u)
-        
-        if [ -n "$possible_locations" ]; then
-            # Use the first location found (most likely location)
-            db_backup_location=$(echo "$possible_locations" | head -1)
-            log_message "Found potential MongoDB backup at: $db_backup_location"
-        else
-            # If no backup directory was found and user did not request to skip DB restore
-            log_message "ERROR: Database backup directory not found in the backup"
-            # Continue without error to allow file restoration to succeed
-            [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-            return 0
-        fi
-    fi
-    
-    # Count CSV files in the backup directory
-    csv_count=$(find "$db_backup_location" -name "*.csv" 2>/dev/null | wc -l)
-    if [ "$csv_count" -eq 0 ]; then
-        log_message "ERROR: No database backup files (CSV) found in $db_backup_location"
-        # Continue without error to allow file restoration to succeed
-        [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
+setup_compose() {
+    if docker compose version >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        DOCKER_COMPOSE=(docker compose)
         return 0
     fi
-    
-    log_message "Found $csv_count collection backup files"
-    
-    # Create a restore script to import the CSVs back to MongoDB
-    restore_script="$temp_dir/restore_db.py"
-    
-    cat > "$restore_script" << 'PYTHON_SCRIPT'
-#!/usr/bin/env python3
-"""
-MongoDB restoration from CSV backups
-"""
-import os
-import csv
-import sys
-import argparse
-import re
-import ast
-from pymongo import MongoClient
-from bson.objectid import ObjectId
-from datetime import datetime
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Restore MongoDB database from CSV files")
-    parser.add_argument("--uri", required=True, help="MongoDB URI")
-    parser.add_argument("--db", required=True, help="Database name")
-    parser.add_argument("--dir", required=True, help="Directory containing CSV files")
-    parser.add_argument("--drop-database", action="store_true", 
-                        help="Drop the entire database before restoring (USE WITH CAUTION!)")
-    return parser.parse_args()
-
-def restore_collection(client, db_name, csv_file):
-    coll_name = os.path.splitext(os.path.basename(csv_file))[0]
-    print(f"Restoring collection: {coll_name}")
-    
-    db = client[db_name]
-    
-    # Drop existing collection if it exists
-    if coll_name in db.list_collection_names():
-        print(f"  Dropping existing collection {coll_name}")
-        db[coll_name].drop()
-    
-    # Read CSV file
-    documents = []
-    with open(csv_file, 'r', newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            # Convert empty strings to None and process values
-            doc = {}
-            for k, v in row.items():
-                if v == '':
-                    doc[k] = None
-                elif k == 'filter_num' and v.isdigit():
-                    # Convert numeric filter_num to integer
-                    doc[k] = int(v)
-                elif isinstance(v, str) and v.isdigit():
-                    # Convert other numeric strings to integers
-                    doc[k] = int(v)
-                else:
-                    doc[k] = v
-            
-            # Handle special field types
-            for k, v in doc.items():
-                # Convert ObjectId strings to actual ObjectIds
-                if k == "_id" and isinstance(v, str):
-                    # Strip quotes if present
-                    clean_v = v.strip('"').strip("'")
-                    
-                    # Check if it's a standard ObjectId format
-                    if re.match(r'^[0-9a-f]{24}$', clean_v):
-                        doc[k] = ObjectId(clean_v)
-                        print(f"  Converted _id to ObjectId: {clean_v}")
-                    # Check for {"$oid":"..."} format
-                    elif clean_v.startswith('{"$oid":') and clean_v.endswith('}'):
-                        try:
-                            oid = clean_v.split('"')[3]  # Extract the ID part
-                            doc[k] = ObjectId(oid)
-                            print(f"  Converted $oid format to ObjectId: {oid}")
-                        except Exception as e:
-                            print(f"  Failed to parse $oid format: {e}")
-                            pass
-                
-                # Parse list strings (values like "['item1', 'item2']")
-                if isinstance(v, str) and v.startswith('[') and v.endswith(']'):
-                    try:
-                        # Use ast.literal_eval which is safer than eval for parsing literals
-                        import ast
-                        # Remove any surrounding quotes if present
-                        cleaned_str = v
-                        if cleaned_str.startswith('"') and cleaned_str.endswith('"'):
-                            cleaned_str = cleaned_str[1:-1]
-                        elif cleaned_str.startswith("'") and cleaned_str.endswith("'"):
-                            cleaned_str = cleaned_str[1:-1]
-                        
-                        # Try to parse the list
-                        doc[k] = ast.literal_eval(cleaned_str)
-                    except:
-                        # If parsing fails, try a simple string split approach for basic lists
-                        try:
-                            # Remove brackets and split by comma
-                            simple_list = v.strip('[]').split(',')
-                            # Clean up each item (remove quotes and extra spaces)
-                            doc[k] = [item.strip().strip("'").strip('"') for item in simple_list]
-                            print(f"  Used fallback parsing for list value: {k}")
-                        except:
-                            # If all parsing fails, keep the original string value
-                            print(f"  Warning: Could not parse list value for {k}: {v}")
-                            pass
-            
-            # Handle nested fields (keys containing dots)
-            nested_doc = {}
-            for k, v in doc.items():
-                if '.' in k:
-                    parts = k.split('.')
-                    current = nested_doc
-                    for part in parts[:-1]:
-                        if part not in current:
-                            current[part] = {}
-                        current = current[part]
-                    current[parts[-1]] = v
-                else:
-                    nested_doc[k] = v
-            documents.append(nested_doc)
-    
-    # Insert documents
-    if documents:
-        db[coll_name].insert_many(documents)
-        print(f"  Restored {len(documents)} documents")
-    else:
-        print(f"  No documents to restore")
-
-def drop_database(client, db_name):
-    """Drop the entire database to start fresh"""
-    try:
-        print(f"Dropping database: {db_name}")
-        client.drop_database(db_name)
-        print(f"Database {db_name} dropped successfully")
-        return True
-    except Exception as e:
-        print(f"Error dropping database {db_name}: {e}")
-        return False
-
-def main():
-    args = parse_args()
-    
-    # Connect to MongoDB
-    client = MongoClient(args.uri)
-    
-    # Drop the entire database if requested
-    if args.drop_database:
-        drop_result = drop_database(client, args.db)
-        if not drop_result:
-            print("Warning: Database drop failed, continuing with restoration...")
-    
-    # Get CSV files
-    csv_files = [os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith('.csv')]
-    
-    if not csv_files:
-        print(f"No CSV files found in {args.dir}")
-        return 1
-    
-    print(f"Found {len(csv_files)} CSV files to restore")
-    
-    # Process each CSV file
-    for csv_file in csv_files:
-        try:
-            restore_collection(client, args.db, csv_file)
-        except Exception as e:
-            print(f"Error restoring {os.path.basename(csv_file)}: {e}")
-    
-    print("Database restoration complete")
-    return 0
-
-if __name__ == "__main__":
-    sys.exit(main())
-PYTHON_SCRIPT
-    
-    chmod +x "$restore_script"
-    
-    # Execute the restoration script
-    log_message "Restoring database from CSV files..."
-    # Prepare command parameters
-    DB_CMD_ARGS="--uri \"mongodb://localhost:27017/\" --db \"Inventarsystem\" --dir \"$db_backup_location\""
-    
-    # Add the drop-database flag if requested
-    if [ "$DROP_DATABASE" = true ]; then
-        log_message "WARNING: Database will be dropped before restoration as requested"
-        DB_CMD_ARGS="$DB_CMD_ARGS --drop-database"
+    if [ -n "$SUDO" ] && $SUDO docker compose version >/dev/null 2>&1 && $SUDO docker info >/dev/null 2>&1; then
+        DOCKER_COMPOSE=($SUDO docker compose)
+        return 0
     fi
-    
-    # Try to use virtualenv Python if available
-    if [ -f "$PROJECT_DIR/.venv/bin/python" ]; then
-        if ! "$PROJECT_DIR/.venv/bin/python" "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
-            log_message "ERROR: Failed to restore database with virtualenv Python"
-            # Try with system Python as fallback
-            if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
-                log_message "ERROR: Failed to restore database"
-                [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-                return 1
-            fi
-        fi
-    else
-        # Use system Python
-        if ! python3 "$restore_script" --uri "mongodb://localhost:27017/" --db "Inventarsystem" --dir "$db_backup_location" $([ "$DROP_DATABASE" = true ] && echo "--drop-database"); then
-            log_message "ERROR: Failed to restore database"
-            [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-            return 1
-        fi
-    fi
-    
-    # Clean up
-    [ -d "$temp_dir" ] && sudo rm -rf "$temp_dir"
-    
-    log_message "Database restored successfully"
-    return 0
-}
 
-# Restart services
-restart_services() {
-    log_message "Restarting services..."
-    
-    # Navigate to project directory
-    cd "$PROJECT_DIR" || {
-        log_message "ERROR: Could not navigate to project directory"
-        return 1
-    }
-    
-    # Execute restart script
-    ./restart.sh || {
-        log_message "ERROR: Failed to restart services"
-        return 1
-    }
-    
-    log_message "Services restarted successfully"
-    return 0
-}
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --date=*)
-            BACKUP_DATE="${1#*=}"
-            shift
-            ;;
-        --restart-services)
-            RESTART_SERVICES=true
-            shift
-            ;;
-        --no-db)
-            RESTORE_DB=false
-            shift
-            ;;
-        --drop-database)
-            DROP_DATABASE=true
-            shift
-            ;;
-        --list)
-            list_backups
-            exit 0
-            ;;
-        --help)
-            show_help
-            exit 0
-            ;;
-        *)
-            echo "Unknown parameter: $1"
-            show_help
-            exit 1
-            ;;
-    esac
-done
-
-# Check if backup date is provided or "latest" is specified
-if [ -z "$BACKUP_DATE" ]; then
-    echo "ERROR: You must specify a backup date with --date=YYYY-MM-DD"
-    echo "       or use --date=latest for the most recent backup"
-    echo ""
-    show_help
+    log "ERROR: docker compose is not available"
     exit 1
-fi
+}
 
-# Handle "latest" backup request
-if [ "$BACKUP_DATE" = "latest" ]; then
-    BACKUP_DATE=$(get_latest_backup)
-    if [ $? -ne 0 ]; then
-        echo "ERROR: No backups available"
+compose() {
+    "${DOCKER_COMPOSE[@]}" "$@"
+}
+
+list_backups() {
+    echo "Detected backup candidates:"
+
+    if [ -d "$BACKUP_ROOT_LOCAL" ]; then
+        find "$BACKUP_ROOT_LOCAL" -maxdepth 2 \( -type d -name "20*" -o -type f -name "*.archive.gz" -o -type f -name "Inventarsystem-*.tar.gz" \) 2>/dev/null | sort
+    fi
+
+    if [ -d "$BACKUP_ROOT_SYSTEM" ]; then
+        find "$BACKUP_ROOT_SYSTEM" -maxdepth 1 \( -type d -name "Inventarsystem-*" -o -type f -name "Inventarsystem-*.tar.gz" \) 2>/dev/null | sort
+    fi
+}
+
+resolve_latest_source() {
+    local latest
+    latest="$({
+        if [ -d "$BACKUP_ROOT_LOCAL" ]; then
+            find "$BACKUP_ROOT_LOCAL" -maxdepth 2 \( -type d -name "20*" -o -type f -name "*.archive.gz" -o -type f -name "Inventarsystem-*.tar.gz" \) -printf '%T@ %p\n' 2>/dev/null
+        fi
+        if [ -d "$BACKUP_ROOT_SYSTEM" ]; then
+            find "$BACKUP_ROOT_SYSTEM" -maxdepth 1 \( -type d -name "Inventarsystem-*" -o -type f -name "Inventarsystem-*.tar.gz" \) -printf '%T@ %p\n' 2>/dev/null
+        fi
+    } | sort -nr | head -n1 | cut -d' ' -f2-)"
+
+    if [ -z "$latest" ]; then
+        log "ERROR: no backup candidates found"
         exit 1
     fi
-    log_message "Selected latest backup: $BACKUP_DATE"
-fi
 
-# Start the log for this restoration
-log_message "====== Starting restoration from backup $BACKUP_DATE ======"
+    SOURCE_PATH="$latest"
+}
 
-# Restore files
-restore_files "$BACKUP_DATE"
-FILE_RESTORE_STATUS=$?
+resolve_date_source() {
+    local d="$1"
 
-# Restore database if requested and file restore was successful
-if [ $FILE_RESTORE_STATUS -eq 0 ] && [ "$RESTORE_DB" = true ]; then
-    restore_db "$BACKUP_DATE"
-    DB_RESTORE_STATUS=$?
-else
-    if [ "$RESTORE_DB" = false ]; then
-        log_message "Database restoration skipped as requested"
-        DB_RESTORE_STATUS=0
-    else
-        log_message "Database restoration skipped due to file restoration failure"
-        DB_RESTORE_STATUS=1
+    if [ "$d" = "latest" ]; then
+        resolve_latest_source
+        return
     fi
-fi
 
-# Restart services if requested and restoration was successful
-if [ $FILE_RESTORE_STATUS -eq 0 ] && [ $DB_RESTORE_STATUS -eq 0 ] && [ "$RESTART_SERVICES" = true ]; then
-    restart_services
-    RESTART_STATUS=$?
-else
-    if [ "$RESTART_SERVICES" = false ]; then
-        log_message "Service restart not requested, skipping"
-        RESTART_STATUS=0
-    else
-        log_message "Service restart skipped due to restoration failures"
-        RESTART_STATUS=1
-    fi
-fi
+    local p1="$BACKUP_ROOT_LOCAL/$d"
+    local p2="$BACKUP_ROOT_SYSTEM/Inventarsystem-$d"
+    local p3="$BACKUP_ROOT_SYSTEM/Inventarsystem-$d.tar.gz"
 
-# Final status report
-if [ $FILE_RESTORE_STATUS -eq 0 ] && ([ $DB_RESTORE_STATUS -eq 0 ] || [ "$RESTORE_DB" = false ]) && [ $RESTART_STATUS -eq 0 ]; then
-    if [ $DB_RESTORE_STATUS -ne 0 ] && [ "$RESTORE_DB" = true ]; then
-        log_message "====== Restoration completed with warnings (file restore OK, database restore failed) ======"
-        echo "Restoration completed with warnings (files restored successfully, but database restore failed)."
-        echo "The system should still be functional with the existing database."
-        echo "Check the log file at $LOG_FILE for details."
-        exit 0
+    if [ -e "$p1" ]; then
+        SOURCE_PATH="$p1"
+    elif [ -e "$p2" ]; then
+        SOURCE_PATH="$p2"
+    elif [ -e "$p3" ]; then
+        SOURCE_PATH="$p3"
     else
-        log_message "====== Restoration completed successfully ======"
-        echo "Restoration completed successfully!"
-        exit 0
+        log "ERROR: no backup found for date $d"
+        exit 1
     fi
-else
-    log_message "====== Restoration completed with errors ======"
-    echo "Restoration completed with errors. Check the log file at $LOG_FILE for details."
+}
+
+ensure_stack() {
+    log "Ensuring mongodb/app services are running..."
+    compose up -d mongodb app >/dev/null
+
+    if ! compose ps --status running mongodb | grep -q mongodb; then
+        log "ERROR: mongodb container is not running"
+        exit 1
+    fi
+
+    if ! compose ps --status running app | grep -q app; then
+        log "ERROR: app container is not running"
+        exit 1
+    fi
+}
+
+stage_source() {
+    local src="$1"
+
+    if [ ! -e "$src" ]; then
+        log "ERROR: source path does not exist: $src"
+        exit 1
+    fi
+
+    if [ -f "$src" ] && [[ "$src" == *.tar.gz ]]; then
+        log "Extracting tar backup: $src"
+        tar -xzf "$src" -C "$WORK_DIR"
+        STAGED_PATH="$WORK_DIR"
+        return
+    fi
+
+    if [ -f "$src" ]; then
+        cp -f "$src" "$WORK_DIR/"
+        STAGED_PATH="$WORK_DIR"
+        return
+    fi
+
+    if [ -d "$src" ]; then
+        STAGED_PATH="$src"
+        return
+    fi
+
+    log "ERROR: unsupported source type: $src"
     exit 1
-fi
+}
+
+find_archive_file() {
+    local root="$1"
+    find "$root" -type f \( -name "*.archive.gz" -o -name "*.archive" \) 2>/dev/null | head -n1 || true
+}
+
+find_best_csv_dir() {
+    local root="$1"
+    local best_dir=""
+    local best_count=0
+
+    while IFS= read -r dir; do
+        [ -z "$dir" ] && continue
+        local count
+        count="$(find "$dir" -maxdepth 1 -type f -name '*.csv' | wc -l | tr -d ' ')"
+        if [ "$count" -gt "$best_count" ]; then
+            best_count="$count"
+            best_dir="$dir"
+        fi
+    done < <(find "$root" -type f -name '*.csv' -printf '%h\n' 2>/dev/null | sort -u)
+
+    if [ "$best_count" -gt 0 ]; then
+        echo "$best_dir"
+    fi
+}
+
+normalize_structure() {
+    local py="$WORK_DIR/normalize_db.py"
+
+    cat > "$py" <<'PY'
+from pymongo import MongoClient
+import os
+
+db_name = os.getenv("DB_NAME", "Inventarsystem")
+host = os.getenv("INVENTAR_MONGODB_HOST", "mongodb")
+port = int(os.getenv("INVENTAR_MONGODB_PORT", "27017"))
+
+client = MongoClient(host, port)
+db = client[db_name]
+
+rename_map = {
+    "user": "users",
+    "item": "items",
+    "ausleihung": "ausleihungen",
+    "filter_preset": "filter_presets",
+    "preset": "filter_presets",
+    "setting": "settings",
+}
+
+for old, new in rename_map.items():
+    if old not in db.list_collection_names():
+        continue
+
+    if new not in db.list_collection_names():
+        db[old].rename(new)
+        print(f"Renamed collection {old} -> {new}")
+        continue
+
+    moved = 0
+    for doc in db[old].find({}):
+        db[new].insert_one(doc)
+        moved += 1
+    db[old].drop()
+    print(f"Merged {moved} docs from {old} into {new}")
+
+print("Final collections:", sorted(db.list_collection_names()))
+PY
+
+    local app_cid
+    app_cid="$(compose ps -q app)"
+
+    $SUDO docker cp "$py" "$app_cid:/tmp/normalize_db.py"
+    compose exec -T app env DB_NAME="$DB_NAME" python /tmp/normalize_db.py
+}
+
+import_archive() {
+    local archive_file="$1"
+    local mongo_cid
+
+    mongo_cid="$(compose ps -q mongodb)"
+    if [ -z "$mongo_cid" ]; then
+        log "ERROR: could not resolve mongodb container id"
+        exit 1
+    fi
+
+    log "Importing archive backup: $archive_file"
+    $SUDO docker cp "$archive_file" "$mongo_cid:/tmp/restore.archive.gz"
+
+    local drop_flag=""
+    if [ "$DROP_DATABASE" = true ]; then
+        drop_flag="--drop"
+    fi
+
+    compose exec -T mongodb sh -lc "mongorestore --archive=/tmp/restore.archive.gz --gzip $drop_flag"
+    compose exec -T mongodb rm -f /tmp/restore.archive.gz >/dev/null 2>&1 || true
+
+    normalize_structure
+}
+
+import_csv() {
+    local csv_dir="$1"
+    local app_cid py
+
+    app_cid="$(compose ps -q app)"
+    if [ -z "$app_cid" ]; then
+        log "ERROR: could not resolve app container id"
+        exit 1
+    fi
+
+    log "Importing CSV backup directory: $csv_dir"
+    compose exec -T app sh -lc "rm -rf /tmp/restore_csv && mkdir -p /tmp/restore_csv"
+    $SUDO docker cp "$csv_dir/." "$app_cid:/tmp/restore_csv"
+
+    py="$WORK_DIR/import_csv.py"
+    cat > "$py" <<'PY'
+import os
+import csv
+import ast
+import re
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+
+DB_NAME = os.getenv("DB_NAME", "Inventarsystem")
+CSV_DIR = os.getenv("CSV_DIR", "/tmp/restore_csv")
+DROP_DATABASE = os.getenv("DROP_DATABASE", "false").lower() == "true"
+HOST = os.getenv("INVENTAR_MONGODB_HOST", "mongodb")
+PORT = int(os.getenv("INVENTAR_MONGODB_PORT", "27017"))
+
+COLLECTION_MAP = {
+    "users": "users",
+    "user": "users",
+    "items": "items",
+    "item": "items",
+    "ausleihungen": "ausleihungen",
+    "ausleihung": "ausleihungen",
+    "filter_presets": "filter_presets",
+    "filter_preset": "filter_presets",
+    "settings": "settings",
+    "setting": "settings",
+}
+
+BOOL_FIELDS = {"Admin", "Verfuegbar", "enabled"}
+INT_FIELDS = {"Anschaffungskosten", "filter_num"}
+OID_LIKE_FIELDS = {"_id", "Item"}
+
+client = MongoClient(HOST, PORT)
+db = client[DB_NAME]
+
+if DROP_DATABASE:
+    client.drop_database(DB_NAME)
+    db = client[DB_NAME]
+
+
+def parse_scalar(key, value):
+    if value is None:
+        return None
+
+    value = value.strip()
+    if value == "":
+        return None
+
+    if key in BOOL_FIELDS:
+        lowered = value.lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+
+    if key in INT_FIELDS:
+        try:
+            return int(value)
+        except Exception:
+            pass
+
+    if key in OID_LIKE_FIELDS and re.fullmatch(r"[0-9a-fA-F]{24}", value):
+        return ObjectId(value)
+
+    if value.startswith("[") and value.endswith("]"):
+        try:
+            return ast.literal_eval(value)
+        except Exception:
+            pass
+
+    return value
+
+
+def load_csv_file(csv_path):
+    docs = []
+    with open(csv_path, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            doc = {}
+            for key, value in row.items():
+                doc[key] = parse_scalar(key, value)
+            docs.append(doc)
+    return docs
+
+
+csv_files = [
+    os.path.join(CSV_DIR, f)
+    for f in sorted(os.listdir(CSV_DIR))
+    if f.endswith(".csv")
+]
+
+if not csv_files:
+    raise SystemExit(f"No CSV files found in {CSV_DIR}")
+
+for csv_file in csv_files:
+    base = os.path.splitext(os.path.basename(csv_file))[0]
+    coll = COLLECTION_MAP.get(base, base)
+
+    docs = load_csv_file(csv_file)
+    db[coll].drop()
+    if docs:
+        db[coll].insert_many(docs)
+    print(f"Imported {len(docs)} docs into {coll} from {os.path.basename(csv_file)}")
+
+print("Collections after CSV import:", sorted(db.list_collection_names()))
+PY
+
+    $SUDO docker cp "$py" "$app_cid:/tmp/import_csv.py"
+    compose exec -T app env DB_NAME="$DB_NAME" CSV_DIR="/tmp/restore_csv" DROP_DATABASE="$DROP_DATABASE" python /tmp/import_csv.py
+
+    normalize_structure
+}
+
+print_counts() {
+    local py="$WORK_DIR/print_counts.py"
+
+    cat > "$py" <<'PY'
+from pymongo import MongoClient
+import os
+
+db_name = os.getenv("DB_NAME", "Inventarsystem")
+host = os.getenv("INVENTAR_MONGODB_HOST", "mongodb")
+port = int(os.getenv("INVENTAR_MONGODB_PORT", "27017"))
+
+client = MongoClient(host, port)
+db = client[db_name]
+
+for name in ["users", "items", "ausleihungen", "filter_presets", "settings"]:
+    try:
+        count = db[name].count_documents({})
+    except Exception:
+        count = -1
+    print(f"{name}: {count}")
+PY
+
+    local app_cid
+    app_cid="$(compose ps -q app)"
+    $SUDO docker cp "$py" "$app_cid:/tmp/print_counts.py"
+
+    log "Post-restore collection counts:"
+    compose exec -T app env DB_NAME="$DB_NAME" python /tmp/print_counts.py | tee -a "$LOG_FILE"
+}
+
+parse_args() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --source)
+                SOURCE_PATH="${2:-}"
+                shift 2
+                ;;
+            --date)
+                BACKUP_DATE="${2:-}"
+                shift 2
+                ;;
+            --drop-database)
+                DROP_DATABASE=true
+                shift
+                ;;
+            --restart-services)
+                RESTART_SERVICES=true
+                shift
+                ;;
+            --list)
+                list_backups
+                exit 0
+                ;;
+            --help)
+                show_help
+                exit 0
+                ;;
+            *)
+                echo "Unknown argument: $1"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+}
+
+main() {
+    parse_args "$@"
+    setup_compose
+
+    if [ -n "$SOURCE_PATH" ] && [ -n "$BACKUP_DATE" ]; then
+        log "ERROR: use either --source or --date, not both"
+        exit 1
+    fi
+
+    if [ -z "$SOURCE_PATH" ] && [ -n "$BACKUP_DATE" ]; then
+        resolve_date_source "$BACKUP_DATE"
+    fi
+
+    if [ -z "$SOURCE_PATH" ]; then
+        log "ERROR: provide --source <path> or --date <YYYY-MM-DD|latest>"
+        show_help
+        exit 1
+    fi
+
+    ensure_stack
+
+    local staged archive_file csv_dir
+    stage_source "$SOURCE_PATH"
+    staged="$STAGED_PATH"
+    archive_file="$(find_archive_file "$staged")"
+
+    if [ -n "$archive_file" ]; then
+        import_archive "$archive_file"
+        print_counts
+    else
+        csv_dir="$(find_best_csv_dir "$staged")"
+        if [ -z "$csv_dir" ]; then
+            log "ERROR: no supported backup data found under: $SOURCE_PATH"
+            log "Expected either *.archive.gz or CSV files"
+            exit 1
+        fi
+        import_csv "$csv_dir"
+        print_counts
+    fi
+
+    if [ "$RESTART_SERVICES" = true ]; then
+        log "Restarting services..."
+        "$SCRIPT_DIR/restart.sh"
+    fi
+
+    log "Restore completed successfully into DB: $DB_NAME"
+}
+
+main "$@"
