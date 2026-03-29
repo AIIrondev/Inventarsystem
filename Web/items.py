@@ -35,7 +35,9 @@ import settings as cfg
 # === ITEM MANAGEMENT ===
 
 def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, filter3=None,
-             ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True):
+             ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True,
+             series_group_id=None, series_count=1, series_position=1,
+             is_grouped_sub_item=False, parent_item_id=None):
     """
     Add a new item to the inventory.
     
@@ -51,6 +53,11 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
         ansch_kost (float, optional): Cost of acquisition
         code_4 (str, optional): 4-digit identification code
         reservierbar (bool, optional): Whether the item can be reserved in advance
+        series_group_id (str, optional): Shared group id for same-type batch items
+        series_count (int, optional): Total items in the created batch
+        series_position (int, optional): Position inside the batch (1-based)
+        is_grouped_sub_item (bool, optional): Whether this item is hidden as sub-item
+        parent_item_id (str, optional): Parent item id if this is a sub-item
         
     Returns:
         ObjectId: ID of the new item or None if failed
@@ -77,6 +84,11 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
+            'SeriesGroupId': series_group_id,
+            'SeriesCount': series_count,
+            'SeriesPosition': series_position,
+            'IsGroupedSubItem': is_grouped_sub_item,
+            'ParentItemId': parent_item_id,
             'Created': datetime.datetime.now(),
             'LastUpdated': datetime.datetime.now()
         }

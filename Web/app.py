@@ -973,11 +973,41 @@ def get_items():
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
-        items_cur = items_col.find()
+        items_cur = items_col.find({'IsGroupedSubItem': {'$ne': True}})
         items = []
         for itm in items_cur:
-            itm['_id'] = str(itm['_id'])
-            itm['is_favorite'] = itm['_id'] in favorites
+            item_id_str = str(itm['_id'])
+            grouped_children = list(items_col.find({
+                'ParentItemId': item_id_str,
+                'IsGroupedSubItem': True
+            }))
+            grouped_count = 1 + len(grouped_children)
+
+            grouped_units = [itm] + grouped_children
+            available_units = []
+            grouped_all_codes = []
+            for unit in grouped_units:
+                unit_code = unit.get('Code_4')
+                if unit_code is not None and str(unit_code).strip() != '':
+                    grouped_all_codes.append(str(unit_code).strip())
+
+                if unit.get('Verfuegbar', True):
+                    unit_id = str(unit['_id']) if not isinstance(unit['_id'], str) else unit['_id']
+                    code = unit.get('Code_4') or '-'
+                    available_units.append({
+                        'id': unit_id,
+                        'code': code,
+                        'label': f"{code} ({unit.get('Name', 'Item')})"
+                    })
+
+            itm['_id'] = item_id_str
+            itm['GroupedDisplayCount'] = grouped_count
+            itm['AvailableGroupedCount'] = len(available_units)
+            itm['GroupedAvailableUnits'] = available_units
+            itm['GroupedAllCodes'] = grouped_all_codes
+            if grouped_count > 1:
+                itm['Verfuegbar'] = len(available_units) > 0
+            itm['is_favorite'] = item_id_str in favorites
             items.append(itm)
         return jsonify({'items': items, 'favorites': list(favorites)})
     except Exception as e:
@@ -1140,6 +1170,19 @@ def upload_item():
         anschaffungs_jahr = sanitize_form_value(request.form.getlist('anschaffungsjahr'))
         anschaffungs_kosten = sanitize_form_value(request.form.getlist('anschaffungskosten'))
         code_4 = sanitize_form_value(request.form.getlist('code_4'))
+        individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))
+        item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
+
+        try:
+            item_count = int(item_count_raw) if item_count_raw else 1
+        except (TypeError, ValueError):
+            item_count = 1
+        item_count = max(1, min(item_count, 100))
+
+        # Optional list of per-item codes (one code per line)
+        individual_codes = []
+        if individual_codes_raw:
+            individual_codes = [c.strip() for c in str(individual_codes_raw).replace(',', '\n').splitlines() if c.strip()]
         
         # Check if this is a duplication
         is_duplicating = request.form.get('is_duplicating') == 'true'
@@ -1202,14 +1245,55 @@ def upload_item():
             flash(error_msg, 'error')
             return redirect(url_for('home_admin'))
 
-    # Check if code is unique
-    if code_4 and not it.is_code_unique(code_4[0]):
+    # Check if base code is unique for single-item uploads
+    if code_4 and item_count == 1 and not it.is_code_unique(code_4[0]):
         error_msg = 'Der Code wird bereits verwendet. Bitte wählen Sie einen anderen Code.'
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 400
         else:
             flash(error_msg, 'error')
             return redirect(url_for('home_admin'))
+
+    # Validate optional per-item codes
+    if individual_codes:
+        if len(individual_codes) > item_count:
+            error_msg = f'Zu viele Einzelcodes angegeben ({len(individual_codes)}), erlaubt sind maximal {item_count}.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
+
+        if len(set(individual_codes)) != len(individual_codes):
+            error_msg = 'Doppelte Einzelcodes erkannt. Bitte alle Codes eindeutig eintragen.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
+
+        for specific_code in individual_codes:
+            if not it.is_code_unique(specific_code):
+                error_msg = f'Der Einzelcode "{specific_code}" wird bereits verwendet.'
+                if is_mobile:
+                    return jsonify({'success': False, 'message': error_msg}), 400
+                flash(error_msg, 'error')
+                return redirect(url_for('home_admin'))
+
+    def generate_unique_batch_code(base_code, position):
+        """Generate a unique code for every item in a batch."""
+        if not base_code:
+            return None
+
+        candidate = base_code if position == 1 else f"{base_code}-{position}"
+        if it.is_code_unique(candidate):
+            return candidate
+
+        suffix = 1
+        while suffix <= 1000:
+            alternative = f"{candidate}-{suffix}"
+            if it.is_code_unique(alternative):
+                return alternative
+            suffix += 1
+        return None
 
     # Process any new uploaded images with robust error handling
     image_filenames = []
@@ -1862,18 +1946,56 @@ def upload_item():
     
     reservierbar = 'reservierbar' in request.form
 
-    # Add the item to the database
-    item_id = it.add_item(name, ort, beschreibung, image_filenames, filter_upload, 
-                        filter_upload2, filter_upload3, 
-                        anschaffungs_jahr[0] if anschaffungs_jahr else None, 
-                        anschaffungs_kosten[0] if anschaffungs_kosten else None,
-                        code_4[0] if code_4 else None,
-                        reservierbar=reservierbar)
+    # Add one or more own items; sub-items are hidden in overview and counted on parent.
+    created_item_ids = []
+    series_group_id = str(uuid.uuid4()) if item_count > 1 else None
+    base_code = code_4[0] if code_4 else None
+
+    for position in range(1, item_count + 1):
+        unique_code = None
+        if position <= len(individual_codes):
+            unique_code = individual_codes[position - 1]
+        else:
+            unique_code = generate_unique_batch_code(base_code, position)
+
+        if (base_code or individual_codes) and not unique_code:
+            error_msg = 'Fehler bei der Code-Erzeugung für mehrere Artikel.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
+
+        parent_item_id = str(created_item_ids[0]) if created_item_ids else None
+        item_id = it.add_item(
+            name, ort, beschreibung, image_filenames, filter_upload,
+            filter_upload2, filter_upload3,
+            anschaffungs_jahr[0] if anschaffungs_jahr else None,
+            anschaffungs_kosten[0] if anschaffungs_kosten else None,
+            unique_code,
+            reservierbar=reservierbar,
+            series_group_id=series_group_id,
+            series_count=item_count,
+            series_position=position,
+            is_grouped_sub_item=(position > 1),
+            parent_item_id=parent_item_id
+        )
+        if not item_id:
+            break
+        created_item_ids.append(item_id)
+
+    if len(created_item_ids) != item_count:
+        error_msg = f'Nur {len(created_item_ids)} von {item_count} Artikeln konnten erstellt werden.'
+        if is_mobile:
+            return jsonify({'success': False, 'message': error_msg}), 500
+        flash(error_msg, 'error')
+        return redirect(url_for('home_admin'))
+
+    item_id = created_item_ids[0] if created_item_ids else None
     
     if item_id:
     # Create QR code for the item (deactivated)
     # create_qr_code(str(item_id))
-        success_msg = 'Element wurde erfolgreich hinzugefügt'
+        success_msg = f'Element wurde erfolgreich hinzugefügt ({len(created_item_ids)} erstellt)'
         
         if is_mobile:
             return jsonify({
@@ -2184,6 +2306,9 @@ def report_damage(id):
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
+        item_doc = items_col.find_one({'_id': ObjectId(id)}, {'Name': 1})
+        if not item_doc:
+            return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
 
         now = datetime.datetime.now()
         damage_entry = {
@@ -2205,6 +2330,22 @@ def report_damage(id):
 
         updated_item = items_col.find_one({'_id': ObjectId(id)}, {'DamageReports': 1})
         damage_count = len(updated_item.get('DamageReports', [])) if updated_item else 0
+
+        # Best-effort system log entry for auditability
+        try:
+            logs_collection = db['system_logs']
+            logs_collection.insert_one({
+                'type': 'damage_report',
+                'timestamp': now.isoformat(),
+                'user': session.get('username'),
+                'item_id': id,
+                'item_name': item_doc.get('Name', ''),
+                'note': description,
+                'damage_count': damage_count,
+                'ip': request.remote_addr
+            })
+        except Exception as log_err:
+            app.logger.warning(f"Damage report log write failed for item {id}: {log_err}")
 
         return jsonify({
             'success': True,
@@ -2263,6 +2404,20 @@ def mark_damage_repaired(id):
         if result.matched_count == 0:
             return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
 
+        # Best-effort system log entry for repair action
+        try:
+            logs_collection = db['system_logs']
+            logs_collection.insert_one({
+                'type': 'damage_repair',
+                'timestamp': now.isoformat(),
+                'user': session.get('username'),
+                'item_id': id,
+                'resolved_count': len(open_reports),
+                'ip': request.remote_addr
+            })
+        except Exception as log_err:
+            app.logger.warning(f"Damage repair log write failed for item {id}: {log_err}")
+
         return jsonify({
             'success': True,
             'message': 'Schäden als repariert markiert.',
@@ -2307,6 +2462,64 @@ def ausleihen(id):
     if not item:
         flash('Element nicht gefunden', 'error')
         return redirect(url_for('home'))
+
+    username = session['username']
+    start_date = datetime.datetime.now()
+
+    # Grouped inventory mode: parent item + hidden sub-items are handled as separate physical units.
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        grouped_children = list(items_col.find({'ParentItemId': id, 'IsGroupedSubItem': True}))
+        client.close()
+    except Exception:
+        grouped_children = []
+
+    if grouped_children:
+        exemplare_count = request.form.get('exemplare_count', 1)
+        specific_item_id = (request.form.get('specific_item_id') or '').strip()
+        try:
+            exemplare_count = int(exemplare_count)
+            if exemplare_count < 1:
+                exemplare_count = 1
+        except (ValueError, TypeError):
+            exemplare_count = 1
+
+        grouped_units = [item] + [{**child, '_id': str(child.get('_id'))} for child in grouped_children]
+        available_units = [unit for unit in grouped_units if unit.get('Verfuegbar', True)]
+
+        if not available_units:
+            flash('Keine Exemplare verfügbar.', 'error')
+            return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+
+        selected_units = []
+        if specific_item_id:
+            chosen = next((unit for unit in available_units if str(unit.get('_id')) == specific_item_id), None)
+            if not chosen:
+                flash('Das ausgewählte Exemplar ist nicht verfügbar.', 'error')
+                return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+            selected_units = [chosen]
+        else:
+            if exemplare_count > len(available_units):
+                flash(f'Nicht genügend Exemplare verfügbar. Angefordert: {exemplare_count}, Verfügbar: {len(available_units)}', 'error')
+                return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+            selected_units = available_units[:exemplare_count]
+
+        for unit in selected_units:
+            unit_id = str(unit.get('_id'))
+            it.update_item_status(unit_id, False, username)
+            au.add_ausleihung(unit_id, username, start_date)
+
+        if len(selected_units) == 1:
+            selected_code = selected_units[0].get('Code_4') or '-'
+            flash(f'Exemplar {selected_code} erfolgreich ausgeliehen', 'success')
+        else:
+            flash(f'{len(selected_units)} Exemplare erfolgreich ausgeliehen', 'success')
+
+        if 'username' in session and not us.check_admin(session['username']):
+            return redirect(url_for('home'))
+        return redirect(url_for('home_admin'))
     
     # Before borrowing, block if there's a conflicting planned booking
     try:
@@ -2371,7 +2584,6 @@ def ausleihen(id):
         return redirect(url_for('home'))
     
     # If we reach here, we can borrow the requested number of exemplars
-    username = session['username']
     current_date = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
     
     # If the item doesn't use exemplars (single item)
@@ -3420,12 +3632,84 @@ def logs():
                 'End': end_date,
                 'Duration': duration,
                 'Status': display_status,
+                'EventType': 'Ausleihe',
                 'id': str(ausleihung['_id']),
                 'ConflictDetected': ausleihung.get('ConflictDetected', False),
                 'ConflictNote': ausleihung.get('ConflictNote', ''),
             })
         except Exception as e:
             continue
+
+    # Add damage + repair entries from system_logs
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        logs_collection = db['system_logs']
+        extra_logs = list(logs_collection.find({'type': {'$in': ['damage_report', 'damage_repair']}}))
+
+        for log_item in extra_logs:
+            log_type = log_item.get('type', '')
+            item_id = log_item.get('item_id')
+            item_obj = it.get_item(item_id) if item_id else None
+            item_name = item_obj.get('Name', 'Unknown Item') if item_obj else 'Unknown Item'
+            ts_raw = log_item.get('timestamp')
+            ts_display = ts_raw or '-'
+            if isinstance(ts_raw, datetime.datetime):
+                ts_display = ts_raw.strftime('%Y-%m-%d %H:%M')
+            elif isinstance(ts_raw, str):
+                try:
+                    ts_display = datetime.datetime.fromisoformat(ts_raw).strftime('%Y-%m-%d %H:%M')
+                except Exception:
+                    ts_display = ts_raw
+
+            if log_type == 'damage_report':
+                note = log_item.get('note', '')
+                formatted_items.append({
+                    'Item': item_name,
+                    'User': log_item.get('user', 'Unknown User'),
+                    'Start': ts_display,
+                    'End': '-',
+                    'Duration': '-',
+                    'Status': 'gemeldet',
+                    'EventType': 'Schaden',
+                    'id': str(log_item.get('_id', '')),
+                    'ConflictDetected': False,
+                    'ConflictNote': note,
+                })
+            elif log_type == 'damage_repair':
+                resolved_count = log_item.get('resolved_count', 0)
+                formatted_items.append({
+                    'Item': item_name,
+                    'User': log_item.get('user', 'Unknown User'),
+                    'Start': ts_display,
+                    'End': '-',
+                    'Duration': '-',
+                    'Status': 'repariert',
+                    'EventType': 'Reparatur',
+                    'id': str(log_item.get('_id', '')),
+                    'ConflictDetected': False,
+                    'ConflictNote': f'Erledigte Schäden: {resolved_count}',
+                })
+        client.close()
+    except Exception as e:
+        app.logger.warning(f"Could not load damage/repair logs: {e}")
+
+    def parse_sort_date(value):
+        if isinstance(value, datetime.datetime):
+            return value
+        if isinstance(value, str):
+            for fmt in ('%Y-%m-%d %H:%M', '%Y-%m-%d'):
+                try:
+                    return datetime.datetime.strptime(value, fmt)
+                except Exception:
+                    continue
+            try:
+                return datetime.datetime.fromisoformat(value)
+            except Exception:
+                return datetime.datetime.min
+        return datetime.datetime.min
+
+    formatted_items.sort(key=lambda entry: parse_sort_date(entry.get('Start')), reverse=True)
     
     return render_template('logs.html', items=formatted_items)
 

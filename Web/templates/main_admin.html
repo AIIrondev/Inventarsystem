@@ -2159,7 +2159,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 </div>
                 <div class="form-group">
                     <label for="edit-code4">Code:</label>
-                    <input id="edit-code4" name="code_4">
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input id="edit-code4" name="code_4">
+                        <button type="button" class="fetch-isbn-button" id="scan-edit-code-btn">Barcode scannen</button>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -2350,6 +2353,35 @@ document.addEventListener('DOMContentLoaded', ()=>{
             this.textContent = 'Barcode scannen';
         }
     });
+
+    function scanIntoEditCode() {
+        const qrReader = document.getElementById('qr-reader');
+        const editCodeInput = document.getElementById('edit-code4');
+        const scanEditBtn = document.getElementById('scan-edit-code-btn');
+        if (!qrReader || !editCodeInput || !scanEditBtn) {
+            return;
+        }
+
+        if (qrReader.style.display !== 'none') {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            scanEditBtn.textContent = 'Barcode scannen';
+            return;
+        }
+
+        qrReader.style.display = 'block';
+        scanEditBtn.textContent = 'Scanner schließen';
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render((decodedText) => {
+            html5QrcodeScanner.clear();
+            qrReader.style.display = 'none';
+            editCodeInput.value = String(decodedText || '').trim();
+            validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
+            scanEditBtn.textContent = 'Barcode scannen';
+        });
+    }
 
     function rebuildFilter3Options() {
         if (!allItems || allItems.length === 0) return;
@@ -2669,6 +2701,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 validateCodeField(this, excludeId);
             });
         }
+
+        const scanEditCodeBtn = document.getElementById('scan-edit-code-btn');
+        if (scanEditCodeBtn) {
+            scanEditCodeBtn.addEventListener('click', scanIntoEditCode);
+        }
     });
 
     // Function to load items from server
@@ -2729,6 +2766,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         card.dataset.filter3 = JSON.stringify(filter3Array);
                         card.dataset.code = (item.Code_4 !== undefined && item.Code_4 !== null) ? 
                           String(item.Code_4).trim() : '';
+                        card.dataset.groupCodes = JSON.stringify(Array.isArray(item.GroupedAllCodes) ? item.GroupedAllCodes : []);
         
                         // Add filter values to their respective sets
                         filter1Array.forEach(value => {
@@ -2826,6 +2864,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             }
                         }
                         const damageCount = Array.isArray(item.DamageReports) ? item.DamageReports.length : 0;
+                        const groupedCount = Number(item.GroupedDisplayCount || 1);
+                        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+                        const isGroupedItem = groupedCount > 1;
+                        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+                        const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
 
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
@@ -2835,6 +2878,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <p><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
                                 <p><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
                                 <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <p><strong>Anzahl:</strong> ${groupedCount}</p>
                                 ${damageCount > 0 ? `<div class="damage-badge">Schäden gemeldet: ${damageCount}</div>` : ''}
                                 <div class="image-container">
                                     ${imagesHtml}
@@ -2843,8 +2887,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
-                                ${item.Verfuegbar && !item.BlockedNow ? 
+                                ${isAvailableForBorrow && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
+                                        ${isGroupedItem ? `
+                                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
+                                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                                            <select name="specific_item_id" style="max-width:190px; padding:4px;">
+                                                <option value="">Automatisch wählen</option>
+                                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code}</option>`).join('')}
+                                            </select>
+                                        </div>` : ''}
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
                                 : isBorrowedByMe ?
@@ -2977,6 +3031,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const itemFilter3 = item.dataset.filter3;
             const rawCode = item.dataset.code || '';
             const itemCode = rawCode.trim().toLowerCase();
+            const groupCodes = (() => {
+                try {
+                    return JSON.parse(item.dataset.groupCodes || '[]')
+                        .map(code => String(code || '').trim().toLowerCase())
+                        .filter(Boolean);
+                } catch {
+                    return [];
+                }
+            })();
             const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
             
             const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
@@ -2984,8 +3047,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
             const matchesFilter3 = checkFilterMatch(activeFilters.filter3, itemFilter3);
             const passesAllFilters = matchesFilter1 && matchesFilter2 && matchesFilter3;
             
-            let matchesCodeSearch = !isCodeSearch || itemCode.includes(searchTerm);
-            let exactCodeMatch = isCodeSearch && itemCode === searchTerm;
+            const codeCandidates = [itemCode, ...groupCodes].filter(Boolean);
+            let matchesCodeSearch = !isCodeSearch || codeCandidates.some(code => code.includes(searchTerm));
+            let exactCodeMatch = isCodeSearch && codeCandidates.some(code => code === searchTerm);
             
             const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
             if (passesAllFilters && matchesCodeSearch && matchesDesc) {
@@ -2998,7 +3062,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     if (!exactMatchCard) {
                         exactMatchCard = item;
                     }
-                } else if (isCodeSearch && itemCode.includes(searchTerm)) {
+                } else if (isCodeSearch && matchesCodeSearch) {
                     item.classList.add('code-match');
                     codeMatchCount++;
                     if (!firstMatchedCard) {
@@ -3144,10 +3208,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     function registerDamage(itemId) {
+        const noteInput = prompt('Notiz zum Schaden (optional):', '');
+        if (noteInput === null) {
+            return;
+        }
+        const note = noteInput.trim();
+
         fetch(`/report_damage/${itemId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ description: 'Schaden gemeldet' })
+            body: JSON.stringify({ description: note || 'Schaden gemeldet' })
         })
         .then(response => response.json().then(data => ({ ok: response.ok, data })))
         .then(({ ok, data }) => {
@@ -3220,7 +3290,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
             }
         }).join('') : '';
         
-        const isBorrowed = !item.Verfuegbar;
+        const groupedCount = Number(item.GroupedDisplayCount || 1);
+        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+        const isGroupedItem = groupedCount > 1;
+        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+        const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
         
         let borrowerInfoHtml = '';
         if (isBorrowed && item.BorrowerInfo) {
@@ -3310,6 +3384,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <div class="detail-label">Code:</div>
                     <div class="detail-value">${item.Code_4 || '-'}</div>
                 </div>
+
+                <div class="detail-group">
+                    <div class="detail-label">Anzahl:</div>
+                    <div class="detail-value">${item.GroupedDisplayCount || 1}</div>
+                </div>
+
+                ${isGroupedItem ? `
+                <div class="detail-group">
+                    <div class="detail-label">Verfügbar:</div>
+                    <div class="detail-value">${availableGroupedCount}</div>
+                </div>` : ''}
                 
                 <div class="detail-group">
                     <div class="detail-label">Anschaffungsjahr:</div>
@@ -3374,11 +3459,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
             </div>
             
             <div class="modal-actions">
-                ${item.Verfuegbar ? 
+                ${!isBorrowed ? 
                     `<form method="POST" action="/ausleihen/${item._id}">
+                        ${isGroupedItem ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:78px; padding:4px;">
+                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                            <select name="specific_item_id" style="max-width:220px; padding:4px;">
+                                <option value="">Automatisch wählen</option>
+                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${escapeHtml(unit.code || '-')}</option>`).join('')}
+                            </select>
+                        </div>` : ''}
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
-                    : (item.User === currentUsername) ?
+                    : (!isGroupedItem && item.User === currentUsername) ?
                     `<form method="POST" action="/zurueckgeben/${item._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`

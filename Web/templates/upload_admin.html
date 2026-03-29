@@ -834,7 +834,23 @@
             </div>
             <div class="form-group">
                 <label for="code_4">Code</label>
-                <input id="code_4" name="code_4" required>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <input id="code_4" name="code_4">
+                    <button type="button" id="scan-code4-btn" class="fetch-isbn-button">Barcode scannen</button>
+                </div>
+                <small style="display:block; color:#666;">Einzelcode manuell setzen oder per Scanner erfassen.</small>
+                <div id="code4-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
+                <small id="code4-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
+            </div>
+            <div class="form-group">
+                <label for="item_count">Anzahl dieser Sorte</label>
+                <input type="number" id="item_count" name="item_count" min="1" max="100" value="1">
+                <small style="display:block; color:#666;">Es werden eigene Items erstellt, aber in der Übersicht als ein Artikel gebündelt angezeigt.</small>
+            </div>
+            <div class="form-group">
+                <label for="individual_codes">Einzelcodes (optional, je Zeile ein Code)</label>
+                <textarea id="individual_codes" name="individual_codes" rows="4" placeholder="z.B.\nABC-001\nABC-002"></textarea>
+                <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Scanner-Eingaben werden bei Mehrfachanzahl automatisch hier angefügt.</small>
             </div>
             <div class="form-group">
                 <label for="images">Bilder/Videos:</label>
@@ -865,6 +881,7 @@
     </div>
 </div>
 
+<script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
     // Function to check if a file is a video
     function isVideoFile(filename) {
@@ -875,6 +892,87 @@
 
     // Global variable to store fetched book data
     let currentBookData = null;
+    let code4ScannerInstance = null;
+    let code4ScannerRunning = false;
+    let code4LastScanned = '';
+    let code4LastScannedAt = 0;
+
+    function setCode4ScanStatus(message, isError = false) {
+        const statusEl = document.getElementById('code4-scan-status');
+        if (!statusEl) return;
+        statusEl.textContent = message || '';
+        statusEl.style.color = isError ? '#b00020' : '#666';
+    }
+
+    function appendIndividualCode(scannedCode) {
+        const textarea = document.getElementById('individual_codes');
+        const itemCountInput = document.getElementById('item_count');
+        if (!textarea || !itemCountInput) return false;
+
+        const itemCount = Math.max(1, parseInt(itemCountInput.value || '1', 10));
+        if (itemCount <= 1) return false;
+
+        const existing = textarea.value
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        if (existing.includes(scannedCode)) {
+            setCode4ScanStatus(`Code ${scannedCode} ist bereits eingetragen.`, true);
+            return true;
+        }
+
+        if (existing.length >= itemCount) {
+            setCode4ScanStatus('Es sind bereits genug Einzelcodes für die gewählte Anzahl eingetragen.', true);
+            return true;
+        }
+
+        existing.push(scannedCode);
+        textarea.value = existing.join('\n');
+        setCode4ScanStatus(`Code ${scannedCode} hinzugefügt (${existing.length}/${itemCount}).`);
+        return true;
+    }
+
+    function startCode4Scanner() {
+        const scannerBox = document.getElementById('code4-scanner');
+        const scanButton = document.getElementById('scan-code4-btn');
+        const codeField = document.getElementById('code_4');
+        if (!scannerBox || !scanButton || !codeField) return;
+
+        if (code4ScannerRunning && code4ScannerInstance) {
+            code4ScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'Barcode scannen';
+            code4ScannerRunning = false;
+            setCode4ScanStatus('Scanner gestoppt.');
+            return;
+        }
+
+        scannerBox.style.display = 'block';
+        scanButton.textContent = 'Scanner stoppen';
+        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { fps: 10, qrbox: 250 });
+        code4ScannerRunning = true;
+        setCode4ScanStatus('Scanner läuft. Mehrere Codes nacheinander möglich.');
+
+        code4ScannerInstance.render((decodedText) => {
+            const scannedCode = String(decodedText || '').trim();
+            if (!scannedCode) return;
+
+            const now = Date.now();
+            if (scannedCode === code4LastScanned && (now - code4LastScannedAt) < 1500) {
+                return;
+            }
+            code4LastScanned = scannedCode;
+            code4LastScannedAt = now;
+
+            const usedForIndividual = appendIndividualCode(scannedCode);
+            if (!usedForIndividual) {
+                codeField.value = scannedCode;
+                validateCodeField(codeField);
+                setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
+            }
+        }, () => {});
+    }
 
     // Load predefined filter values for dropdowns
     function loadPredefinedFilterValues(filterNumber) {
@@ -1386,6 +1484,11 @@
             codeField.addEventListener('blur', function() {
                 validateCodeField(this);
             });
+        }
+
+        const scanCodeBtn = document.getElementById('scan-code4-btn');
+        if (scanCodeBtn) {
+            scanCodeBtn.addEventListener('click', startCode4Scanner);
         }
         
         // Setup add new location button

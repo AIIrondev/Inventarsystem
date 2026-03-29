@@ -8,11 +8,11 @@
 -->
 {% extends "base.html" %}
 
-{% block title %}Ausleihungen Logs{% endblock %}
+{% block title %}System Logs{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h1>Ausleihungs-Protokoll</h1>
+    <h1>System-Protokoll</h1>
 
     {% set conflicts = items | selectattr('ConflictDetected') | list %}
     {% if conflicts %}
@@ -39,11 +39,12 @@
         <table id="logsTable">
             <thead>
                 <tr>
-                    <th onclick="sortTable(0)">Item Name ↕</th>
-                    <th onclick="sortTable(1)">Benutzer ↕</th>
-                    <th onclick="sortTable(2)">Status ↕</th>
-                    <th onclick="sortTable(3)">Ausgeliehen am ↕</th>
-                    <th onclick="sortTable(4)">Zurückgegeben am ↕</th>
+                    <th onclick="sortTable(0)">Typ ↕</th>
+                    <th onclick="sortTable(1)">Item Name ↕</th>
+                    <th onclick="sortTable(2)">Benutzer ↕</th>
+                    <th onclick="sortTable(3)">Status ↕</th>
+                    <th onclick="sortTable(4)">Ausgeliehen am ↕</th>
+                    <th onclick="sortTable(5)">Zurückgegeben am ↕</th>
                     <th>Dauer</th>
                     <th>Hinweis</th>
                 </tr>
@@ -51,6 +52,7 @@
             <tbody>
                 {% for item in items %}
                 <tr>
+                    <td>{{ item.EventType or 'Ausleihe' }}</td>
                     <td>{{ item.Item }}</td>
                     <td>{{ item.User }}</td>
                     <td>
@@ -60,6 +62,9 @@
                     <td>{{ item.End }}</td>
                     <td>{{ item.Duration }}</td>
                     <td>
+                        {% if item.ConflictNote %}
+                        <span title="{{ item.ConflictNote }}">{{ item.ConflictNote }}</span>
+                        {% endif %}
                         {% if item.ConflictDetected %}
                         <span class="conflict-badge" title="{{ item.ConflictNote }}">⚠ Konflikt</span>
                         {% endif %}
@@ -100,14 +105,14 @@
                 show = textMatch;
             }
             
-            // Date range filtering (uses Start in column 3 and End in column 4)
+            // Date range filtering (uses Start in column 4 and End in column 5)
             if (show && startDate) {
-                const rowDate = new Date(cells[3].textContent);
+                const rowDate = new Date(cells[4].textContent);
                 show = rowDate >= new Date(startDate);
             }
             
             if (show && endDate) {
-                const rowDate = new Date(cells[4].textContent);
+                const rowDate = new Date(cells[5].textContent);
                 show = rowDate <= new Date(endDate);
             }
             
@@ -130,8 +135,8 @@
                 const x = rows[i].getElementsByTagName('td')[n];
                 const y = rows[i + 1].getElementsByTagName('td')[n];
                 
-                // Check if date column for proper date comparison (Start=3, End=4)
-                if (n === 3 || n === 4) {
+                // Check if date column for proper date comparison (Start=4, End=5)
+                if (n === 4 || n === 5) {
                     const dateX = new Date(x.innerHTML);
                     const dateY = new Date(y.innerHTML);
                     
@@ -253,6 +258,8 @@
     .status-active { background-color: #17a2b8; }
     .status-completed { background-color: #28a745; }
     .status-cancelled { background-color: #dc3545; }
+    .status-gemeldet { background-color: #fd7e14; }
+    .status-repariert { background-color: #20c997; }
 
     .conflict-badge {
         display: inline-block;
