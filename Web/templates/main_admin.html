@@ -34,6 +34,14 @@
         text-align: center;
     }
 
+    .items-indicator {
+        text-align: center;
+        font-size: 0.9rem;
+        color: #495057;
+        margin: 6px 0 16px;
+        font-weight: 600;
+    }
+
     /* Filter styles */
     .filter-container {
         display: flex;
@@ -579,7 +587,7 @@
         flex: 0 0 auto;
     }
 
-    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button {
+    .ausleihen, .edit-button, .delete-button, .details-button, .duplicate-button, .schedule-button, .damage-button {
         padding: 10px 18px;
         border: none;
         border-radius: 5px;
@@ -721,6 +729,48 @@
     .duplicate-button:active {
         transform: translateY(0);
         box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
+    }
+
+    .damage-button {
+        background-color: #fd7e14;
+        color: white;
+        border: 2px solid #fd7e14;
+    }
+
+    .damage-button:hover {
+        background-color: #e46d0d;
+        border-color: #c25b05;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(253, 126, 20, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .damage-button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(253, 126, 20, 0.3);
+    }
+
+    .damage-badge {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #fff3cd;
+        color: #8a6d3b;
+        border: 1px solid #ffeeba;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .damage-list {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    .damage-list li {
+        margin-bottom: 8px;
+        line-height: 1.35;
     }
 
     /* Disabled Button */
@@ -1887,6 +1937,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 <span id="favorites-view-icon">🔖</span>
             </button>
         </h1>
+        <div id="items-indicator" class="items-indicator">Objekte im System: 0</div>
         <div class="filter-container">
             <div class="filter-group">
                 <div class="filter-header">
@@ -2626,6 +2677,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             .then(response => response.json())
             .then(data => {
                 const itemsContainer = document.querySelector('#items-container');
+                const itemsIndicator = document.getElementById('items-indicator');
                 /* favorites load start removed */
                 // Creating a Set to store unique filter values
                 const filter1Values = new Set();
@@ -2635,7 +2687,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 itemsContainer.innerHTML = '';
                 if (!data.items || data.items.length === 0) {
                     itemsContainer.innerHTML = '<div class="no-items-message">Keine Objekte gefunden</div>';
+                    if (itemsIndicator) {
+                        itemsIndicator.textContent = 'Objekte im System: 0';
+                    }
                     return;
+                }
+                if (itemsIndicator) {
+                    itemsIndicator.textContent = `Objekte im System: ${data.items.length}`;
                 }
                 data.items.sort((a, b) => {
                     const nameA = a.Name ? a.Name.toLowerCase() : '';
@@ -2767,6 +2825,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                     </div>`;
                             }
                         }
+                        const damageCount = Array.isArray(item.DamageReports) ? item.DamageReports.length : 0;
 
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
@@ -2776,6 +2835,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <p><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
                                 <p><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
                                 <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                ${damageCount > 0 ? `<div class="damage-badge">Schäden gemeldet: ${damageCount}</div>` : ''}
                                 <div class="image-container">
                                     ${imagesHtml}
                                 </div>
@@ -2867,8 +2927,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             .catch(error => {
                 console.error('Error fetching items:', error);
                 const itemsContainer = document.querySelector('#items-container');
+                const itemsIndicator = document.getElementById('items-indicator');
                 itemsContainer.innerHTML = 
                     '<div class="error-message">Fehler beim Laden der Objekte. Bitte versuchen Sie es später erneut.</div>';
+                if (itemsIndicator) {
+                    itemsIndicator.textContent = 'Objekte im System: 0';
+                }
             });
     }
 
@@ -2895,6 +2959,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function applyFilters(isDirectSearch = false) {
         const itemsContainer = document.querySelector('#items-container');
         const items = itemsContainer.querySelectorAll('.item-card');
+        const itemsIndicator = document.getElementById('items-indicator');
         
         let visibleCount = 0;
         let codeMatchCount = 0;
@@ -2952,6 +3017,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 item.style.display = 'none';
             }
         });
+
+        if (itemsIndicator) {
+            itemsIndicator.textContent = `Objekte im System: ${allItems.length} | Angezeigt: ${visibleCount}`;
+        }
         
         if (isCodeSearch && visibleCount > 0 && (codeMatchCount > 0 || exactMatchCount > 0)) {
             setTimeout(() => {
@@ -3054,6 +3123,71 @@ document.addEventListener('DOMContentLoaded', ()=>{
         applyFilters();
     }
 
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, (char) => {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return map[char] || char;
+        });
+    }
+
+    function formatDamageTimestamp(ts) {
+        if (!ts) return '-';
+        const date = new Date(ts);
+        if (Number.isNaN(date.getTime())) return String(ts);
+        return date.toLocaleString('de-DE');
+    }
+
+    function registerDamage(itemId) {
+        fetch(`/report_damage/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: 'Schaden gemeldet' })
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok || !data.success) {
+                throw new Error(data.message || 'Fehler beim Speichern der Schadensmeldung.');
+            }
+            alert(`Schaden gespeichert. Insgesamt gemeldet: ${data.damage_count}`);
+            loadItems();
+            const modal = document.getElementById('item-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            alert(error.message || 'Fehler beim Speichern der Schadensmeldung.');
+        });
+    }
+
+    function markDamageAsRepaired(itemId) {
+        fetch(`/mark_damage_repaired/${itemId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok || !data.success) {
+                throw new Error(data.message || 'Fehler beim Markieren als repariert.');
+            }
+            alert(`Reparatur gespeichert. Erledigte Schäden: ${data.resolved_count}`);
+            loadItems();
+            const modal = document.getElementById('item-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            alert(error.message || 'Fehler beim Markieren als repariert.');
+        });
+    }
+
     function openItemModal(item) {
         const modal = document.getElementById('item-modal');
         const modalContent = document.getElementById('modal-content-wrapper');
@@ -3119,6 +3253,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 `;
             }
         }
+
+        const damageReports = Array.isArray(item.DamageReports) ? item.DamageReports : [];
+        const damageInfoHtml = damageReports.length > 0
+            ? `<ul class="damage-list">${damageReports.map(report => {
+                const desc = escapeHtml(report?.description || '-');
+                const by = escapeHtml(report?.reported_by || 'Unbekannt');
+                const at = escapeHtml(formatDamageTimestamp(report?.reported_at));
+                return `<li><strong>${at}</strong> durch ${by}<br>${desc}</li>`;
+            }).join('')}</ul>`
+            : 'Keine Schäden erfasst.';
         
         modalContent.innerHTML = `
             <h2>${item.Name}</h2>
@@ -3182,6 +3326,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <div class="detail-value">${item.Beschreibung || '-'}</div>
                 </div>
 
+                <div class="detail-group full-width">
+                    <div class="detail-label">Schäden:</div>
+                    <div class="detail-value">${damageInfoHtml}</div>
+                </div>
+
                 <div class="detail-group full-width" style="margin-top:12px; padding:10px; border:1px solid #e3e3e3; border-radius:8px;">
                     <div class="detail-label">Verfügbarkeit prüfen:</div>
                     <div class="detail-value">
@@ -3237,6 +3386,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
                 <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
+                ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
                 ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                 <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
                     <button class="delete-button">Löschen</button>

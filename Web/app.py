@@ -2165,6 +2165,117 @@ def edit_item(id):
     return redirect(url_for('home_admin'))
 
 
+@app.route('/report_damage/<id>', methods=['POST'])
+def report_damage(id):
+    """Register a damage report entry for an item (admin only)."""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'success': False, 'message': 'Administratorrechte erforderlich'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    description = str(payload.get('description', '')).strip() or 'Schaden gemeldet'
+
+    if len(description) > 1000:
+        return jsonify({'success': False, 'message': 'Die Schadensbeschreibung ist zu lang (max. 1000 Zeichen).'}), 400
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+
+        now = datetime.datetime.now()
+        damage_entry = {
+            'description': description,
+            'reported_by': session['username'],
+            'reported_at': now,
+        }
+
+        result = items_col.update_one(
+            {'_id': ObjectId(id)},
+            {
+                '$push': {'DamageReports': {'$each': [damage_entry], '$position': 0}},
+                '$set': {'HasDamage': True, 'LastUpdated': now}
+            }
+        )
+
+        if result.matched_count == 0:
+            return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
+
+        updated_item = items_col.find_one({'_id': ObjectId(id)}, {'DamageReports': 1})
+        damage_count = len(updated_item.get('DamageReports', [])) if updated_item else 0
+
+        return jsonify({
+            'success': True,
+            'message': 'Schaden erfolgreich erfasst.',
+            'damage_count': damage_count
+        })
+    except Exception as e:
+        app.logger.error(f"Error reporting damage for item {id}: {e}")
+        return jsonify({'success': False, 'message': 'Fehler beim Speichern der Schadensmeldung.'}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/mark_damage_repaired/<id>', methods=['POST'])
+def mark_damage_repaired(id):
+    """Mark all currently open damage reports of an item as repaired (admin only)."""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'Nicht angemeldet'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'success': False, 'message': 'Administratorrechte erforderlich'}), 403
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+
+        item = items_col.find_one({'_id': ObjectId(id)}, {'DamageReports': 1, 'DamageRepairs': 1})
+        if not item:
+            return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
+
+        open_reports = item.get('DamageReports', [])
+        if not open_reports:
+            return jsonify({'success': False, 'message': 'Keine offenen Schäden vorhanden.'}), 400
+
+        now = datetime.datetime.now()
+        repair_entry = {
+            'repaired_by': session['username'],
+            'repaired_at': now,
+            'resolved_reports': open_reports
+        }
+
+        result = items_col.update_one(
+            {'_id': ObjectId(id)},
+            {
+                '$push': {'DamageRepairs': {'$each': [repair_entry], '$position': 0}},
+                '$set': {
+                    'DamageReports': [],
+                    'HasDamage': False,
+                    'LastUpdated': now
+                }
+            }
+        )
+
+        if result.matched_count == 0:
+            return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
+
+        return jsonify({
+            'success': True,
+            'message': 'Schäden als repariert markiert.',
+            'resolved_count': len(open_reports)
+        })
+    except Exception as e:
+        app.logger.error(f"Error marking damages repaired for item {id}: {e}")
+        return jsonify({'success': False, 'message': 'Fehler beim Markieren als repariert.'}), 500
+    finally:
+        if client:
+            client.close()
+
+
 @app.route('/get_ausleihungen', methods=['GET'])
 def get_ausleihungen():
     """
