@@ -124,6 +124,54 @@ def remove_item(id):
         return False
 
 
+def get_group_item_ids(id):
+    """
+    Resolve all item ids that belong to the same grouped series as the given item.
+
+    For non-grouped items, this returns only the provided id.
+
+    Args:
+        id (str): ID of any item in the group
+
+    Returns:
+        list[str]: All related item IDs (including the parent item)
+    """
+    try:
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        items = db['items']
+
+        base_item = items.find_one({'_id': ObjectId(id)})
+        if not base_item:
+            client.close()
+            return []
+
+        resolved_ids = set()
+
+        # Prefer SeriesGroupId because it represents the full logical group.
+        series_group_id = base_item.get('SeriesGroupId')
+        if series_group_id:
+            for group_item in items.find({'SeriesGroupId': series_group_id}, {'_id': 1}):
+                resolved_ids.add(str(group_item['_id']))
+        else:
+            resolved_ids.add(str(base_item['_id']))
+
+            parent_item_id = base_item.get('ParentItemId')
+            if parent_item_id:
+                resolved_ids.add(str(parent_item_id))
+                for sibling in items.find({'ParentItemId': str(parent_item_id), 'IsGroupedSubItem': True}, {'_id': 1}):
+                    resolved_ids.add(str(sibling['_id']))
+            else:
+                for child in items.find({'ParentItemId': str(base_item['_id']), 'IsGroupedSubItem': True}, {'_id': 1}):
+                    resolved_ids.add(str(child['_id']))
+
+        client.close()
+        return list(resolved_ids)
+    except Exception as e:
+        print(f"Error resolving group item IDs: {e}")
+        return []
+
+
 def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True, 
                 filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True):
     """

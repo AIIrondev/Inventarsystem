@@ -865,8 +865,11 @@
                 <label for="isbn">ISBN:</label>
                 <div class="isbn-input-group">
                     <input type="text" id="isbn" name="isbn" placeholder="ISBN eingeben...">
+                    <button type="button" id="scan-isbn-btn" class="fetch-isbn-button">ISBN scannen</button>
                     <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Buchinformationen abrufen</button>
                 </div>
+                <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
+                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
                 <div id="book-info-container" class="book-info-container"></div>
             </div>
             
@@ -896,9 +899,18 @@
     let code4ScannerRunning = false;
     let code4LastScanned = '';
     let code4LastScannedAt = 0;
+    let isbnScannerInstance = null;
+    let isbnScannerRunning = false;
 
     function setCode4ScanStatus(message, isError = false) {
         const statusEl = document.getElementById('code4-scan-status');
+        if (!statusEl) return;
+        statusEl.textContent = message || '';
+        statusEl.style.color = isError ? '#b00020' : '#666';
+    }
+
+    function setIsbnScanStatus(message, isError = false) {
+        const statusEl = document.getElementById('isbn-scan-status');
         if (!statusEl) return;
         statusEl.textContent = message || '';
         statusEl.style.color = isError ? '#b00020' : '#666';
@@ -939,6 +951,16 @@
         const codeField = document.getElementById('code_4');
         if (!scannerBox || !scanButton || !codeField) return;
 
+        // Stop ISBN scanner if currently running to avoid camera conflicts.
+        if (isbnScannerRunning && isbnScannerInstance) {
+            isbnScannerInstance.clear().catch(() => {});
+            const isbnScannerBox = document.getElementById('isbn-scanner');
+            const isbnScanButton = document.getElementById('scan-isbn-btn');
+            if (isbnScannerBox) isbnScannerBox.style.display = 'none';
+            if (isbnScanButton) isbnScanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+        }
+
         if (code4ScannerRunning && code4ScannerInstance) {
             code4ScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
@@ -950,7 +972,11 @@
 
         scannerBox.style.display = 'block';
         scanButton.textContent = 'Scanner stoppen';
-        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { fps: 10, qrbox: 250 });
+        code4ScannerInstance = new Html5QrcodeScanner('code4-scanner', { 
+            fps: 10, 
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
         code4ScannerRunning = true;
         setCode4ScanStatus('Scanner läuft. Mehrere Codes nacheinander möglich.');
 
@@ -971,6 +997,59 @@
                 validateCodeField(codeField);
                 setCode4ScanStatus(`Code_4 gesetzt: ${scannedCode}`);
             }
+        }, () => {});
+    }
+
+    function startIsbnScanner() {
+        const scannerBox = document.getElementById('isbn-scanner');
+        const scanButton = document.getElementById('scan-isbn-btn');
+        const isbnField = document.getElementById('isbn');
+        if (!scannerBox || !scanButton || !isbnField) return;
+
+        // Stop Code_4 scanner if currently running to avoid camera conflicts.
+        if (code4ScannerRunning && code4ScannerInstance) {
+            code4ScannerInstance.clear().catch(() => {});
+            const codeScannerBox = document.getElementById('code4-scanner');
+            const codeScanButton = document.getElementById('scan-code4-btn');
+            if (codeScannerBox) codeScannerBox.style.display = 'none';
+            if (codeScanButton) codeScanButton.textContent = 'Barcode scannen';
+            code4ScannerRunning = false;
+            setCode4ScanStatus('Scanner gestoppt.');
+        }
+
+        if (isbnScannerRunning && isbnScannerInstance) {
+            isbnScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+            setIsbnScanStatus('Scanner gestoppt.');
+            return;
+        }
+
+        scannerBox.style.display = 'block';
+        scanButton.textContent = 'Scanner stoppen';
+        isbnScannerInstance = new Html5QrcodeScanner('isbn-scanner', {
+            fps: 10,
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        isbnScannerRunning = true;
+        setIsbnScanStatus('Scanner läuft. Bitte ISBN-Code erfassen.');
+
+        isbnScannerInstance.render((decodedText) => {
+            const scannedCode = String(decodedText || '').trim();
+            if (!scannedCode) return;
+
+            isbnField.value = scannedCode;
+            setIsbnScanStatus(`ISBN gesetzt: ${scannedCode}`);
+
+            isbnScannerInstance.clear().catch(() => {});
+            scannerBox.style.display = 'none';
+            scanButton.textContent = 'ISBN scannen';
+            isbnScannerRunning = false;
+
+            // Automatically load book metadata after scan.
+            fetchBookInfo('upload');
         }, () => {});
     }
 
@@ -1489,6 +1568,11 @@
         const scanCodeBtn = document.getElementById('scan-code4-btn');
         if (scanCodeBtn) {
             scanCodeBtn.addEventListener('click', startCode4Scanner);
+        }
+
+        const scanIsbnBtn = document.getElementById('scan-isbn-btn');
+        if (scanIsbnBtn) {
+            scanIsbnBtn.addEventListener('click', startIsbnScanner);
         }
         
         // Setup add new location button

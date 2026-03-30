@@ -1113,6 +1113,48 @@ def remove_fav(item_id):
     session.modified = True
     return jsonify({'ok': True, 'favorites': session['favorites']})
 
+@app.route('/favorites/toggle/<item_id>', methods=['POST'])
+def toggle_fav(item_id):
+    _ensure_session_favs()
+
+    session_favs = [str(f) for f in session.get('favorites', [])]
+    item_id = str(item_id)
+    is_favorite = item_id in session_favs
+
+    username = session.get('username')
+
+    if is_favorite:
+        session_favs = [f for f in session_favs if f != item_id]
+        if username:
+            try:
+                us.remove_favorite(username, item_id)
+            except Exception as e:
+                app.logger.warning(f"Persist toggle(remove) favorite failed: {e}")
+    else:
+        session_favs.append(item_id)
+        if username:
+            try:
+                us.add_favorite(username, item_id)
+            except Exception as e:
+                app.logger.warning(f"Persist toggle(add) favorite failed: {e}")
+
+    # Normalize and de-duplicate while preserving order.
+    deduped = []
+    seen = set()
+    for fav in session_favs:
+        if fav not in seen:
+            seen.add(fav)
+            deduped.append(fav)
+
+    session['favorites'] = deduped
+    session.modified = True
+
+    return jsonify({
+        'ok': True,
+        'is_favorite': item_id in deduped,
+        'favorites': deduped
+    })
+
 @app.route('/debug/favorites')
 def debug_favorites():
     """Diagnostic endpoint: shows session favorites, DB favorites and merged output."""
@@ -2151,27 +2193,57 @@ def delete_item(id):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
-    
-    # Delete associated images first
-    item_to_delete = it.get_item(id)
-    if not item_to_delete:
+    # Resolve all related item ids (grouped variants) and load their data
+    group_item_ids = it.get_group_item_ids(id)
+    if not group_item_ids:
         flash('Element nicht gefunden.', 'error')
         return redirect(url_for('home_admin'))
-    
-    image_filenames = item_to_delete.get('Images', [])
+
+    group_items = []
+    for group_item_id in group_item_ids:
+        group_item = it.get_item(group_item_id)
+        if group_item:
+            group_items.append(group_item)
+
+    if not group_items:
+        flash('Element nicht gefunden.', 'error')
+        return redirect(url_for('home_admin'))
+
+    # Collect all referenced images once to avoid duplicate deletion attempts
+    image_filenames = []
+    seen_images = set()
+    for group_item in group_items:
+        for filename in group_item.get('Images', []):
+            if filename and filename not in seen_images:
+                seen_images.add(filename)
+                image_filenames.append(filename)
     
     # Attempt to delete image files
+    stats = {'originals': 0, 'thumbnails': 0, 'previews': 0, 'errors': 0}
     try:
         stats = delete_item_images(image_filenames)
-        app.logger.info(f"Item {id} deletion - Images removed: " +
+        app.logger.info(f"Item group deletion ({len(group_item_ids)} IDs) - Images removed: " +
                       f"originals={stats['originals']}, thumbnails={stats['thumbnails']}, " +
                       f"previews={stats['previews']}, errors={stats['errors']}")
     except Exception as e:
-        app.logger.error(f"Error deleting images for item {id}: {str(e)}")
-    
-    # Delete the item from the database
-    if it.remove_item(id):
-        flash(f'Element erfolgreich gelöscht. {stats["originals"]} Bilder entfernt.', 'success')
+        app.logger.error(f"Error deleting images for item group {id}: {str(e)}")
+
+    # Delete all items in the group and related borrow entries
+    delete_success = True
+    for group_item_id in group_item_ids:
+        if not it.remove_item(group_item_id):
+            delete_success = False
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        db['ausleihungen'].delete_many({'Item': {'$in': group_item_ids}})
+        client.close()
+    except Exception as e:
+        app.logger.error(f"Error deleting borrowing records for item group {id}: {str(e)}")
+
+    if delete_success:
+        flash(f'Elementgruppe erfolgreich gelöscht ({len(group_item_ids)} Versionen). {stats["originals"]} Bilder entfernt.', 'success')
     else:
         flash('Fehler beim Löschen des Elements aus der Datenbank.', 'error')
         

@@ -1860,16 +1860,39 @@
 <script>
 let favoritesOnly = false;
 function toggleFavorite(id, btn, card){
-    const method = btn.textContent === '★' ? 'DELETE' : 'POST';
-    fetch(`/favorites/${id}`, {method}).then(r=>{
-        if(!r.ok){ console.error('Favoriten HTTP Fehler', r.status); }
-        return r.json().catch(()=>({ok:false,error:'invalid json'}));
-    }).then(data=>{
-        if(!data.ok){ console.error('Favoriten Antwort Fehler', data); return; }
-        const isFav = data.favorites.includes(id);
+    if (!btn || btn.dataset.pending === '1') {
+        return;
+    }
+    btn.dataset.pending = '1';
+    const currentlyFav = btn.classList.contains('active');
+
+    fetch(`/favorites/toggle/${id}`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' }
+    }).then(async (r)=>{
+        let data = null;
+        try {
+            data = await r.json();
+        } catch (_) {
+            data = { ok: false, error: 'invalid json' };
+        }
+
+        if (!r.ok || !data || data.ok !== true) {
+            console.error('Favoriten Fehler', { status: r.status, data });
+            throw new Error('Favorit konnte nicht gespeichert werden.');
+        }
+
+        const isFav = Boolean(data.is_favorite);
         document.querySelectorAll(`.bookmark-btn[data-fav-id='${id}']`).forEach(b=>{
             b.textContent = isFav ? '★' : '☆';
             b.classList.toggle('active', isFav);
+        });
+        document.querySelectorAll('.item-card').forEach(cardEl => {
+            const favBtn = cardEl.querySelector(`.bookmark-btn[data-fav-id='${id}']`);
+            if (favBtn) {
+                cardEl.classList.toggle('favorite-item', isFav);
+                cardEl.dataset.favorite = isFav ? '1' : '0';
+            }
         });
         if(card){
             if(isFav){ card.classList.add('favorite-item'); } else { card.classList.remove('favorite-item'); }
@@ -1879,7 +1902,14 @@ function toggleFavorite(id, btn, card){
             if(!window.currentFavorites) window.currentFavorites = new Set();
             if(isFav) window.currentFavorites.add(id); else window.currentFavorites.delete(id);
         } catch(e) { /* silent */ }
-    }).catch(err=>console.error('Favoriten Netzwerkfehler', err));
+    }).catch(err=>{
+        console.error('Favoriten Netzwerkfehler', err);
+        // Keep UI consistent with last known state on error.
+        btn.classList.toggle('active', currentlyFav);
+        btn.textContent = currentlyFav ? '★' : '☆';
+    }).finally(()=>{
+        delete btn.dataset.pending;
+    });
 }
 document.addEventListener('DOMContentLoaded', ()=>{
     const t = document.getElementById('toggle-favorites-view');
@@ -1888,19 +1918,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
             favoritesOnly = !favoritesOnly;
             document.body.classList.toggle('favorites-only', favoritesOnly);
             document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+            applyFilters();
         });
     }
-    // Global delegation fallback (in case inline/attached listeners are stripped)
-    document.body.addEventListener('click', (e)=>{
-        const target = e.target;
-        if(target && target.classList && target.classList.contains('bookmark-btn')){
-            if(!target.dataset.favId){ return; }
-            e.stopPropagation();
-            if(typeof toggleFavorite === 'function'){
-                toggleFavorite(target.dataset.favId, target, target.closest('.item-card'));
-            }
-        }
-    }, true);
 });
 </script>
 
@@ -2194,6 +2214,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     <label for="edit-isbn">ISBN:</label>
                     <div class="isbn-input-group">
                         <input type="text" id="edit-isbn" name="isbn" placeholder="ISBN eingeben...">
+                        <button type="button" class="fetch-isbn-button" id="scan-edit-isbn-btn">ISBN scannen</button>
                         <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('edit')">Buchinformationen abrufen</button>
                     </div>
                     <div id="edit-book-info-container" class="book-info-container"></div>
@@ -2325,7 +2346,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
             qrReader.style.display = 'block';
             
             html5QrcodeScanner = new Html5QrcodeScanner(
-                "qr-reader", { fps: 10, qrbox: 250 }
+                "qr-reader", { 
+                    fps: 10, 
+                    qrbox: 250,
+                    rememberLastUsedCamera: true
+                }
             );
             
             html5QrcodeScanner.render((decodedText) => {
@@ -2373,13 +2398,52 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
         qrReader.style.display = 'block';
         scanEditBtn.textContent = 'Scanner schließen';
-        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: 250 });
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', { 
+            fps: 10, 
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
         html5QrcodeScanner.render((decodedText) => {
             html5QrcodeScanner.clear();
             qrReader.style.display = 'none';
             editCodeInput.value = String(decodedText || '').trim();
             validateCodeField(editCodeInput, document.getElementById('edit-item-id')?.value || null);
             scanEditBtn.textContent = 'Barcode scannen';
+        });
+    }
+
+    function scanIntoEditIsbn() {
+        const qrReader = document.getElementById('qr-reader');
+        const editIsbnInput = document.getElementById('edit-isbn');
+        const scanIsbnBtn = document.getElementById('scan-edit-isbn-btn');
+        if (!qrReader || !editIsbnInput || !scanIsbnBtn) {
+            return;
+        }
+
+        if (qrReader.style.display !== 'none') {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear();
+            }
+            qrReader.style.display = 'none';
+            scanIsbnBtn.textContent = 'ISBN scannen';
+            return;
+        }
+
+        qrReader.style.display = 'block';
+        scanIsbnBtn.textContent = 'Scanner schließen';
+        html5QrcodeScanner = new Html5QrcodeScanner('qr-reader', {
+            fps: 10,
+            qrbox: 250,
+            rememberLastUsedCamera: true
+        });
+        html5QrcodeScanner.render((decodedText) => {
+            html5QrcodeScanner.clear();
+            qrReader.style.display = 'none';
+            editIsbnInput.value = String(decodedText || '').trim();
+            scanIsbnBtn.textContent = 'ISBN scannen';
+            if (typeof fetchBookInfo === 'function') {
+                fetchBookInfo('edit');
+            }
         });
     }
 
@@ -2706,6 +2770,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (scanEditCodeBtn) {
             scanEditCodeBtn.addEventListener('click', scanIntoEditCode);
         }
+
+        const scanEditIsbnBtn = document.getElementById('scan-edit-isbn-btn');
+        if (scanEditIsbnBtn) {
+            scanEditIsbnBtn.addEventListener('click', scanIntoEditIsbn);
+        }
     });
 
     // Function to load items from server
@@ -2754,6 +2823,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         
                         const favActive = favoriteIds.has(item._id);
                         if (favActive) card.classList.add('favorite-item');
+                        card.dataset.favorite = favActive ? '1' : '0';
 
                         // Process and store filter values
                         const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
@@ -2894,7 +2964,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                             <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
                                             <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
                                             <label style="font-size:0.85rem; margin:0;">oder Code:</label>
-                                            <select name="specific_item_id" style="max-width:190px; padding:4px;">
+                                            <select id="specific-item-card-${item._id}" name="specific_item_id" style="max-width:190px; padding:4px;">
                                                 <option value="">Automatisch wählen</option>
                                                 ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code}</option>`).join('')}
                                             </select>
@@ -2911,7 +2981,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <a href="{{ url_for('delete_item', id='') }}${item._id}" onclick="return confirm('Sind Sie sicher, dass Sie dieses Objekt löschen möchten?')">
                                     <button class="delete-button">Löschen</button>
                                 </a>
-                                <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
+                                <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-card-${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                                 ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                             </div>
@@ -2927,7 +2997,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         bookmark.dataset.favId = item._id;
                         bookmark.textContent = favActive ? '★' : '☆';
                         bookmark.style.zIndex = '25';
-                        bookmark.setAttribute('onclick', `event.stopPropagation();toggleFavorite('${item._id}', this, this.closest('.item-card'));`);
                         bookmark.addEventListener('click', (ev)=>{ ev.stopPropagation(); toggleFavorite(item._id, bookmark, card); });
                         card.appendChild(bookmark);
                         /* bookmark appended */
@@ -3041,6 +3110,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 }
             })();
             const itemId = item.querySelector('.card-content')?.dataset.itemId || item.dataset.itemId || '';
+            const isFavoriteCard = item.dataset.favorite === '1';
             
             const matchesFilter1 = checkFilterMatch(activeFilters.filter1, itemFilter1);
             const matchesFilter2 = checkFilterMatch(activeFilters.filter2, itemFilter2);
@@ -3052,7 +3122,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
             let exactCodeMatch = isCodeSearch && codeCandidates.some(code => code === searchTerm);
             
             const matchesDesc = !descSearchIds || (itemId && descSearchIds.has(String(itemId)));
-            if (passesAllFilters && matchesCodeSearch && matchesDesc) {
+            if (passesAllFilters && matchesCodeSearch && matchesDesc && (!favoritesOnly || isFavoriteCard)) {
                 item.style.display = 'block';
                 visibleCount++;
                 
@@ -3185,6 +3255,134 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (input) input.value = '';
         descSearchIds = null;
         applyFilters();
+    }
+
+    function openEditModalForSelectedUnit(defaultItemId, selectId) {
+        let targetItemId = defaultItemId;
+
+        try {
+            const selectedUnit = selectId ? document.getElementById(selectId) : null;
+            if (selectedUnit && selectedUnit.value) {
+                targetItemId = selectedUnit.value;
+            }
+        } catch (e) {
+            // Keep default item id as fallback.
+        }
+
+        openEditModalFromServer(targetItemId);
+    }
+
+    function closeEditModal() {
+        const editModal = document.getElementById('edit-modal');
+        if (editModal) {
+            editModal.style.display = 'none';
+        }
+    }
+
+    function openEditModalFromServer(itemId) {
+        const editModal = document.getElementById('edit-modal');
+        if (!editModal) {
+            console.error('Edit modal nicht gefunden');
+            return;
+        }
+
+        console.log('DEBUG: openEditModal called with itemId:', itemId);
+
+        // Fetch the item data from the backend
+        fetch(`/get_item/${itemId}`)
+            .then(response => {
+                console.log('DEBUG: Response status:', response.status);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                console.log('DEBUG: Fetched data:', data);
+                // Backend returns the item directly or wrapped in error/success
+                const item = data.error ? null : (data.item || data);
+                
+                console.log('DEBUG: Parsed item:', item);
+                
+                if (!item || !item._id) {
+                    console.error('DEBUG: Item not found or invalid');
+                    alert('Item nicht gefunden');
+                    return;
+                }
+
+                // Fill in the form fields with the item data
+                document.getElementById('edit-item-id').value = item._id || '';
+                document.getElementById('edit-name').value = item.Name || '';
+                document.getElementById('edit-location').value = item.Ort || '';
+                document.getElementById('edit-description').value = item.Beschreibung || '';
+                document.getElementById('edit-year').value = item.Anschaffungsjahr || '';
+                document.getElementById('edit-cost').value = item.Anschaffungskosten || '';
+                document.getElementById('edit-code4').value = item.Code_4 || '';
+                document.getElementById('edit-isbn').value = item.ISBN || '';
+                document.getElementById('edit-reservierbar').checked = item.Reservierbar !== false;
+
+                // Fill in filter 1 (Unterrichtsfach)
+                const filter1Array = Array.isArray(item.Filter) ? item.Filter : (item.Filter ? [item.Filter] : []);
+                document.getElementById('edit-filter1-1').value = filter1Array[0] || '';
+                document.getElementById('edit-filter1-2').value = filter1Array[1] || '';
+                document.getElementById('edit-filter1-3').value = filter1Array[2] || '';
+                document.getElementById('edit-filter1-4').value = filter1Array[3] || '';
+
+                // Fill in filter 2 (Jahrgangsstufe)
+                const filter2Array = Array.isArray(item.Filter2) ? item.Filter2 : (item.Filter2 ? [item.Filter2] : []);
+                document.getElementById('edit-filter2-1').value = filter2Array[0] || '';
+                document.getElementById('edit-filter2-2').value = filter2Array[1] || '';
+                document.getElementById('edit-filter2-3').value = filter2Array[2] || '';
+                document.getElementById('edit-filter2-4').value = filter2Array[3] || '';
+
+                // Fill in filter 3 (Thema)
+                const filter3Array = Array.isArray(item.Filter3) ? item.Filter3 : (item.Filter3 ? [item.Filter3] : []);
+                document.getElementById('edit-filter3-1').value = filter3Array[0] || '';
+                document.getElementById('edit-filter3-2').value = filter3Array[1] || '';
+                document.getElementById('edit-filter3-3').value = filter3Array[2] || '';
+                document.getElementById('edit-filter3-4').value = filter3Array[3] || '';
+
+                // Display existing images
+                const existingImagesContainer = document.getElementById('edit-existing-images');
+                existingImagesContainer.innerHTML = '';
+                if (item.Images && Array.isArray(item.Images)) {
+                    item.Images.forEach((image, index) => {
+                        const isVideo = isVideoFile(image);
+                        const imageDiv = document.createElement('div');
+                        imageDiv.className = 'existing-image-item';
+                        imageDiv.style.marginBottom = '10px';
+
+                        const thumbnailInfo = item.ThumbnailInfo && item.ThumbnailInfo[index];
+                        const imageSrc = thumbnailInfo && thumbnailInfo.has_preview ? 
+                            thumbnailInfo.preview_url : 
+                            (image.startsWith('/uploads/') || image.startsWith('http') ? 
+                                image : 
+                                `{{ url_for('uploaded_file', filename='') }}${image}`);
+
+                        if (isVideo) {
+                            imageDiv.innerHTML = `
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <video src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" controls></video>
+                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
+                                </div>
+                            `;
+                        } else {
+                            imageDiv.innerHTML = `
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <img src="${imageSrc}" style="max-width:100px; max-height:100px; object-fit:contain;" alt="Existierendes Bild ${index + 1}">
+                                    <button type="button" class="delete-image-button" onclick="deleteExistingImage('${item._id}', ${index})">Löschen</button>
+                                </div>
+                            `;
+                        }
+                        existingImagesContainer.appendChild(imageDiv);
+                    });
+                }
+
+                // Display the modal
+                editModal.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Fehler beim Laden des Items:', error);
+                alert('Fehler beim Laden des Items');
+            });
     }
 
     function escapeHtml(value) {
@@ -3466,7 +3664,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                             <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
                             <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:78px; padding:4px;">
                             <label style="font-size:0.85rem; margin:0;">oder Code:</label>
-                            <select name="specific_item_id" style="max-width:220px; padding:4px;">
+                            <select id="specific-item-modal-${item._id}" name="specific_item_id" style="max-width:220px; padding:4px;">
                                 <option value="">Automatisch wählen</option>
                                 ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${escapeHtml(unit.code || '-')}</option>`).join('')}
                             </select>
@@ -3479,7 +3677,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                     </form>`
                     : `<button class="ausleihen disabled-button" disabled>Ausgeliehen</button>`
                 }
-                <button class="edit-button" onclick="openEditModal('${item._id}')">Bearbeiten</button>
+                <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-modal-${item._id}')">Bearbeiten</button>
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                 ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
                 ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}

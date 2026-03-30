@@ -43,6 +43,11 @@
 
     // Edit modal functions
     function openEditModal(itemId) {
+        if (typeof openEditModalFromServer === 'function') {
+            openEditModalFromServer(itemId);
+            return;
+        }
+
         // Find the item data from allItems array
         const item = allItems.find(i => i._id === itemId);
         if (!item) {
