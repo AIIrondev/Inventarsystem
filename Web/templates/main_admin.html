@@ -570,6 +570,31 @@
         margin: 20px 0;
     }
 
+    .empty-state-cta {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 16px 28px;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #0d6efd, #198754);
+        border: none;
+        border-radius: 10px;
+        text-decoration: none;
+        box-shadow: 0 10px 24px rgba(13, 110, 253, 0.25);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+
+    .empty-state-cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 28px rgba(13, 110, 253, 0.3);
+        text-decoration: none;
+    }
+
+    .empty-state-cta:active {
+        transform: translateY(0);
+    }
+
     /* Action Button Styles */
     .modal-actions {
         display: flex;
@@ -2792,7 +2817,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 allItems = data.items || [];
                 itemsContainer.innerHTML = '';
                 if (!data.items || data.items.length === 0) {
-                    itemsContainer.innerHTML = '<div class="no-items-message">Keine Objekte gefunden</div>';
+                    itemsContainer.innerHTML = `
+                        <div class="no-items-message">
+                            <div>Keine Objekte gefunden</div>
+                            <a class="empty-state-cta" href="{{ url_for('upload_admin') }}">Erstellen sie hier ihr erstes Item</a>
+                        </div>
+                    `;
                     if (itemsIndicator) {
                         itemsIndicator.textContent = 'Objekte im System: 0';
                     }
