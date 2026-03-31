@@ -89,7 +89,7 @@ if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
     fi
 else
     log_message "No requirements.txt found, installing essential packages manually"
-    pip install flask werkzeug gunicorn pillow qrcode apscheduler python-dateutil pytz requests || {
+    pip install flask werkzeug gunicorn pillow qrcode apscheduler python-dateutil pytz requests flask_jwt_extended || {
         log_message "WARNING: Failed to install some essential packages"
     }
 fi
