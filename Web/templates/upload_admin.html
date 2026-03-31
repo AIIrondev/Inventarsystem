@@ -8,7 +8,7 @@
 -->
 {% extends "base.html" %}
 
-{% block title %}Artikel hochladen - Inventarsystem{% endblock %}
+{% block title %}{{ page_title|default('Artikel hochladen') }} - Inventarsystem{% endblock %}
 
 {% block content %}
 {% if duplicate_data and duplicate_data.images %}
@@ -709,11 +709,23 @@
 </style>
 
 <div class="upload-container">
-    <a href="{{ url_for('home_admin') }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
+    <a href="{{ url_for(back_target|default('home_admin')) }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
+    {% if library_module_enabled %}
+        {% if show_library_features %}
+        <a href="{{ url_for('upload_admin') }}" class="nav-back-button" style="margin-left:8px;">Zur Artikel-Seite</a>
+        <a href="{{ url_for('library_view') }}" class="nav-back-button" style="margin-left:8px;">Zur Bibliotheks-Ansicht</a>
+        {% if student_cards_module_enabled %}
+        <a href="{{ url_for('student_cards_admin') }}" class="nav-back-button" style="margin-left:8px;">Schülerausweise verwalten</a>
+        {% endif %}
+        {% else %}
+        <a href="{{ url_for('library_admin') }}" class="nav-back-button" style="margin-left:8px;">Zur Bibliothek-Seite</a>
+        {% endif %}
+    {% endif %}
     
     <div class="upload-form">
-        <h1>Artikel hochladen</h1>
+        <h1>{{ page_title|default('Artikel hochladen') }}</h1>
         <form method="POST" action="{{ url_for('upload_item') }}" enctype="multipart/form-data">
+            <input type="hidden" name="upload_mode" value="{{ upload_mode|default('item') }}">
             <div class="form-group">
                 <label for="name">Name:</label>
                 <input type="text" id="name" name="name" required>
@@ -738,7 +750,17 @@
                 <textarea id="beschreibung" name="beschreibung" required></textarea>
             </div>
             
-            <!-- Updated filter inputs with dropdowns for Filter 1 and Filter 2 -->
+            {% if show_library_features %}
+            <!-- Library Mode: Single Customizable Filter -->
+            <div class="filter-inputs">
+                <h3>Kategorie/Typ (customisierbar):</h3>
+                <div class="form-group">
+                    <input type="text" name="library_category" id="library_category" placeholder="z.B. Belletristik, Sachbücher, Nachschlagewerke, etc.">
+                    <small style="display:block; color:#666;">Geben Sie hier eine beliebige Kategorie ein zur freien Klassifizierung.</small>
+                </div>
+            </div>
+            {% else %}
+            <!-- Normal Item Mode: Standard Filters -->
             <div class="filter-inputs">
                 <h3>Unterrichtsfach:</h3>
                 <div class="multi-filter">
@@ -824,6 +846,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
             <div class="form-group">
                 <label for="anschaffungsjahr">Anschaffungsjahr</label>
                 <input type="date" id="anschaffungsjahr" name="anschaffungsjahr">
@@ -852,7 +875,8 @@
                 <textarea id="individual_codes" name="individual_codes" rows="4" placeholder="z.B.\nABC-001\nABC-002"></textarea>
                 <small style="display:block; color:#666;">Bei Anzahl > 1 können hier individuelle Codes pro Item gesetzt werden. Scanner-Eingaben werden bei Mehrfachanzahl automatisch hier angefügt.</small>
             </div>
-            <div class="form-group">
+            <!-- Image upload (hidden for library mode) -->
+            <div class="form-group" {% if show_library_features %}style="display:none;"{% endif %}>
                 <label for="images">Bilder/Videos:</label>
                 <input type="file" id="images" name="images" accept=".jpg, .jpeg, .png, .gif, .mp4, .mov, .avi, .mkv, .webm, .flv, .m4v, .3gp" multiple>
                 <div class="allowed-formats">Erlaubte Formate: JPG, JPEG, PNG, GIF, MP4, MOV, AVI, MKV, WEBM, FLV, M4V, 3GP</div>
@@ -860,16 +884,17 @@
                 <div class="image-preview-container" id="image-preview-container"></div>
             </div>
             
-            <!-- Add ISBN and exemplar count fields to upload form -->
+            <!-- ISBN fields (library page only) -->
+            {% if show_library_features %}
             <div class="form-group">
-                <label for="isbn">ISBN:</label>
+                <label for="isbn">ISBN/Barcode (für Bild-Suche):</label>
                 <div class="isbn-input-group">
-                    <input type="text" id="isbn" name="isbn" placeholder="ISBN eingeben...">
-                    <button type="button" id="scan-isbn-btn" class="fetch-isbn-button">ISBN scannen</button>
-                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Buchinformationen abrufen</button>
+                    <input type="text" id="isbn" name="isbn" placeholder="ISBN oder Barcode eingeben..." required>
+                    <button type="button" id="scan-isbn-btn" class="fetch-isbn-button">Barcode scannen</button>
+                    <button type="button" class="fetch-isbn-button" onclick="fetchBookInfo('upload')">Bild abrufen</button>
                 </div>
                 <div id="isbn-scanner" style="width:100%; max-width:520px; display:none; margin-top:10px;"></div>
-                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;"></small>
+                <small id="isbn-scan-status" style="display:block; color:#666; margin-top:6px;">Scannen oder manuell eingeben. Das Buchcover wird automatisch heruntergeladen.</small>
                 <div id="book-info-container" class="book-info-container"></div>
             </div>
             
@@ -878,6 +903,7 @@
                 <input type="checkbox" id="reservierbar" name="reservierbar" style="width:auto;">
                 <small style="display:block; color:#666;">Wenn deaktiviert, kann der Artikel nicht im Voraus reserviert werden (Sofort-Ausleihe bleibt möglich).</small>
             </div>
+            {% endif %}
 
             <button type="submit" class="submit-button">Artikel hochladen</button>
         </form>
@@ -886,6 +912,8 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
 <script>
+    const libraryModuleEnabled = {{ 'true' if library_module_enabled else 'false' }};
+
     // Function to check if a file is a video
     function isVideoFile(filename) {
         const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v', '.3gp'];
@@ -914,6 +942,17 @@
         if (!statusEl) return;
         statusEl.textContent = message || '';
         statusEl.style.color = isError ? '#b00020' : '#666';
+    }
+
+    function normalizeIsbnClient(value) {
+        const normalized = String(value || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+        if (normalized.length === 13 && /^\d{13}$/.test(normalized)) {
+            return normalized;
+        }
+        if (normalized.length === 10 && /^\d{9}[\dX]$/.test(normalized)) {
+            return normalized;
+        }
+        return '';
     }
 
     function appendIndividualCode(scannedCode) {
@@ -1001,6 +1040,10 @@
     }
 
     function startIsbnScanner() {
+        if (!libraryModuleEnabled) {
+            setIsbnScanStatus('Bibliotheks-Modul ist deaktiviert.', true);
+            return;
+        }
         const scannerBox = document.getElementById('isbn-scanner');
         const scanButton = document.getElementById('scan-isbn-btn');
         const isbnField = document.getElementById('isbn');
@@ -1040,8 +1083,14 @@
             const scannedCode = String(decodedText || '').trim();
             if (!scannedCode) return;
 
-            isbnField.value = scannedCode;
-            setIsbnScanStatus(`ISBN gesetzt: ${scannedCode}`);
+            const normalizedIsbn = normalizeIsbnClient(scannedCode);
+            if (!normalizedIsbn) {
+                setIsbnScanStatus('Kein gültiger ISBN-Barcode erkannt. Bitte erneut scannen.', true);
+                return;
+            }
+
+            isbnField.value = normalizedIsbn;
+            setIsbnScanStatus(`ISBN gesetzt: ${normalizedIsbn}`);
 
             isbnScannerInstance.clear().catch(() => {});
             scannerBox.style.display = 'none';
@@ -1149,6 +1198,10 @@
 
     // Function to fetch book information from ISBN
     function fetchBookInfo(formType) {
+        if (!libraryModuleEnabled) {
+            alert('Bibliotheks-Modul ist deaktiviert.');
+            return;
+        }
         const isbnField = document.getElementById('isbn');
         const infoContainer = document.getElementById('book-info-container');
         
@@ -1157,10 +1210,10 @@
             return;
         }
         
-        const isbn = isbnField.value.trim().replace(/-/g, ''); // Remove hyphens
+        const isbn = normalizeIsbnClient(isbnField.value);
         
         if (!isbn) {
-            alert('Bitte geben Sie eine ISBN ein.');
+            alert('Bitte eine gültige ISBN-10 oder ISBN-13 eingeben.');
             return;
         }
         

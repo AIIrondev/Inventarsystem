@@ -16,6 +16,13 @@ from bson.objectid import ObjectId
 import settings as cfg
 
 
+def normalize_student_card_id(card_id):
+    """Normalize student card IDs for reliable lookup."""
+    if card_id is None:
+        return ''
+    return str(card_id).strip().upper()
+
+
 # === FAVORITES MANAGEMENT ===
 def get_favorites(username):
     """Return a list of favorite item ObjectId strings for the user."""
@@ -110,7 +117,7 @@ def check_nm_pwd(username, password):
     return user
 
 
-def add_user(username, password, name, last_name):
+def add_user(username, password, name, last_name, is_student=False, student_card_id=None, max_borrow_days=None):
     """
     Add a new user to the database.
     
@@ -126,9 +133,55 @@ def add_user(username, password, name, last_name):
     users = db['users']
     if not check_password_strength(password):
         return False
-    users.insert_one({'Username': username, 'Password': hashing(password), 'Admin': False, 'active_ausleihung': None, 'name': name, 'last_name': last_name})
+    user_doc = {
+        'Username': username,
+        'Password': hashing(password),
+        'Admin': False,
+        'active_ausleihung': None,
+        'name': name,
+        'last_name': last_name,
+        'IsStudent': bool(is_student)
+    }
+
+    normalized_card = normalize_student_card_id(student_card_id)
+    if bool(is_student):
+        if normalized_card:
+            user_doc['StudentCardId'] = normalized_card
+        if max_borrow_days is not None:
+            try:
+                user_doc['MaxBorrowDays'] = int(max_borrow_days)
+            except (TypeError, ValueError):
+                pass
+
+    users.insert_one(user_doc)
     client.close()
     return True
+
+
+def student_card_exists(student_card_id):
+    """Return True if a student card id is already assigned to a user."""
+    normalized = normalize_student_card_id(student_card_id)
+    if not normalized:
+        return False
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    users = db['users']
+    exists = users.find_one({'StudentCardId': normalized}) is not None
+    client.close()
+    return exists
+
+
+def get_user_by_student_card(student_card_id):
+    """Return user by student card id or None."""
+    normalized = normalize_student_card_id(student_card_id)
+    if not normalized:
+        return None
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    users = db['users']
+    found_user = users.find_one({'StudentCardId': normalized})
+    client.close()
+    return found_user
 
 
 def make_admin(username):

@@ -39,6 +39,17 @@
         "logs": "logs"
     },
 
+    "modules": {
+        "library": {
+            "enabled": true
+        },
+        "student_cards": {
+            "enabled": true,
+            "default_borrow_days": 14,
+            "max_borrow_days": 365
+        }
+    },
+
     "allowed_extensions": [
         "png", "jpg", "jpeg", "gif",
         "hevc", "heif",

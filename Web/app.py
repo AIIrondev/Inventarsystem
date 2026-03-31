@@ -92,6 +92,8 @@ SCHEDULER_INTERVAL = cfg.SCHEDULER_INTERVAL_MIN
 SSL_CERT = cfg.SSL_CERT
 SSL_KEY = cfg.SSL_KEY
 
+LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media']
+
 
 SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 
@@ -101,7 +103,12 @@ APP_VERSION = __version__
 @app.context_processor
 def inject_version():
     """Inject global template variables."""
-    return {'APP_VERSION': APP_VERSION, 'school_periods': SCHOOL_PERIODS}
+    return {
+        'APP_VERSION': APP_VERSION,
+        'school_periods': SCHOOL_PERIODS,
+        'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
+        'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED
+    }
 
 # Create necessary directories at startup
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -149,8 +156,7 @@ def update_appointment_statuses():
     current_time = datetime.datetime.now()
     # Prepare logging early so it's available in exception paths
     log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, 'scheduler.log')
 
     try:
@@ -485,6 +491,44 @@ def sanitize_form_value(value):
     return value
 
 
+def normalize_isbn(isbn_raw):
+    """Return only digits/X from ISBN input in canonical uppercase form."""
+    if isbn_raw is None:
+        return ''
+    normalized = re.sub(r'[^0-9Xx]', '', str(isbn_raw)).upper()
+    return normalized
+
+
+def is_valid_isbn10(isbn10):
+    if not re.fullmatch(r'[0-9]{9}[0-9X]', isbn10):
+        return False
+    checksum = 0
+    for idx, char in enumerate(isbn10):
+        value = 10 if char == 'X' else int(char)
+        checksum += value * (10 - idx)
+    return checksum % 11 == 0
+
+
+def is_valid_isbn13(isbn13):
+    if not re.fullmatch(r'[0-9]{13}', isbn13):
+        return False
+    checksum = 0
+    for idx, char in enumerate(isbn13[:12]):
+        checksum += int(char) * (1 if idx % 2 == 0 else 3)
+    check_digit = (10 - (checksum % 10)) % 10
+    return check_digit == int(isbn13[12])
+
+
+def normalize_and_validate_isbn(isbn_raw):
+    """Normalize ISBN and return a valid canonical ISBN-13/10 or empty string."""
+    isbn = normalize_isbn(isbn_raw)
+    if len(isbn) == 13 and is_valid_isbn13(isbn):
+        return isbn
+    if len(isbn) == 10 and is_valid_isbn10(isbn):
+        return isbn
+    return ''
+
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """
@@ -737,7 +781,13 @@ def home():
         flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
     elif not us.check_admin(session['username']):
-        return render_template('main.html', username=session['username'])
+        return render_template(
+            'main.html',
+            username=session['username'],
+            student_cards_module_enabled=False,
+            student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+            student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+        )
     else:
         return redirect(url_for('home_admin'))
 
@@ -757,7 +807,299 @@ def home_admin():
     if not us.check_admin(session['username']):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
-    return render_template('main_admin.html', username=session['username'])
+    return render_template(
+        'main_admin.html',
+        username=session['username'],
+        student_cards_module_enabled=False,
+        student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+    )
+
+@app.route('/library')
+def library_view():
+    """
+    Dedicated page for viewing library items (books, CDs, etc.).
+    Only available when library module is enabled.
+    Table-only view with customizable filter.
+    
+    Returns:
+        flask.Response: Rendered template or redirect
+    """
+    if 'username' not in session:
+        flash('Bitte mit registriertem Konto anmelden!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home'))
+    
+    return render_template(
+        'library_table.html',
+        username=session['username'],
+        is_admin=us.check_admin(session['username']),
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+    )
+
+
+@app.route('/api/library_items')
+def api_library_items():
+    """
+    API endpoint to fetch all library items (books, CDs, DVDs, media).
+    Returns JSON array suitable for table view.
+    """
+    if 'username' not in session:
+        return jsonify([]), 401
+    
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_db = db['items']
+        
+        library_items = list(items_db.find({
+            'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']}
+        }))
+        
+        client.close()
+        
+        # Convert ObjectId to string for JSON serialization
+        for item in library_items:
+            item['_id'] = str(item['_id'])
+        
+        return jsonify(library_items), 200
+    except Exception as e:
+        print(f"Error fetching library items: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/library_scan_action', methods=['POST'])
+def api_library_scan_action():
+    """
+    Scan-based library workflow:
+    - scan student card id
+    - scan media code (ISBN/Code_4)
+    - borrow if available, otherwise return (toggle behavior)
+    """
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        return jsonify({'ok': False, 'message': 'Schülerausweis-Modul ist deaktiviert.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    student_card_id = us.normalize_student_card_id(payload.get('student_card_id') or payload.get('card_id'))
+    item_code_raw = str(payload.get('item_code') or payload.get('code') or '').strip()
+    duration_raw = str(payload.get('borrow_duration_days') or '').strip()
+
+    if not student_card_id:
+        return jsonify({'ok': False, 'message': 'Schülerausweis-ID fehlt.'}), 400
+    if not item_code_raw:
+        return jsonify({'ok': False, 'message': 'Mediencode fehlt.'}), 400
+
+    normalized_isbn = normalize_and_validate_isbn(item_code_raw)
+    normalized_code = item_code_raw.upper()
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        student_cards_col = db['student_cards']
+        items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
+
+        card_doc = student_cards_col.find_one({'AusweisId': student_card_id})
+        if not card_doc:
+            return jsonify({'ok': False, 'message': 'Ungültige Schülerausweis-ID.'}), 404
+
+        query_or = [
+            {'Code_4': item_code_raw},
+            {'Code_4': normalized_code},
+        ]
+        if normalized_isbn:
+            query_or.append({'ISBN': normalized_isbn})
+
+        item_doc = items_col.find_one({
+            'ItemType': {'$in': LIBRARY_ITEM_TYPES},
+            '$or': query_or
+        })
+
+        if not item_doc:
+            return jsonify({'ok': False, 'message': 'Kein Bibliotheksmedium für diesen Code gefunden.'}), 404
+
+        item_id = str(item_doc['_id'])
+        borrower_name = card_doc.get('SchülerName') or f"Ausweis {student_card_id}"
+        now = datetime.datetime.now()
+
+        if item_doc.get('Verfuegbar', True):
+            borrow_duration_days = None
+            if duration_raw:
+                try:
+                    parsed_duration = int(duration_raw)
+                    if 1 <= parsed_duration <= cfg.STUDENT_MAX_BORROW_DAYS:
+                        borrow_duration_days = parsed_duration
+                    else:
+                        return jsonify({
+                            'ok': False,
+                            'message': f'Ausleihdauer muss zwischen 1 und {cfg.STUDENT_MAX_BORROW_DAYS} Tagen liegen.'
+                        }), 400
+                except ValueError:
+                    return jsonify({'ok': False, 'message': 'Ungültige Ausleihdauer.'}), 400
+            else:
+                try:
+                    card_default = int(card_doc.get('StandardAusleihdauer', cfg.STUDENT_DEFAULT_BORROW_DAYS))
+                except (TypeError, ValueError):
+                    card_default = cfg.STUDENT_DEFAULT_BORROW_DAYS
+                borrow_duration_days = max(1, min(card_default, cfg.STUDENT_MAX_BORROW_DAYS))
+
+            end_date = now + datetime.timedelta(days=borrow_duration_days) if borrow_duration_days else None
+            it.update_item_status(item_id, False, borrower_name)
+            au.add_ausleihung(item_id, borrower_name, now, end_date=end_date)
+
+            return jsonify({
+                'ok': True,
+                'action': 'borrowed',
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'student_card_id': student_card_id,
+                'borrower': borrower_name,
+                'borrow_duration_days': borrow_duration_days,
+                'message': f"{item_doc.get('Name', 'Medium')} wurde ausgeliehen."
+            }), 200
+
+        # Toggle back: item is currently borrowed -> return
+        current_borrower = str(item_doc.get('User') or '').strip()
+        if current_borrower and current_borrower != borrower_name and not us.check_admin(session['username']):
+            return jsonify({
+                'ok': False,
+                'message': f"Medium ist aktuell an '{current_borrower}' ausgeliehen und kann mit diesem Ausweis nicht zurückgegeben werden."
+            }), 409
+
+        update_result = ausleihungen_col.update_many(
+            {'Item': item_id, 'Status': 'active'},
+            {'$set': {
+                'Status': 'completed',
+                'End': now,
+                'LastUpdated': now
+            }}
+        )
+        it.update_item_status(item_id, True, borrower_name)
+
+        return jsonify({
+            'ok': True,
+            'action': 'returned',
+            'item_id': item_id,
+            'item_name': item_doc.get('Name', ''),
+            'student_card_id': student_card_id,
+            'borrower': borrower_name,
+            'completed_records': update_result.modified_count,
+            'message': f"{item_doc.get('Name', 'Medium')} wurde zurückgegeben."
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error in library scan action: {e}")
+        return jsonify({'ok': False, 'message': 'Fehler beim Verarbeiten des Scan-Vorgangs.'}), 500
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/api/item_detail/<item_id>')
+def api_item_detail(item_id):
+    """
+    API endpoint to fetch detail view HTML for a library item.
+    """
+    if 'username' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        item = it.get_item(item_id)
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
+        
+        # Basic detail HTML
+        detail_html = f"""
+        <h2>{html.escape(item.get('Name', 'Untitled'))}</h2>
+        <p><strong>Autor/Künstler:</strong> {html.escape(item.get('Autor', item.get('Author', '-')))}</p>
+        <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
+        <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
+        <p><strong>Status:</strong> {'Verfügbar' if item.get('Verfuegbar') != False else 'Ausgeliehen'}</p>
+        """
+        return detail_html, 200
+    except Exception as e:
+        print(f"Error fetching item detail: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/library_item/<item_id>/update', methods=['POST'])
+def api_library_item_update(item_id):
+    """Admin-only API to edit library item core fields from the library table view."""
+    if 'username' not in session:
+        return jsonify({'ok': False, 'message': 'Nicht angemeldet.'}), 401
+    if not us.check_admin(session['username']):
+        return jsonify({'ok': False, 'message': 'Administratorrechte erforderlich.'}), 403
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        return jsonify({'ok': False, 'message': 'Bibliotheks-Modul ist deaktiviert.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+
+    name = sanitize_form_value(payload.get('name'))
+    description = sanitize_form_value(payload.get('beschreibung'))
+    location = sanitize_form_value(payload.get('ort'))
+    author = sanitize_form_value(payload.get('autor'))
+    media_type = sanitize_form_value(payload.get('item_type')).lower() or 'book'
+    code_4 = sanitize_form_value(payload.get('code_4'))
+    isbn_raw = sanitize_form_value(payload.get('isbn'))
+
+    if not name or not description or not location:
+        return jsonify({'ok': False, 'message': 'Name, Ort und Beschreibung sind erforderlich.'}), 400
+
+    if media_type not in LIBRARY_ITEM_TYPES:
+        return jsonify({'ok': False, 'message': 'Ungültiger Medientyp.'}), 400
+
+    normalized_isbn = ''
+    if isbn_raw:
+        normalized_isbn = normalize_and_validate_isbn(isbn_raw)
+        if not normalized_isbn:
+            return jsonify({'ok': False, 'message': 'Ungültige ISBN (nur ISBN-10/13).'}), 400
+
+    if code_4 and not it.is_code_unique(code_4, exclude_id=item_id):
+        return jsonify({'ok': False, 'message': 'Der Code wird bereits verwendet.'}), 409
+
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+
+        current = items_col.find_one({'_id': ObjectId(item_id)})
+        if not current:
+            client.close()
+            return jsonify({'ok': False, 'message': 'Element nicht gefunden.'}), 404
+        if current.get('ItemType') not in LIBRARY_ITEM_TYPES:
+            client.close()
+            return jsonify({'ok': False, 'message': 'Element ist kein Bibliotheksmedium.'}), 400
+
+        update_doc = {
+            'Name': name,
+            'Beschreibung': description,
+            'Ort': location,
+            'Autor': author,
+            'Code_4': code_4,
+            'ItemType': media_type,
+            'LastUpdated': datetime.datetime.now()
+        }
+
+        if normalized_isbn:
+            update_doc['ISBN'] = normalized_isbn
+        elif 'ISBN' in current:
+            update_doc['ISBN'] = ''
+
+        items_col.update_one({'_id': ObjectId(item_id)}, {'$set': update_doc})
+        client.close()
+
+        return jsonify({'ok': True, 'message': 'Bibliotheksmedium aktualisiert.'}), 200
+    except Exception as e:
+        app.logger.error(f"Error updating library item {item_id}: {e}")
+        return jsonify({'ok': False, 'message': 'Fehler beim Aktualisieren des Bibliotheksmediums.'}), 500
 
 
 @app.route('/upload_admin')
@@ -826,7 +1168,206 @@ def upload_admin():
         # Just indicate that duplication mode is active
         flash('Element wird dupliziert. Die Daten werden aus dem Session-Speicher geladen.', 'info')
     
-    return render_template('upload_admin.html', username=session['username'], duplicate_data=duplicate_data)
+    return render_template(
+        'upload_admin.html',
+        username=session['username'],
+        duplicate_data=duplicate_data,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        show_library_features=False,
+        upload_mode='item',
+        page_title='Artikel hochladen',
+        back_target='home_admin'
+    )
+
+
+@app.route('/library_admin')
+def library_admin():
+    """
+    Dedicated admin page for library/book uploads with ISBN scanning.
+    Only accessible by admins and only when the library module is enabled.
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    duplicate_from = request.args.get('duplicate_from')
+    duplicate_flag = request.args.get('duplicate')
+    duplicate_data = None
+
+    if duplicate_from:
+        try:
+            original_item = it.get_item(duplicate_from)
+            if original_item:
+                duplicate_data = {
+                    'name': original_item.get('Name', ''),
+                    'description': original_item.get('Beschreibung', ''),
+                    'location': original_item.get('Ort', ''),
+                    'room': original_item.get('Raum', ''),
+                    'category': original_item.get('Kategorie', ''),
+                    'year': original_item.get('Anschaffungsjahr', ''),
+                    'cost': original_item.get('Anschaffungskosten', ''),
+                    'filter1': original_item.get('Filter1', ''),
+                    'filter2': original_item.get('Filter2', ''),
+                    'filter3': original_item.get('Filter3', ''),
+                    'images': original_item.get('Images', []),
+                    'original_id': duplicate_from
+                }
+                for i in range(1, 4):
+                    for j in range(1, 6):
+                        filter_key = f'Filter{i}_{j}'
+                        if filter_key in original_item:
+                            duplicate_data[f'filter{i}_{j}'] = original_item[filter_key]
+                flash('Buch wird dupliziert. Bitte überprüfen Sie die Daten und passen Sie sie bei Bedarf an.', 'info')
+            else:
+                flash('Ursprungs-Element für Duplizierung nicht gefunden.', 'error')
+        except Exception as e:
+            print(f"Error loading item for duplication: {e}")
+            flash('Fehler beim Laden der Duplizierungsdaten.', 'error')
+    elif duplicate_flag == 'true':
+        flash('Buch wird dupliziert. Die Daten werden aus dem Session-Speicher geladen.', 'info')
+
+    return render_template(
+        'upload_admin.html',
+        username=session['username'],
+        duplicate_data=duplicate_data,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        show_library_features=True,
+        upload_mode='library',
+        page_title='Buch hochladen',
+        back_target='home_admin'
+    )
+
+
+@app.route('/student_cards_admin', methods=['GET', 'POST'])
+def student_cards_admin():
+    """
+    Admin page for managing student library cards (Schülerausweise).
+    Only accessible by admins and only when the student cards module is enabled.
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    student_cards = db['student_cards']
+
+    edit_mode = False
+    form_data = {}
+
+    # Handle GET request to edit a card
+    edit_id = request.args.get('edit')
+    if edit_id:
+        try:
+            card = student_cards.find_one({'_id': ObjectId(edit_id)})
+            if card:
+                edit_mode = True
+                form_data = {
+                    'card_id': str(card['_id']),
+                    'ausweis_id': card.get('AusweisId', ''),
+                    'student_name': card.get('SchülerName', ''),
+                    'default_borrow_days': card.get('StandardAusleihdauer', 14),
+                    'class_name': card.get('Klasse', ''),
+                    'notes': card.get('Notizen', '')
+                }
+        except Exception as e:
+            print(f"Error loading student card for edit: {e}")
+            flash('Fehler beim Laden des Ausweises.', 'error')
+
+    # Handle POST request (add or edit)
+    if request.method == 'POST':
+        action = request.form.get('action', 'add')
+        ausweis_id = request.form.get('ausweis_id', '').strip().upper()
+        student_name = request.form.get('student_name', '').strip()
+        default_borrow_days = request.form.get('default_borrow_days', 14)
+        class_name = request.form.get('class_name', '').strip()
+        notes = request.form.get('notes', '').strip()
+
+        if action == 'delete':
+            try:
+                card_id = request.form.get('card_id')
+                student_cards.delete_one({'_id': ObjectId(card_id)})
+                flash('Ausweis wurde gelöscht.', 'success')
+            except Exception as e:
+                print(f"Error deleting student card: {e}")
+                flash('Fehler beim Löschen des Ausweises.', 'error')
+
+        elif action == 'edit':
+            if not ausweis_id or not student_name:
+                flash('Bitte Ausweis-ID und Schülername angeben.', 'error')
+            else:
+                try:
+                    card_id = request.form.get('card_id')
+                    # Check if new ID already exists (and it's not the same card)
+                    existing = student_cards.find_one({'AusweisId': ausweis_id, '_id': {'$ne': ObjectId(card_id)}})
+                    if existing:
+                        flash('Diese Ausweis-ID existiert bereits.', 'error')
+                    else:
+                        student_cards.update_one(
+                            {'_id': ObjectId(card_id)},
+                            {'$set': {
+                                'AusweisId': ausweis_id,
+                                'SchülerName': student_name,
+                                'StandardAusleihdauer': int(default_borrow_days),
+                                'Klasse': class_name,
+                                'Notizen': notes,
+                                'Aktualisiert': datetime.datetime.now()
+                            }}
+                        )
+                        flash('Ausweis wurde aktualisiert.', 'success')
+                        return redirect(url_for('student_cards_admin'))
+                except Exception as e:
+                    print(f"Error updating student card: {e}")
+                    flash('Fehler beim Aktualisieren des Ausweises.', 'error')
+
+        elif action == 'add':
+            if not ausweis_id or not student_name:
+                flash('Bitte Ausweis-ID und Schülername angeben.', 'error')
+            else:
+                # Check if ID already exists
+                existing = student_cards.find_one({'AusweisId': ausweis_id})
+                if existing:
+                    flash('Diese Ausweis-ID existiert bereits.', 'error')
+                else:
+                    try:
+                        student_cards.insert_one({
+                            'AusweisId': ausweis_id,
+                            'SchülerName': student_name,
+                            'StandardAusleihdauer': int(default_borrow_days),
+                            'Klasse': class_name,
+                            'Notizen': notes,
+                            'Erstellt': datetime.datetime.now()
+                        })
+                        flash('Neuer Ausweis wurde hinzugefügt.', 'success')
+                        return redirect(url_for('student_cards_admin'))
+                    except Exception as e:
+                        print(f"Error adding student card: {e}")
+                        flash('Fehler beim Hinzufügen des Ausweises.', 'error')
+
+    # Get all student cards
+    all_cards = list(student_cards.find().sort('AusweisId', 1))
+    client.close()
+
+    return render_template(
+        'student_cards_admin.html',
+        username=session['username'],
+        student_cards=all_cards,
+        edit_mode=edit_mode,
+        form_data=form_data,
+        config={'default': cfg.STUDENT_DEFAULT_BORROW_DAYS}
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -973,7 +1514,10 @@ def get_items():
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
-        items_cur = items_col.find({'IsGroupedSubItem': {'$ne': True}})
+        items_cur = items_col.find({
+            'IsGroupedSubItem': {'$ne': True},
+            'ItemType': {'$nin': LIBRARY_ITEM_TYPES}
+        })
         items = []
         for itm in items_cur:
             item_id_str = str(itm['_id'])
@@ -1212,6 +1756,8 @@ def upload_item():
         anschaffungs_jahr = sanitize_form_value(request.form.getlist('anschaffungsjahr'))
         anschaffungs_kosten = sanitize_form_value(request.form.getlist('anschaffungskosten'))
         code_4 = sanitize_form_value(request.form.getlist('code_4'))
+        isbn_raw = sanitize_form_value(request.form.get('isbn', ''))
+        upload_mode = sanitize_form_value(request.form.get('upload_mode', 'item'))
         individual_codes_raw = sanitize_form_value(request.form.get('individual_codes', ''))
         item_count_raw = sanitize_form_value(request.form.get('item_count', '1'))
 
@@ -1278,8 +1824,37 @@ def upload_item():
             flash(error_msg, 'error')
             return redirect(url_for('home_admin'))
 
+    item_isbn = ''
+    item_type = 'general'
+    if cfg.LIBRARY_MODULE_ENABLED:
+        item_isbn = normalize_and_validate_isbn(isbn_raw)
+        if isbn_raw and not item_isbn:
+            error_msg = 'Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
+        if item_isbn:
+            item_type = 'book'
+
+    if upload_mode == 'library':
+        if not cfg.LIBRARY_MODULE_ENABLED:
+            error_msg = 'Bibliotheks-Modul ist deaktiviert.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('home_admin'))
+        if not item_isbn:
+            error_msg = 'Für Bücher ist eine gültige ISBN erforderlich.'
+            if is_mobile:
+                return jsonify({'success': False, 'message': error_msg}), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('library_admin'))
+        item_type = 'book'
+
     # Only check for images if not duplicating and no duplicate images provided and no book cover
-    if not is_duplicating and not images and not duplicate_images and not book_cover_image:
+    # For library mode, skip this check as images come only from ISBN fetch
+    if upload_mode != 'library' and not is_duplicating and not images and not duplicate_images and not book_cover_image:
         error_msg = 'Bitte laden Sie mindestens ein Bild hoch'
         if is_mobile:
             return jsonify({'success': False, 'message': error_msg}), 400
@@ -1356,6 +1931,12 @@ def upload_item():
     
     # Process each image independently
     for index, image in enumerate(images):
+        # In library mode, skip manual image uploads (use only book_cover_image from ISBN fetch)
+        if upload_mode == 'library':
+            app.logger.info(f"[Library Mode] Skipping manual image upload {index+1}/{len(images)}")
+            skipped_count += 1
+            continue
+        
         image_log_prefix = f"[Upload {upload_session_id}][Image {index+1}/{len(images)}]"
         
         if not image or not image.filename or image.filename == '':
@@ -2019,7 +2600,9 @@ def upload_item():
             series_count=item_count,
             series_position=position,
             is_grouped_sub_item=(position > 1),
-            parent_item_id=parent_item_id
+            parent_item_id=parent_item_id,
+            isbn=item_isbn,
+            item_type=item_type
         )
         if not item_id:
             break
@@ -2281,7 +2864,18 @@ def edit_item(id):
     anschaffungs_jahr = sanitize_form_value(request.form.get('anschaffungsjahr'))
     anschaffungs_kosten = sanitize_form_value(request.form.get('anschaffungskosten'))
     code_4 = sanitize_form_value(request.form.get('code_4'))
+    isbn_raw = sanitize_form_value(request.form.get('isbn', ''))
     reservierbar = 'reservierbar' in request.form
+
+    item_isbn = ''
+    item_type = 'general'
+    if cfg.LIBRARY_MODULE_ENABLED:
+        item_isbn = normalize_and_validate_isbn(isbn_raw)
+        if isbn_raw and not item_isbn:
+            flash('Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden.', 'error')
+            return redirect(url_for('home_admin'))
+        if item_isbn:
+            item_type = 'book'
     
     # Check if code is unique (excluding the current item)
     if code_4 and not it.is_code_unique(code_4, exclude_id=id):
@@ -2348,7 +2942,9 @@ def edit_item(id):
     result = it.update_item(
         id, name, ort, beschreibung, 
         images, verfuegbar, filter1, filter2, filter3,
-        anschaffungs_jahr, anschaffungs_kosten, code_4, reservierbar
+        anschaffungs_jahr, anschaffungs_kosten, code_4, reservierbar,
+        isbn=item_isbn,
+        item_type=item_type
     )
     
     if result:
@@ -2536,7 +3132,77 @@ def ausleihen(id):
         return redirect(url_for('home'))
 
     username = session['username']
+    redirect_target = 'home_admin' if us.check_admin(username) else 'home'
+    effective_borrower = username
+    borrow_duration_days = None
+    student_card_id = us.normalize_student_card_id(request.form.get('borrower_card_id'))
+    item_type = str(item.get('ItemType', '')).strip().lower()
+    is_library_item = item_type in LIBRARY_ITEM_TYPES
+
+    # Library media can only be borrowed with a valid student card.
+    if is_library_item:
+        if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+            flash('Bibliotheksmedien können nur mit aktivem Schülerausweis-Modul ausgeliehen werden.', 'error')
+            return redirect(url_for(redirect_target))
+        if not student_card_id:
+            flash('Für Bibliotheksmedien ist eine gültige Schülerausweis-ID erforderlich.', 'error')
+            return redirect(url_for(redirect_target))
+
+        client = None
+        try:
+            client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+            db = client[MONGODB_DB]
+            student_cards_col = db['student_cards']
+            card_doc = student_cards_col.find_one({'AusweisId': student_card_id})
+            if not card_doc:
+                flash('Ungültige Schülerausweis-ID. Bibliotheksmedien können nur mit gültigem Ausweis ausgeliehen werden.', 'error')
+                return redirect(url_for(redirect_target))
+
+            effective_borrower = card_doc.get('SchülerName') or f"Ausweis {student_card_id}"
+
+            if not (request.form.get('borrow_duration_days') or '').strip():
+                try:
+                    card_default = int(card_doc.get('StandardAusleihdauer', cfg.STUDENT_DEFAULT_BORROW_DAYS))
+                except (TypeError, ValueError):
+                    card_default = cfg.STUDENT_DEFAULT_BORROW_DAYS
+                borrow_duration_days = max(1, min(card_default, cfg.STUDENT_MAX_BORROW_DAYS))
+        finally:
+            if client:
+                client.close()
+
+    if cfg.STUDENT_CARDS_MODULE_ENABLED:
+        duration_raw = (request.form.get('borrow_duration_days') or '').strip()
+        if duration_raw:
+            try:
+                parsed_duration = int(duration_raw)
+                if 1 <= parsed_duration <= cfg.STUDENT_MAX_BORROW_DAYS:
+                    borrow_duration_days = parsed_duration
+                else:
+                    flash(f'Ausleihdauer muss zwischen 1 und {cfg.STUDENT_MAX_BORROW_DAYS} Tagen liegen.', 'error')
+                    return redirect(url_for(redirect_target))
+            except ValueError:
+                flash('Ungültige Ausleihdauer angegeben.', 'error')
+                return redirect(url_for(redirect_target))
+
+        # Admins can borrow on behalf of students via student card id.
+        if us.check_admin(username) and not is_library_item:
+            if student_card_id:
+                student_user = us.get_user_by_student_card(student_card_id)
+                if not student_user:
+                    flash('Keine Schülerin/kein Schüler mit dieser Ausweis-ID gefunden.', 'error')
+                    return redirect(url_for('home_admin'))
+                effective_borrower = student_user.get('Username') or student_user.get('username') or username
+                if borrow_duration_days is None:
+                    try:
+                        card_default = int(student_user.get('MaxBorrowDays', cfg.STUDENT_DEFAULT_BORROW_DAYS))
+                    except (TypeError, ValueError):
+                        card_default = cfg.STUDENT_DEFAULT_BORROW_DAYS
+                    borrow_duration_days = max(1, min(card_default, cfg.STUDENT_MAX_BORROW_DAYS))
+
     start_date = datetime.datetime.now()
+    end_date = None
+    if borrow_duration_days:
+        end_date = start_date + datetime.timedelta(days=borrow_duration_days)
 
     # Grouped inventory mode: parent item + hidden sub-items are handled as separate physical units.
     try:
@@ -2580,8 +3246,8 @@ def ausleihen(id):
 
         for unit in selected_units:
             unit_id = str(unit.get('_id'))
-            it.update_item_status(unit_id, False, username)
-            au.add_ausleihung(unit_id, username, start_date)
+            it.update_item_status(unit_id, False, effective_borrower)
+            au.add_ausleihung(unit_id, effective_borrower, start_date, end_date=end_date)
 
         if len(selected_units) == 1:
             selected_code = selected_units[0].get('Code_4') or '-'
@@ -2660,9 +3326,9 @@ def ausleihen(id):
     
     # If the item doesn't use exemplars (single item)
     if total_exemplare <= 1:
-        it.update_item_status(id, False, username)
+        it.update_item_status(id, False, effective_borrower)
         start_date = datetime.datetime.now()
-        au.add_ausleihung(id, username, start_date)
+        au.add_ausleihung(id, effective_borrower, start_date, end_date=end_date)
         flash('Element erfolgreich ausgeliehen', 'success')
     else:
         # Handle multi-exemplar item
@@ -2679,7 +3345,7 @@ def ausleihen(id):
                 
             new_borrowed_exemplars.append({
                 'number': exemplar_number,
-                'user': username,
+                'user': effective_borrower,
                 'date': current_date
             })
         
@@ -2697,7 +3363,7 @@ def ausleihen(id):
         start_date = datetime.datetime.now()
         for exemplar in new_borrowed_exemplars:
             exemplar_id = f"{id}_{exemplar['number']}"
-            au.add_ausleihung(exemplar_id, username, start_date, exemplar_data={
+            au.add_ausleihung(exemplar_id, effective_borrower, start_date, end_date=end_date, exemplar_data={
                 'parent_id': id,
                 'exemplar_number': exemplar['number']
             })
@@ -3330,6 +3996,9 @@ def register():
             password = request.form['password']
             name = request.form['name']
             last_name = request.form['last-name']
+            is_student = bool(request.form.get('is_student')) if cfg.STUDENT_CARDS_MODULE_ENABLED else False
+            student_card_id = us.normalize_student_card_id(request.form.get('student_card_id')) if cfg.STUDENT_CARDS_MODULE_ENABLED else ''
+            max_borrow_days_raw = request.form.get('max_borrow_days') if cfg.STUDENT_CARDS_MODULE_ENABLED else None
             if not username or not password:
                 flash('Bitte füllen Sie alle Felder aus', 'error')
                 return redirect(url_for('register'))
@@ -3339,9 +4008,37 @@ def register():
             if not us.check_password_strength(password):
                 flash('Passwort ist zu schwach', 'error')
                 return redirect(url_for('register'))
-            us.add_user(username, password, name, last_name)
+
+            max_borrow_days = None
+            if is_student:
+                if not student_card_id:
+                    flash('Für Schüler muss eine Ausweis-ID angegeben werden.', 'error')
+                    return redirect(url_for('register'))
+                if us.student_card_exists(student_card_id):
+                    flash('Die Ausweis-ID ist bereits vergeben.', 'error')
+                    return redirect(url_for('register'))
+                try:
+                    max_borrow_days = int(max_borrow_days_raw) if max_borrow_days_raw else cfg.STUDENT_DEFAULT_BORROW_DAYS
+                except (TypeError, ValueError):
+                    max_borrow_days = cfg.STUDENT_DEFAULT_BORROW_DAYS
+                max_borrow_days = max(1, min(max_borrow_days, cfg.STUDENT_MAX_BORROW_DAYS))
+
+            us.add_user(
+                username,
+                password,
+                name,
+                last_name,
+                is_student=is_student,
+                student_card_id=student_card_id if is_student else None,
+                max_borrow_days=max_borrow_days
+            )
             return redirect(url_for('home'))
-        return render_template('register.html')
+        return render_template(
+            'register.html',
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+            student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+            student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+        )
     flash('Sie sind nicht berechtigt, diese Seite anzuzeigen', 'error')
     return redirect(url_for('login'))
 
@@ -3968,56 +4665,87 @@ def fetch_book_info(isbn):
     Returns:
         dict: Book information or error message
     """
+    if 'username' not in session or not us.check_admin(session['username']):
+        return jsonify({"error": "Not authorized"}), 403
+
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        return jsonify({"error": "Bibliotheks-Modul ist deaktiviert."}), 403
+
     try:
-        # Clean the ISBN (remove hyphens and spaces)
-        clean_isbn = isbn.replace('-', '').replace(' ', '')
-        
-        # Query the Google Books API
-        response = requests.get(f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}")
-        
-        # Check if the request was successful
-        if response.status_code != 200:
-            return jsonify({"error": f"API request failed with status code: {response.status_code}"}), 500
-        
-        # Parse the response
-        data = response.json()
-        
-        # Check if books were found
-        if data.get('totalItems', 0) == 0:
-            return jsonify({"error": f"No books found for ISBN: {isbn}"}), 404
-        
-        # Get the first book's information
-        book_info = data['items'][0]['volumeInfo']
-        sale_info = data['items'][0].get('saleInfo', {})
-        
-        # Extract price information if available
-        price = None
-        retail_price = sale_info.get('retailPrice', {})
-        list_price = sale_info.get('listPrice', {})
-        
-        if retail_price and 'amount' in retail_price:
-            price = f"{retail_price['amount']} {retail_price.get('currencyCode', '€')}"
-        elif list_price and 'amount' in list_price:
-            price = f"{list_price['amount']} {list_price.get('currencyCode', '€')}"
-        
-        # Extract relevant information
-        result = {
-            "title": book_info.get('title', 'Unknown Title'),
-            "authors": ', '.join(book_info.get('authors', ['Unknown Author'])),
-            "publisher": book_info.get('publisher', 'Unknown Publisher'),
-            "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
-            "description": book_info.get('description', 'No description available'),
-            "pageCount": book_info.get('pageCount', 'Unknown'),
-            "price": price
-        }
-        
-        # Ensure thumbnail URL uses HTTPS
-        thumbnail = book_info.get('imageLinks', {}).get('thumbnail', '')
-        if thumbnail:
-            thumbnail = thumbnail.replace('http:', 'https:')
-        result["thumbnail"] = thumbnail
-        
-        return jsonify(result)
+        clean_isbn = normalize_and_validate_isbn(isbn)
+        if not clean_isbn:
+            return jsonify({"error": "Ungültige ISBN. Bitte ISBN-10 oder ISBN-13 verwenden."}), 400
+
+        # First source: Google Books
+        response = requests.get(
+            f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}",
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('totalItems', 0) > 0 and data.get('items'):
+                book_info = data['items'][0].get('volumeInfo', {})
+                sale_info = data['items'][0].get('saleInfo', {})
+
+                price = None
+                retail_price = sale_info.get('retailPrice', {})
+                list_price = sale_info.get('listPrice', {})
+                if retail_price and 'amount' in retail_price:
+                    price = f"{retail_price['amount']} {retail_price.get('currencyCode', '€')}"
+                elif list_price and 'amount' in list_price:
+                    price = f"{list_price['amount']} {list_price.get('currencyCode', '€')}"
+
+                thumbnail = book_info.get('imageLinks', {}).get('thumbnail', '')
+                if thumbnail:
+                    thumbnail = thumbnail.replace('http:', 'https:')
+
+                return jsonify({
+                    "title": book_info.get('title', 'Unknown Title'),
+                    "authors": ', '.join(book_info.get('authors', ['Unknown Author'])),
+                    "publisher": book_info.get('publisher', 'Unknown Publisher'),
+                    "publishedDate": book_info.get('publishedDate', 'Unknown Date'),
+                    "description": book_info.get('description', 'No description available'),
+                    "pageCount": book_info.get('pageCount', 'Unknown'),
+                    "price": price,
+                    "thumbnail": thumbnail,
+                    "isbn": clean_isbn,
+                    "source": "google-books"
+                })
+
+        # Fallback: OpenLibrary
+        ol_response = requests.get(
+            f"https://openlibrary.org/isbn/{clean_isbn}.json",
+            timeout=10
+        )
+        if ol_response.status_code == 200:
+            ol_data = ol_response.json()
+            author_names = []
+            for author_ref in ol_data.get('authors', []):
+                key = author_ref.get('key')
+                if not key:
+                    continue
+                try:
+                    author_resp = requests.get(f"https://openlibrary.org{key}.json", timeout=8)
+                    if author_resp.status_code == 200:
+                        author_names.append(author_resp.json().get('name'))
+                except Exception:
+                    continue
+
+            return jsonify({
+                "title": ol_data.get('title', 'Unknown Title'),
+                "authors": ', '.join([a for a in author_names if a]) if author_names else 'Unknown Author',
+                "publisher": ', '.join(ol_data.get('publishers', [])) if ol_data.get('publishers') else 'Unknown Publisher',
+                "publishedDate": ol_data.get('publish_date', 'Unknown Date'),
+                "description": (ol_data.get('description', {}).get('value') if isinstance(ol_data.get('description'), dict) else ol_data.get('description')) or 'No description available',
+                "pageCount": ol_data.get('number_of_pages', 'Unknown'),
+                "price": None,
+                "thumbnail": f"https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg",
+                "isbn": clean_isbn,
+                "source": "openlibrary"
+            })
+
+        return jsonify({"error": f"Kein Buch zu dieser ISBN gefunden: {clean_isbn}"}), 404
         
     except Exception as e:
         print(f"Error fetching book data: {e}")
@@ -4035,6 +4763,8 @@ def download_book_cover():
         return jsonify({"error": "Not authorized"}), 403
     if not us.check_admin(session['username']):
         return jsonify({"error": "Admin privileges required"}), 403
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        return jsonify({"error": "Bibliotheks-Modul ist deaktiviert."}), 403
     
     try:
         data = request.get_json()

@@ -32,12 +32,24 @@ import datetime
 import settings as cfg
 
 
+LIBRARY_ITEM_TYPES = ('book', 'cd', 'dvd', 'media')
+
+
+def _non_library_query(extra_query=None):
+    """Build a query that excludes library media items from normal inventory."""
+    base_query = {'ItemType': {'$nin': list(LIBRARY_ITEM_TYPES)}}
+    if extra_query:
+        base_query.update(extra_query)
+    return base_query
+
+
 # === ITEM MANAGEMENT ===
 
 def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, filter3=None,
              ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True,
              series_group_id=None, series_count=1, series_position=1,
-             is_grouped_sub_item=False, parent_item_id=None):
+             is_grouped_sub_item=False, parent_item_id=None,
+             isbn=None, item_type='general'):
     """
     Add a new item to the inventory.
     
@@ -84,6 +96,8 @@ def add_item(name, ort, beschreibung, images=None, filter=None, filter2=None, fi
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
+            'ISBN': isbn,
+            'ItemType': item_type,
             'SeriesGroupId': series_group_id,
             'SeriesCount': series_count,
             'SeriesPosition': series_position,
@@ -173,7 +187,8 @@ def get_group_item_ids(id):
 
 
 def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True, 
-                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True):
+                filter=None, filter2=None, filter3=None, ansch_jahr=None, ansch_kost=None, code_4=None, reservierbar=True,
+                isbn=None, item_type='general'):
     """
     Update an existing inventory item.
     
@@ -217,6 +232,8 @@ def update_item(id, name, ort, beschreibung, images=None, verfuegbar=True,
             'Anschaffungsjahr': ansch_jahr,
             'Anschaffungskosten': ansch_kost,
             'Code_4': code_4,
+            'ISBN': isbn,
+            'ItemType': item_type,
             'LastUpdated': datetime.datetime.now()
         }
 
@@ -351,7 +368,7 @@ def get_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find()
+        items_return = items.find(_non_library_query())
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -374,7 +391,7 @@ def get_available_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find({'Verfuegbar': True})
+        items_return = items.find(_non_library_query({'Verfuegbar': True}))
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -397,7 +414,7 @@ def get_borrowed_items():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        items_return = items.find({'Verfuegbar': False})
+        items_return = items.find(_non_library_query({'Verfuegbar': False}))
         items_list = []
         for item in items_return:
             item['_id'] = str(item['_id'])
@@ -469,13 +486,13 @@ def get_items_by_filter(filter_value):
         items = db['items']
         
         # Use $or to find matches in any filter field
-        query = {
+        query = _non_library_query({
             '$or': [
                 {'Filter': filter_value},
                 {'Filter2': filter_value},
                 {'Filter3': filter_value}
             ]
-        }
+        })
         
         results = list(items.find(query))
         client.close()
@@ -501,9 +518,10 @@ def get_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = items.distinct('Filter')
-        filters2 = items.distinct('Filter2')
-        filters3 = items.distinct('Filter3')
+        non_library = _non_library_query()
+        filters = items.distinct('Filter', non_library)
+        filters2 = items.distinct('Filter2', non_library)
+        filters3 = items.distinct('Filter3', non_library)
         
         # Combine filters and remove None/empty values
         all_filters = [f for f in filters + filters2 + filters3 if f]
@@ -532,7 +550,7 @@ def get_primary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter') if f]
+        filters = [f for f in items.distinct('Filter', _non_library_query()) if f]
         client.close()
         return filters
     except Exception as e:
@@ -551,7 +569,7 @@ def get_secondary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter2') if f]
+        filters = [f for f in items.distinct('Filter2', _non_library_query()) if f]
         client.close()
         return filters
     except Exception as e:
@@ -570,7 +588,7 @@ def get_tertiary_filters():
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        filters = [f for f in items.distinct('Filter3') if f]
+        filters = [f for f in items.distinct('Filter3', _non_library_query()) if f]
         client.close()
         return filters
     except Exception as e:
@@ -592,7 +610,7 @@ def get_item_by_code_4(code_4):
         client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
         db = client[cfg.MONGODB_DB]
         items = db['items']
-        results = list(items.find({"Code_4": code_4}))
+        results = list(items.find(_non_library_query({"Code_4": code_4})))
         
         # Convert ObjectId to string
         for item in results:

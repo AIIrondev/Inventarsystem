@@ -67,6 +67,16 @@ DEFAULTS = {
         "8": {"start": "14:15", "end": "15:00", "label": "8. Stunde (14:15 - 15:00)"},
         "9": {"start": "15:15", "end": "16:00", "label": "9. Stunde (15:15 - 16:00)"},
         "10": {"start": "16:00", "end": "16:45", "label": "10. Stunde (16:00 - 16:45)"}
+    },
+    'modules': {
+        'library': {
+            'enabled': False
+        },
+        'student_cards': {
+            'enabled': False,
+            'default_borrow_days': 14,
+            'max_borrow_days': 365
+        }
     }
 }
 
@@ -117,6 +127,12 @@ SSL_KEY = _get(_conf, ['ssl', 'key'], DEFAULTS['ssl']['key'])
 
 # School periods
 SCHOOL_PERIODS = _get(_conf, ['schoolPeriods'], DEFAULTS['schoolPeriods'])
+
+# Optional feature modules
+LIBRARY_MODULE_ENABLED = bool(_get(_conf, ['modules', 'library', 'enabled'], DEFAULTS['modules']['library']['enabled']))
+STUDENT_CARDS_MODULE_ENABLED = bool(_get(_conf, ['modules', 'student_cards', 'enabled'], DEFAULTS['modules']['student_cards']['enabled']))
+STUDENT_DEFAULT_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'default_borrow_days'], DEFAULTS['modules']['student_cards']['default_borrow_days']))
+STUDENT_MAX_BORROW_DAYS = int(_get(_conf, ['modules', 'student_cards', 'max_borrow_days'], DEFAULTS['modules']['student_cards']['max_borrow_days']))
 
 # Upload/paths
 ALLOWED_EXTENSIONS = set(_get(_conf, ['allowed_extensions'], DEFAULTS['upload']['allowed_extensions']))

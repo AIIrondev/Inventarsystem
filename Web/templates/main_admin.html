@@ -2447,6 +2447,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     let descSearchIds = null; // Set of matching IDs or null when disabled
     let currentUsername = '';
     let allItems = []; // Cache for all items
+    const studentCardsModuleEnabled = {{ 'true' if student_cards_module_enabled else 'false' }};
+    const studentDefaultBorrowDays = {{ student_default_borrow_days|default(14) }};
+    const studentMaxBorrowDays = {{ student_max_borrow_days|default(365) }};
     
     // Get the highlight item ID from the pre-processed server variables
     let highlightItemId = window.serverVars.highlightItemId;
@@ -3105,6 +3108,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                                 <option value="">Automatisch wählen</option>
                                                 ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code}</option>`).join('')}
                                             </select>
+                                        </div>` : ''}
+                                        ${studentCardsModuleEnabled ? `
+                                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                            <label style="font-size:0.85rem; margin:0;">Ausweis-ID:</label>
+                                            <input type="text" name="borrower_card_id" placeholder="optional" style="max-width:140px; padding:4px;">
+                                            <label style="font-size:0.85rem; margin:0;">Dauer (Tage):</label>
+                                            <input type="number" name="borrow_duration_days" min="1" max="${studentMaxBorrowDays}" value="${studentDefaultBorrowDays}" style="width:84px; padding:4px;">
                                         </div>` : ''}
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
@@ -3808,6 +3818,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 <option value="">Automatisch wählen</option>
                                 ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${escapeHtml(unit.code || '-')}</option>`).join('')}
                             </select>
+                        </div>` : ''}
+                        ${studentCardsModuleEnabled ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                            <label style="font-size:0.85rem; margin:0;">Ausweis-ID:</label>
+                            <input type="text" name="borrower_card_id" placeholder="optional" style="max-width:160px; padding:4px;">
+                            <label style="font-size:0.85rem; margin:0;">Dauer (Tage):</label>
+                            <input type="number" name="borrow_duration_days" min="1" max="${studentMaxBorrowDays}" value="${studentDefaultBorrowDays}" style="width:84px; padding:4px;">
                         </div>` : ''}
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
