@@ -1,149 +1,200 @@
-<!--
-   Copyright 2025-2026 AIIrondev
-
-   Licensed under the Inventarsystem EULA (Endbenutzer-Lizenzvertrag).
-   See Legal/LICENSE for the full license text.
-   Unauthorized commercial use, SaaS hosting, or removal of branding is prohibited.
-   For commercial licensing inquiries: https://github.com/AIIrondev
--->
-{% extends "base.html" %}
-
-{% block title %}Inventarsystem{% endblock %}
-
-{% block content %}
-<style>
-    /* Bootstrap CSS variables */
-    :root {
-        --bs-blue: #0d6efd;
-        --bs-indigo: #6610f2;
-        --bs-purple: #6f42c1;
-        --bs-pink: #d63384;
-        --bs-red: #dc3545;
-        --bs-orange: #fd7e14;
-        --bs-yellow: #ffc107;
-        --bs-green: #198754;
-        --bs-teal: #20c997;
-        --bs-cyan: #0dcaf0;
-        --bs-black: #000;
-        --bs-white: #fff;
-        --bs-gray: #6c757d;
-        --bs-gray-dark: #343a40;
-        --bs-gray-100: #f8f9fa;
-        --bs-gray-200: #e9ecef;
-        --bs-gray-300: #dee2e6;
-        --bs-gray-400: #ced4da;
-        --bs-gray-500: #adb5bd;
-        --bs-gray-600: #6c757d;
-        --bs-gray-700: #495057;
-        --bs-gray-800: #343a40;
-        --bs-gray-900: #212529;
-        --bs-primary: #0d6efd;
-        --bs-secondary: #6c757d;
-        --bs-success: #198754;
-        --bs-info: #0dcaf0;
-        --bs-warning: #ffc107;
-        --bs-danger: #dc3545;
-        --bs-light: #f8f9fa;
-        --bs-dark: #212529;
-        --bs-primary-rgb: 13,110,253;
-        --bs-secondary-rgb: 108,117,125;
-        --bs-success-rgb: 25,135,84;
-        --bs-info-rgb: 13,202,240;
-        --bs-warning-rgb: 255,193,7;
-        --bs-danger-rgb: 220,53,69;
-        --bs-light-rgb: 248,249,250;
-        --bs-dark-rgb: 33,37,41;
-        --bs-border-width: 1px;
-        --bs-border-style: solid;
-        --bs-border-color: #dee2e6;
-        --bs-border-radius: 0.375rem;
-        --bs-border-radius-lg: 0.5rem;
-        --bs-box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        --bs-box-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        --bs-box-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    /* Calendar styles for detailed view */
+    .calendar-wrapper {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 10px;
     }
 
-    /* Main container and layout styles */
-    body {
-        font-family: var(--bs-font-sans-serif, Arial, sans-serif);
-        background-color: var(--bs-gray-100);
-        margin: 0;
-        padding: 0;
-        color: var(--bs-body-color, #212529);
-    }
-
-    .container {
-        background-color: var(--bs-white);
-        padding: 20px;
-        border-radius: var(--bs-border-radius);
-        box-shadow: var(--bs-box-shadow);
-        width: 80%;
-        max-width: 1200px;
-        margin: 20px auto;
-    }
-
-    h1, h2 {
-        text-align: center;
-    }
-
-    /* Filter styles */
-    .filter-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 20px;
-        justify-content: center;
-        margin-bottom: 20px;
-    }
-
-    .filter-group {
-        position: relative;
-        min-width: 200px;
-        background-color: #fff;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .filter-header {
+    .calendar-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 10px;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid #e7edf5;
+        background: #f8fafc;
     }
 
-    .filter-toggle, .clear-filter {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 3px;
-        padding: 3px 8px;
+    .calendar-header button {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #dbe3ee;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        font-weight: 700;
+        line-height: 1;
         cursor: pointer;
     }
 
-    .clear-filter {
-        font-size: 0.8rem;
-        color: #6c757d;
+    .calendar-header button:hover {
+        background: #f1f5f9;
     }
 
-    .filter-dropdown {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        width: 100%;
-        max-height: 300px;
-        overflow-y: auto;
-        background-color: white;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        z-index: 100;
+    .calendar-header span {
+        font-weight: 700;
+        font-size: 1rem;
+        color: #0f172a;
+        text-align: center;
+        flex: 1;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         padding: 8px;
+        gap: 4px;
     }
 
-    .filter-options {
+    .cal-cell {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: #334155;
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .cal-cell.header {
+        aspect-ratio: auto;
+        height: 28px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #64748b;
+        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .cal-cell:not(.header):not(.empty):hover {
+        background: #f1f5f9;
+    }
+
+    .cal-cell.empty {
+        cursor: default;
+    }
+
+    .cal-cell.today {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+    }
+
+    .cal-cell.selected {
+        background: #2563eb !important;
+        color: #fff !important;
+    }
+
+    .cal-cell.has-booking::after {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #ef4444;
+        position: absolute;
+        bottom: 5px;
+    }
+
+    .cal-cell.selected.has-booking::after {
+        background: #fff;
+    }
+
+    .calendar-day-details {
+        border-top: 1px solid #e7edf5;
+        padding: 12px;
+        background: #f8fafc;
+        display: none;
+    }
+
+    .calendar-day-details h5 {
+        margin: 0 0 10px;
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    #cal-details-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .cal-empty-state {
+        font-size: 0.9rem;
+        color: #64748b;
+        padding: 8px 2px;
+    }
+
+    .cal-booking-item {
+        background: #fff;
+        border: 1px solid #dbe3ee;
+        border-left: 3px solid #2563eb;
+        border-radius: 10px;
         padding: 10px;
+        display: grid;
+        gap: 6px;
     }
 
+    .cal-booking-label {
+        display: inline-block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-right: 6px;
+        font-weight: 700;
+    }
+
+    .cal-booking-time,
+    .cal-booking-user,
+    .cal-booking-note {
+        font-size: 0.9rem;
+        color: #1f2937;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+
+    .cal-booking-time strong {
+        font-size: 0.94rem;
+        color: #0f172a;
+    }
+
+    .cal-booking-period {
+        margin-left: 8px;
+        color: #475569;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    @media (max-width: 480px) {
+        .calendar-grid {
+            gap: 3px;
+            padding: 6px;
+        }
+
+        .cal-cell {
+            font-size: 0.86rem;
+            border-radius: 7px;
+        }
+
+        .calendar-header {
+            padding: 10px;
+        }
+
+        .calendar-header span {
+            font-size: 0.95rem;
+        }
+
+        .calendar-day-details {
+            padding: 10px;
+        }
+    }
     .filter-option {
         margin-bottom: 5px;
         display: flex;
@@ -293,9 +344,14 @@
     </script>
     <div class="content">
         <h1 style="position:relative;">Inventar Objekte
-            <button id="toggle-favorites-view" title="Nur Merkliste anzeigen" style="position:absolute; right:0; top:0; background:none; border:none; font-size:1.4rem; cursor:pointer;">
-                <span id="favorites-view-icon">🔖</span>
-            </button>
+            <div class="view-switch-group">
+                <button id="toggle-view-mode" class="view-toggle-btn" title="In Tabellenansicht wechseln">
+                    <span id="view-mode-icon">🗂</span>
+                </button>
+                <button id="toggle-favorites-view" class="view-toggle-btn" title="Nur Merkliste anzeigen">
+                    <span id="favorites-view-icon">🔖</span>
+                </button>
+            </div>
         </h1>
         <div class="filter-container">
             <div class="filter-group">
@@ -367,8 +423,16 @@
             </div>
         </div>
         <div class="qr-container">
-            <button id="scanButton" class="scan-button">Barcode scannen</button>
+            <button id="scanButton" class="scan-button" aria-controls="qr-reader" aria-expanded="false">Barcode scannen</button>
             <div id="qr-reader"></div>
+        </div>
+        <div id="table-view-header" class="table-view-header" aria-hidden="true">
+            <span>Name</span>
+            <span>Ort</span>
+            <span>Unterrichtsfach</span>
+            <span>Jahrgangsstufe</span>
+            <span>Thema</span>
+            <span>Barcode</span>
         </div>
         <div id="items-container" class="items-container">
             <!-- Items will be dynamically loaded here -->
@@ -483,6 +547,12 @@
 
         if (!scanButton || !qrReader) return;
 
+        const setScannerUi = (isOpen) => {
+            scanButton.classList.toggle('is-active', isOpen);
+            scanButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            scanButton.textContent = isOpen ? 'Scanner schliessen' : 'Barcode scannen';
+        };
+
         scanButton.addEventListener('click', function() {
             if (qrReader.style.display !== 'block') {
                 qrReader.style.display = 'block';
@@ -501,18 +571,17 @@
                         searchInput.value = decodedText;
                         searchByCode();
                     }
-                    
-                    // Reset the button text
-                    scanButton.textContent = 'Barcode scannen';
+
+                    setScannerUi(false);
                 });
-                
-                this.textContent = 'Barcode Scanner schließen';
+
+                setScannerUi(true);
             } else {
                 if (html5QrcodeScanner) {
                     html5QrcodeScanner.clear();
                 }
                 qrReader.style.display = 'none';
-                this.textContent = 'Barcode scannen';
+                setScannerUi(false);
             }
         });
     });
@@ -820,12 +889,12 @@
 
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
-                                <h3>${item.Name}</h3>
-                                <p><strong>Ort:</strong> ${item.Ort || '-'}</p>
-                                <p><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
-                                <p><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
-                                <p><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
-                                <p><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <h3 class="item-name-cell">${item.Name}</h3>
+                                <p class="item-ort-cell"><strong>Ort:</strong> ${item.Ort || '-'}</p>
+                                <p class="item-filter1-cell"><strong>Unterrichtsfach:</strong> ${filter1Display}${filter1More}</p>
+                                <p class="item-filter2-cell"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
+                                <p class="item-filter3-cell"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
+                                <p class="item-code-cell"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
                                 <div class="image-container">
                                     ${imagesHtml}
                                 </div>
@@ -1290,7 +1359,10 @@
                 <div class="detail-group full-width" style="margin-top:12px;">
                     <div class="detail-label" style="font-weight:600; color:#374151;">Geplante Ausleihen</div>
                     <div class="detail-value">
-                        <button id="toggle-bookings" class="filter-toggle" style="margin-bottom:8px; padding:8px 12px; border-radius:8px;">Kalender anzeigen / verbergen</button>
+                        <button id="toggle-bookings" class="calendar-toggle-btn" style="margin-bottom:12px; padding:10px 16px; border-radius:6px; background:#f3f4f6; border:1px solid #d1d5db; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition:all 0.2s ease;">
+                            <span>📅</span>
+                            <span id="toggle-bookings-text">Kalender anzeigen</span>
+                        </button>
                         <div id="bookings-panel" style="display:none; margin-top:10px;">
                             <div class="calendar-wrapper">
                                 <div class="calendar-header">
@@ -1408,6 +1480,7 @@
             for (let i = 1; i <= lastDay.getDate(); i++) {
                 const div = document.createElement('div');
                 div.className = 'cal-cell';
+                div.dataset.day = String(i);
                 div.textContent = i;
                 
                 const currentDayDate = new Date(displayedYear, displayedMonth, i);
@@ -1443,29 +1516,48 @@
         function showDayDetails(day, dayBookings) {
             // Remove selected class from others
             document.querySelectorAll('.cal-cell').forEach(c => c.classList.remove('selected'));
+            const selectedDay = calGrid.querySelector(`.cal-cell[data-day="${day}"]`);
+            if (selectedDay) {
+                selectedDay.classList.add('selected');
+            }
+
+            const esc = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
             
             detailsPanel.style.display = 'block';
-            detailsDate.textContent = `${day}.${displayedMonth + 1}.${displayedYear}`;
+            detailsDate.textContent = `Termine am ${day}.${displayedMonth + 1}.${displayedYear}`;
             
             if (dayBookings.length === 0) {
-                detailsList.innerHTML = '<div>Keine Buchungen</div>';
+                detailsList.innerHTML = '<div class="cal-empty-state">Keine Termine für diesen Tag.</div>';
                 return;
             }
 
             detailsList.innerHTML = dayBookings.map(b => {
                 const startStr = new Date(b.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const endStr = b.end ? new Date(b.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
-                const periodStr = b.period ? ` (${b.period}. Std)` : '';
+                const timeRange = `${startStr}${endStr ? ' - ' + endStr : ''}`;
+                const periodStr = b.period ? `${b.period}. Stunde` : '';
+                const userStr = b.user ? esc(b.user) : 'Nicht angegeben';
+                const notesStr = b.notes ? esc(b.notes) : '';
                 return `<div class="cal-booking-item">
-                    <strong>${startStr}${endStr ? ' - ' + endStr : ''}</strong>${periodStr}
-                    ${b.user ? '<br><small>Benutzer: ' + b.user + '</small>' : ''}
+                    <div class="cal-booking-time"><span class="cal-booking-label">Zeit</span><strong>${esc(timeRange)}</strong>${periodStr ? `<span class="cal-booking-period">${esc(periodStr)}</span>` : ''}</div>
+                    <div class="cal-booking-user"><span class="cal-booking-label">Nutzer</span>${userStr}</div>
+                    ${notesStr ? `<div class="cal-booking-note"><span class="cal-booking-label">Notiz</span>${notesStr}</div>` : ''}
                 </div>`;
             }).join('');
         }
 
         toggleBtn?.addEventListener('click', ()=>{
+            const btnText = document.getElementById('toggle-bookings-text');
             if(panel.style.display === 'none'){
                 panel.style.display = 'block';
+                if(btnText) btnText.textContent = 'Kalender verbergen';
+                toggleBtn.style.background = '#e0e7ff';
+                toggleBtn.style.borderColor = '#818cf8';
                 if(bookings.length === 0){
                     fetch(`/get_planned_bookings_public/${item._id}`)
                         .then(r=>r.json())
@@ -1484,6 +1576,9 @@
             } else {
                 panel.style.display = 'none';
                 detailsPanel.style.display = 'none';
+                if(btnText) btnText.textContent = 'Kalender anzeigen';
+                toggleBtn.style.background = '#f3f4f6';
+                toggleBtn.style.borderColor = '#d1d5db';
             }
         });
 
@@ -1602,19 +1697,40 @@
         }, 200);
     }
 
-    function toggleFilterDropdown(dropdownId) {
-        const dropdown = document.getElementById(dropdownId);
-        
-        // Close all other dropdowns first
+    function closeAllFilterDropdowns(exceptId = null) {
         document.querySelectorAll('.filter-dropdown').forEach(dd => {
-            if (dd.id !== dropdownId) {
+            if (!exceptId || dd.id !== exceptId) {
                 dd.style.display = 'none';
             }
         });
-        
-        // Toggle this dropdown
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        document.querySelectorAll('.filter-toggle').forEach(btn => {
+            btn.classList.remove('is-open');
+            btn.setAttribute('aria-expanded', 'false');
+        });
     }
+
+    function toggleFilterDropdown(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) {
+            return;
+        }
+
+        const shouldOpen = dropdown.style.display !== 'block';
+        closeAllFilterDropdowns(dropdownId);
+        dropdown.style.display = shouldOpen ? 'block' : 'none';
+        const group = dropdown.closest('.filter-group');
+        const toggle = group ? group.querySelector('.filter-toggle') : null;
+        if (toggle) {
+            toggle.classList.toggle('is-open', shouldOpen);
+            toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.filter-group')) {
+            closeAllFilterDropdowns();
+        }
+    });
 
     function clearFilter(filterNum) {
         activeFilters[`filter${filterNum}`] = [];
@@ -3332,6 +3448,10 @@
     .inline-action-form { display:inline-block; margin:0; }
     .modal-action-bar .bookmark-btn { font-size:1.6rem; }
 
+    .container {
+        --table-columns: minmax(170px, 2fr) repeat(5, minmax(105px, 1fr));
+    }
+
     /* Calendar Styles - Optimized & Mobile Friendly */
     .calendar-wrapper {
         background: #fff;
@@ -3519,6 +3639,51 @@
             overflow-wrap: anywhere !important;
         }
 
+        /* Table-mode improvements for mobile/iPad */
+        body.table-view .item-card {
+            padding: 10px 8px !important;
+        }
+
+        body.table-view .item-card .card-content {
+            grid-template-columns: 1fr !important;
+            gap: 4px !important;
+        }
+
+        body.table-view .item-card .card-content h3 {
+            margin: 0 0 6px 0 !important;
+            font-size: 0.95rem !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+            line-height: 1.3 !important;
+        }
+
+        body.table-view .item-card .card-content p {
+            margin: 3px 0 !important;
+            font-size: 0.85rem !important;
+            line-height: 1.3 !important;
+        }
+
+        body.table-view .item-card .card-content p strong {
+            display: inline !important;
+            font-weight: 600 !important;
+            margin-right: 4px !important;
+            min-width: auto !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+        }
+
+        body.table-view .item-card .card-content .item-name-cell {
+            font-size: 0.95rem !important;
+        }
+
+        body.table-view .item-card .image-container {
+            display: none !important;
+        }
+
+        body.table-view .item-card .actions {
+            gap: 6px !important;
+        }
+
         .filter-option label,
         .filter-tag,
         .filter-tag-group {
@@ -3541,9 +3706,47 @@
             width: 100% !important;
         }
 
+        /* Extra small screens table mode */
+        @media (max-width: 480px) {
+            body.table-view .item-card .card-content p strong {
+                display: block !important;
+                margin-right: 0 !important;
+                margin-bottom: 2px !important;
+                color: #6c757d !important;
+                font-size: 0.8rem !important;
+            }
+
+            body.table-view .item-card .card-content p {
+                margin-left: 8px !important;
+                margin-top: 4px !important;
+                padding: 2px 0 !important;
+            }
+
+            body.table-view .item-card {
+                padding: 8px 6px !important;
+            }
+
+            body.table-view .item-card .card-content h3 {
+                font-size: 0.9rem !important;
+            }
+        }
+
         .items-container {
             padding: 6px 0 !important;
             gap: 10px !important;
+        }
+
+        body.table-view .table-view-header {
+            display: none !important;
+        }
+
+        body.table-view .item-card .card-content {
+            grid-template-columns: 1fr !important;
+            gap: 6px !important;
+        }
+
+        body.table-view .item-card .card-content p strong {
+            display: inline !important;
         }
 
         .item-card {
@@ -3607,6 +3810,19 @@
 </style>
 <script>
 let favoritesOnly = false;
+let tableViewMode = false;
+
+function setViewModeState() {
+    document.body.classList.toggle('table-view', tableViewMode);
+    const icon = document.getElementById('view-mode-icon');
+    const button = document.getElementById('toggle-view-mode');
+    if (icon) icon.textContent = tableViewMode ? '🖼' : '🗂';
+    if (button) {
+        button.title = tableViewMode ? 'In Kartenansicht wechseln' : 'In Tabellenansicht wechseln';
+        button.setAttribute('aria-pressed', tableViewMode ? 'true' : 'false');
+    }
+}
+
 function toggleFavorite(id, btn, card){
     const method = btn.textContent === '★' ? 'DELETE' : 'POST';
     fetch(`/favorites/${id}`, {method})
@@ -3643,6 +3859,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
             favoritesOnly = !favoritesOnly;
             document.body.classList.toggle('favorites-only', favoritesOnly);
             document.getElementById('favorites-view-icon').textContent = favoritesOnly ? '⭐' : '🔖';
+            applyFilters();
+        });
+    }
+
+    const viewToggleBtn = document.getElementById('toggle-view-mode');
+    try {
+        tableViewMode = localStorage.getItem('inventarViewMode') === 'table';
+    } catch (e) {
+        tableViewMode = false;
+    }
+    setViewModeState();
+
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', () => {
+            tableViewMode = !tableViewMode;
+            setViewModeState();
+            try {
+                localStorage.setItem('inventarViewMode', tableViewMode ? 'table' : 'cards');
+            } catch (e) {}
         });
     }
 });
@@ -3660,4 +3895,156 @@ function openItemQuick(id){
     });
 }
 </script>
+
+<style>
+/* Unified polished filter styling aligned with switch and action buttons */
+.filter-container {
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.filter-group {
+    background: #ffffff;
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 6px rgba(20, 35, 60, 0.08);
+}
+
+.filter-header {
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.filter-header label {
+    font-weight: 700;
+    color: #2f3e4e;
+}
+
+.filter-toggle,
+.clear-filter,
+.search-button,
+.scan-button {
+    border-radius: 10px;
+    border: 1px solid #c7ced6;
+    min-height: 36px;
+    padding: 7px 12px;
+    font-weight: 700;
+    box-shadow: none;
+    transition: transform 0.12s ease, box-shadow 0.14s ease, filter 0.14s ease;
+}
+
+.filter-toggle {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2f3e4e;
+}
+
+.filter-toggle.is-open {
+    transform: rotate(180deg);
+    background: #e9f2ff;
+    border-color: #7ea1c8;
+    color: #1f4f7a;
+}
+
+.clear-filter {
+    background: #fff;
+    color: #495868;
+}
+
+.filter-dropdown {
+    top: calc(100% + 8px);
+    border: 1px solid #cfd8e3;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(20, 35, 60, 0.12);
+    background: #ffffff;
+    padding: 10px;
+}
+
+.filter-option {
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.selected-filters {
+    min-height: 34px;
+    gap: 6px;
+}
+
+.filter-tag {
+    background: #edf4fb;
+    border: 1px solid #d0dfef;
+    color: #2a4763;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
+.search-container input {
+    border: 1px solid #cfd8e3;
+    border-radius: 10px;
+    min-height: 36px;
+}
+
+.qr-container {
+    margin-top: 6px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+}
+
+#qr-reader {
+    margin-top: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.scan-button {
+    background: linear-gradient(180deg, #f6fbff, #e8f2ff);
+    color: #214867;
+    border-color: #96b5d3;
+}
+
+.scan-button.is-active {
+    background: linear-gradient(180deg, #fff4e8, #ffe7cf);
+    color: #8a4c08;
+    border-color: #e1a467;
+}
+
+@media (max-width: 768px) {
+    .filter-group {
+        border-radius: 12px !important;
+        padding: 12px !important;
+    }
+
+    .filter-toggle,
+    .clear-filter,
+    .search-button,
+    .scan-button {
+        min-height: 40px !important;
+        border-radius: 10px !important;
+    }
+
+    .filter-dropdown {
+        border-radius: 10px !important;
+    }
+
+    .qr-container {
+        border-radius: 10px !important;
+        padding: 10px !important;
+    }
+
+    #qr-reader {
+        border-radius: 10px !important;
+    }
+}
+</style>
 {% endblock %}
