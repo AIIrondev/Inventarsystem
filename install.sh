@@ -300,6 +300,20 @@ EOF
 
     echo "$tag" | sudo tee "$PROJECT_DIR/.release-version" >/dev/null
 
+    if [ ! -f "$PROJECT_DIR/.docker-build.env" ]; then
+        cat > "$tmp_dir/.docker-build.env" <<EOF
+NUITKA_BUILD=0
+INVENTAR_HTTP_PORT=80
+INVENTAR_HTTPS_PORT=443
+INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag
+EOF
+        sudo install -m 644 "$tmp_dir/.docker-build.env" "$PROJECT_DIR/.docker-build.env"
+    elif sudo grep -q '^INVENTAR_APP_IMAGE=' "$PROJECT_DIR/.docker-build.env"; then
+        sudo sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag|" "$PROJECT_DIR/.docker-build.env"
+    else
+        echo "INVENTAR_APP_IMAGE=ghcr.io/aiirondev/inventarsystem:$tag" | sudo tee -a "$PROJECT_DIR/.docker-build.env" >/dev/null
+    fi
+
     backup_legacy_database
 
     echo "Starting stack..."

@@ -358,8 +358,8 @@ check_venv_health() {
         return 1
     fi
     
-    # Try importing pymongo
-    if ! "$VENV_DIR/bin/python" -c "import pymongo" 2>/dev/null; then
+    # Try importing the runtime packages required at app startup
+    if ! "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
         return 1
     fi
     
@@ -913,11 +913,11 @@ if [ $PYMONGO_STATUS -ne 0 ] && [ "$FIX_PYMONGO" = true ]; then
             }
         }
         
-        # Verify pymongo installation
-        if "$VENV_DIR/bin/python" -c "import pymongo; print(f'PyMongo version: {pymongo.__version__}')" 2>/dev/null; then
-            log_success "PyMongo wurde korrekt installiert"
+        # Verify core runtime imports
+        if "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
+            log_success "Runtime-Abhängigkeiten wurden korrekt installiert"
         else
-            log_error "PyMongo Installation konnte nicht verifiziert werden"
+            log_error "Runtime-Abhängigkeiten konnten nicht verifiziert werden"
         fi
         
         # Install requirements
@@ -937,11 +937,11 @@ if [ $PYMONGO_STATUS -ne 0 ] && [ "$FIX_PYMONGO" = true ]; then
             pip uninstall -y bson pymongo 2>/dev/null || true
             pip install pymongo==4.6.1 2>/dev/null || log_error "Fehler beim Installieren von pymongo"
             
-            # Verify pymongo installation
-            if python -c "import pymongo; print(f'PyMongo version: {pymongo.__version__}')" 2>/dev/null; then
-                log_success "PyMongo wurde korrekt installiert"
+            # Verify core runtime imports
+            if python -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
+                log_success "Runtime-Abhängigkeiten wurden korrekt installiert"
             else
-                log_error "PyMongo Installation konnte nicht verifiziert werden"
+                log_error "Runtime-Abhängigkeiten konnten nicht verifiziert werden"
             fi
             
             # Install requirements

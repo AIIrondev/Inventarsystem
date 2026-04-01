@@ -99,7 +99,7 @@ deactivate
 
 # Verify the virtual environment works correctly
 log_message "Verifying virtual environment..."
-if "$VENV_DIR/bin/python" -c "import pymongo; exit(0)" 2>/dev/null; then
+if "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler; exit(0)" 2>/dev/null; then
     log_message "✓ Virtual environment verification successful"
     
     # Clean up backup if everything works

@@ -12,6 +12,7 @@ REPO_SLUG="AIIrondev/Inventarsystem"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
 BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
 ENV_FILE="$PROJECT_DIR/.docker-build.env"
+APP_IMAGE_REPO="ghcr.io/aiirondev/inventarsystem"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
@@ -180,16 +181,53 @@ download_and_extract_bundle() {
 }
 
 deploy() {
+    local tag="$1"
+    local app_image="${APP_IMAGE_REPO}:${tag}"
+
     cd "$PROJECT_DIR"
     if [ ! -f "$ENV_FILE" ]; then
         cat > "$ENV_FILE" <<EOF
 NUITKA_BUILD=0
 INVENTAR_HTTP_PORT=80
 INVENTAR_HTTPS_PORT=443
+INVENTAR_APP_IMAGE=$app_image
 EOF
+    elif grep -q '^INVENTAR_APP_IMAGE=' "$ENV_FILE"; then
+        sed -i "s|^INVENTAR_APP_IMAGE=.*|INVENTAR_APP_IMAGE=$app_image|" "$ENV_FILE"
+    else
+        printf '\nINVENTAR_APP_IMAGE=%s\n' "$app_image" >> "$ENV_FILE"
     fi
 
-    docker compose --env-file "$ENV_FILE" up -d --build --remove-orphans >> "$LOG_FILE" 2>&1
+    docker compose --env-file "$ENV_FILE" pull app nginx mongodb >> "$LOG_FILE" 2>&1
+    docker compose --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
+}
+
+verify_stack_health() {
+    local compose_args running_services
+    local https_port
+    compose_args=(--env-file "$ENV_FILE")
+    https_port="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ')"
+    if [ -z "$https_port" ]; then
+        https_port="443"
+    fi
+
+    for _ in $(seq 1 60); do
+        running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
+        if printf '%s\n' "$running_services" | grep -Fxq app && \
+           printf '%s\n' "$running_services" | grep -Fxq nginx && \
+           printf '%s\n' "$running_services" | grep -Fxq mongodb; then
+            if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
+                if curl -kfsS "https://127.0.0.1:$https_port" >/dev/null 2>&1; then
+                    return 0
+                fi
+            fi
+        fi
+        sleep 2
+    done
+
+    docker compose "${compose_args[@]}" ps >> "$LOG_FILE" 2>&1 || true
+    docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb >> "$LOG_FILE" 2>&1 || true
+    return 1
 }
 
 main() {
@@ -211,17 +249,27 @@ main() {
 
     log_message "Checking latest GitHub release for $REPO_SLUG..."
     if ! fetch_release_metadata "$meta_file"; then
-        log_message "WARNING: Could not fetch release metadata. Falling back to local rebuild deployment."
-        deploy
-        log_message "Local rebuild deployment completed"
+        log_message "WARNING: Could not fetch release metadata. Falling back to image-only deployment."
+        deploy "latest"
+        if verify_stack_health; then
+            log_message "Fallback deployment completed"
+        else
+            log_message "ERROR: Fallback deployment failed health check"
+            exit 1
+        fi
         exit 0
     fi
 
     latest_tag="$(parse_latest_tag "$meta_file")"
     if [ -z "$latest_tag" ]; then
-        log_message "WARNING: Could not determine latest release tag. Falling back to local rebuild deployment."
-        deploy
-        log_message "Local rebuild deployment completed"
+        log_message "WARNING: Could not determine latest release tag. Falling back to image-only deployment."
+        deploy "latest"
+        if verify_stack_health; then
+            log_message "Fallback deployment completed"
+        else
+            log_message "ERROR: Fallback deployment failed health check"
+            exit 1
+        fi
         exit 0
     fi
 
@@ -231,23 +279,37 @@ main() {
     fi
 
     if [ "$current_tag" = "$latest_tag" ]; then
-        log_message "Already on latest release ($latest_tag). Running local rebuild deploy for current sources."
-        deploy
-        log_message "Local rebuild deployment completed"
+        log_message "Already on latest release ($latest_tag). Refreshing containers from prebuilt image."
+        deploy "$latest_tag"
+        if verify_stack_health; then
+            log_message "Container refresh completed"
+        else
+            log_message "ERROR: Container refresh failed health check"
+            exit 1
+        fi
         exit 0
     fi
 
     bundle_url="$(parse_asset_url "$meta_file" "$BUNDLE_ASSET")"
     if [ -z "$bundle_url" ]; then
-        log_message "WARNING: Release asset not found: $BUNDLE_ASSET. Falling back to local rebuild deployment."
-        deploy
-        log_message "Local rebuild deployment completed"
+        log_message "WARNING: Release asset not found: $BUNDLE_ASSET. Falling back to image-only deployment."
+        deploy "$latest_tag"
+        if verify_stack_health; then
+            log_message "Image-only deployment completed"
+        else
+            log_message "ERROR: Image-only fallback failed health check"
+            exit 1
+        fi
         exit 0
     fi
 
     log_message "Updating from release $latest_tag"
     download_and_extract_bundle "$bundle_url" "$tmp_dir"
-    deploy
+    deploy "$latest_tag"
+    if ! verify_stack_health; then
+        log_message "ERROR: Updated stack failed health check"
+        exit 1
+    fi
 
     echo "$latest_tag" > "$STATE_FILE"
     log_message "Update completed successfully to release $latest_tag"

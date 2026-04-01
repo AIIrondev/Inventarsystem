@@ -15,6 +15,7 @@ NUITKA_BUILD_VALUE="0"
 HTTP_PORT_VALUE="80"
 HTTPS_PORT_VALUE="443"
 CRON_SETUP_VALUE="${INVENTAR_SETUP_CRON:-1}"
+APP_IMAGE_VALUE="${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/inventarsystem:latest}"
 
 usage() {
     cat <<EOF
@@ -325,7 +326,34 @@ write_env_file() {
 NUITKA_BUILD=$NUITKA_BUILD_VALUE
 INVENTAR_HTTP_PORT=$HTTP_PORT_VALUE
 INVENTAR_HTTPS_PORT=$HTTPS_PORT_VALUE
+INVENTAR_APP_IMAGE=$APP_IMAGE_VALUE
 EOF
+}
+
+verify_stack_health() {
+    local compose_args running_services
+    compose_args=(--env-file "$ENV_FILE")
+
+    echo "Waiting for containers to become healthy..."
+    for _ in $(seq 1 60); do
+        running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
+        if printf '%s\n' "$running_services" | grep -Fxq app && \
+           printf '%s\n' "$running_services" | grep -Fxq nginx && \
+           printf '%s\n' "$running_services" | grep -Fxq mongodb; then
+            if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
+                if curl -kfsS "https://127.0.0.1:$HTTPS_PORT_VALUE" >/dev/null 2>&1; then
+                    echo "Health check passed."
+                    return 0
+                fi
+            fi
+        fi
+        sleep 2
+    done
+
+    echo "Error: stack health check failed."
+    docker compose "${compose_args[@]}" ps || true
+    docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
+    return 1
 }
 
 parse_args "$@"
@@ -338,7 +366,10 @@ configure_host_ports
 write_env_file
 
 echo "Starting Inventarsystem Docker stack (app + mongodb)..."
-docker compose --env-file "$ENV_FILE" up -d --build
+docker compose --env-file "$ENV_FILE" pull app nginx mongodb
+docker compose --env-file "$ENV_FILE" up -d --remove-orphans
+
+verify_stack_health
 
 echo "Stack started."
 echo "Open: https://<server-ip>:$HTTPS_PORT_VALUE"

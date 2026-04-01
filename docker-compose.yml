@@ -25,12 +25,8 @@ services:
       retries: 10
 
   app:
-    image: inventarsystem-app:local
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        NUITKA_BUILD: ${NUITKA_BUILD:-0}
+    image: ${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/inventarsystem:latest}
+    pull_policy: always
     container_name: inventarsystem-app
     restart: unless-stopped
     depends_on:
