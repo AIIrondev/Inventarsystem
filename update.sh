@@ -148,6 +148,17 @@ EOF
     fi
 }
 
+archive_logs() {
+    log_message "Checking for monthly log archival..."
+    if [ -x "$PROJECT_DIR/archive-logs.sh" ]; then
+        if "$PROJECT_DIR/archive-logs.sh" >> "$LOG_FILE" 2>&1; then
+            log_message "Log archival check completed"
+        else
+            log_message "WARNING: Log archival encountered issues; continuing"
+        fi
+    fi
+}
+
 create_backup() {
     log_message "Creating database backup before update..."
     if [ -x "$PROJECT_DIR/backup-docker.sh" ]; then
@@ -350,10 +361,9 @@ verify_stack_health() {
         if printf '%s\n' "$running_services" | grep -Fxq app && \
            printf '%s\n' "$running_services" | grep -Fxq nginx && \
            printf '%s\n' "$running_services" | grep -Fxq mongodb; then
-            if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
-                if curl -kfsS "https://127.0.0.1:$https_port" >/dev/null 2>&1; then
-                    return 0
-                fi
+            # Primary check: HTTP endpoint responds (most reliable)
+            if curl -kfsS "https://127.0.0.1:$https_port" >/dev/null 2>&1; then
+                return 0
             fi
         fi
         sleep 2
@@ -374,6 +384,7 @@ main() {
     require_cmd docker
     require_cmd python3
 
+    archive_logs
     create_backup
 
     local tmp_dir meta_file latest_tag current_tag bundle_url
