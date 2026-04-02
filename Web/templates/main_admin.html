@@ -12,23 +12,7 @@
 
 {% block content %}
 <style>
-    /* Main container and layout styles */
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        margin: 0;
-        padding: 0;
-    }
-
-    .container {
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        width: 80%;
-        max-width: 1200px;
-        margin: 20px auto;
-    }
+    /* Page-specific styles */
 
     h1, h2 {
         text-align: center;
@@ -1036,7 +1020,7 @@
         }
         
         /* Mobile-responsive styles for admin interface */
-        .container {
+        .admin-content-container {
             width: 95% !important;
             margin: 10px auto !important;
             padding: 15px !important;
@@ -1309,7 +1293,7 @@
     
     /* Tablet specific styles */
     @media screen and (min-width: 769px) and (max-width: 1024px) {
-        .container {
+        .admin-content-container {
             width: 90% !important;
         }
         
@@ -1325,7 +1309,7 @@
 
     /* Mobile-responsive styles for admin interface */
     @media screen and (max-width: 768px) {
-        .container {
+        .admin-content-container {
             width: 95% !important;
             margin: 10px auto !important;
             padding: 15px !important;
@@ -1532,7 +1516,7 @@
     
     /* Tablet specific styles */
     @media screen and (min-width: 769px) and (max-width: 1024px) {
-        .container {
+        .admin-content-container {
             width: 90% !important;
         }
         
@@ -1607,7 +1591,7 @@
             touch-action: pan-y;
         }
         
-        .container {
+        .admin-content-container {
             width: 95%;
             margin: 10px auto;
             padding: 15px;
@@ -1735,7 +1719,7 @@
         .bookmark-btn:active { transform:scale(.9); }
         .bookmark-btn.active { background:#ffc107; color:#212529; }
         .favorite-item { outline:2px solid #ffc107; }
-    .container {
+    .admin-content-container {
         --table-columns: minmax(190px, 2fr) repeat(6, minmax(110px, 1fr));
     }
     /* Calendar styles for detailed view */
@@ -2034,7 +2018,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 </script>
 
-<div class="container">
+<div class="admin-content-container">
     <!-- Admin conflict warning banner (populated by JS) -->
     <div id="conflict-banner" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-left:4px solid #fd7e14; color:#856404; padding:12px 16px; border-radius:4px; margin-bottom:16px; position:relative;">
         <strong>⚠ Buchungskonflikte erkannt:</strong>

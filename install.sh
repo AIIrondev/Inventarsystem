@@ -6,6 +6,7 @@ PROJECT_DIR="/opt/Inventarsystem"
 REPO_SLUG="AIIrondev/Inventarsystem"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
 BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
+APP_IMAGE_ASSET_PREFIX="inventarsystem-image-"
 LEGACY_DB_NAME="Inventarsystem"
 LEGACY_MONGO_URI="mongodb://127.0.0.1:27017"
 MIGRATE_LEGACY_DB=false
@@ -233,12 +234,18 @@ with open(meta_file, 'r', encoding='utf-8') as f:
     data = json.load(f)
 tag = data.get('tag_name', '').strip()
 url = ''
+image_url = ''
 for asset in data.get('assets', []):
     if asset.get('name') == asset_name:
         url = asset.get('browser_download_url', '').strip()
         break
+for asset in data.get('assets', []):
+    if asset.get('name') == f'inventarsystem-image-{tag}.tar.gz':
+        image_url = asset.get('browser_download_url', '').strip()
+        break
 print(tag)
 print(url)
+print(image_url)
 PY
 }
 
@@ -251,7 +258,7 @@ main() {
     need_cmd python3
     need_cmd curl
 
-    local tmp_dir meta_file tag bundle_url
+    local tmp_dir meta_file tag bundle_url image_url
     tmp_dir="$(mktemp -d)"
     meta_file="$tmp_dir/release.json"
     trap 'rm -rf "$tmp_dir"' EXIT
@@ -259,6 +266,7 @@ main() {
     mapfile -t release_info < <(latest_tag_and_bundle_url "$meta_file")
     tag="${release_info[0]:-}"
     bundle_url="${release_info[1]:-}"
+    image_url="${release_info[2]:-}"
 
     if [ -z "$tag" ] || [ -z "$bundle_url" ]; then
         echo "Error: latest release metadata is incomplete."
@@ -271,6 +279,14 @@ main() {
 
     curl -fL "$bundle_url" -o "$tmp_dir/$BUNDLE_ASSET"
     sudo tar -xzf "$tmp_dir/$BUNDLE_ASSET" -C "$PROJECT_DIR"
+
+    if [ -z "$image_url" ]; then
+        echo "Error: release image asset is missing"
+        exit 1
+    fi
+
+    curl -fL "$image_url" -o "$tmp_dir/inventarsystem-image-$tag.tar.gz"
+    sudo docker load -i "$tmp_dir/inventarsystem-image-$tag.tar.gz" >/dev/null
 
     if [ ! -f "$PROJECT_DIR/start.sh" ]; then
         echo "Error: release bundle is missing start.sh"

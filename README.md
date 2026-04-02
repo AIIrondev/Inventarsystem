@@ -249,7 +249,8 @@ Hinweis: Für Container-Deployments werden MongoDB- und Speicherpfade via Umgebu
 sudo ./update.sh
 ```
 
-`update.sh` lädt ausschließlich das Release-Asset `inventarsystem-docker-bundle.tar.gz` aus dem neuesten GitHub Release, setzt `INVENTAR_APP_IMAGE` auf das passende GHCR-Release-Image und startet den Stack ohne lokalen Rebuild neu.
+`update.sh` lädt ausschließlich das Release-Asset `inventarsystem-docker-bundle.tar.gz` aus dem neuesten GitHub Release, lädt das passende Release-Image lokal aus dem Release-Archiv und startet den Stack ohne lokalen Rebuild neu.
+Wenn lokal ein passendes Image-Artefakt unter `dist/` liegt (`inventarsystem-image-<tag>.tar.gz` oder `inventarsystem-image-*.tar.gz`), wird dieses zuerst verwendet.
 Zusätzlich wird ein Health-Check ausgeführt; bei Fehlern endet das Update mit Exit-Code ungleich 0 und protokolliert Container-Logs in `logs/update.log`.
 
 ### Release-Erstellung (Build-only)

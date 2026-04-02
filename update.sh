@@ -11,8 +11,10 @@ STATE_FILE="$PROJECT_DIR/.release-version"
 REPO_SLUG="AIIrondev/Inventarsystem"
 API_URL="https://api.github.com/repos/$REPO_SLUG/releases/latest"
 BUNDLE_ASSET="inventarsystem-docker-bundle.tar.gz"
+APP_IMAGE_ASSET_PREFIX="inventarsystem-image-"
 ENV_FILE="$PROJECT_DIR/.docker-build.env"
 APP_IMAGE_REPO="ghcr.io/aiirondev/inventarsystem"
+DIST_DIR="$PROJECT_DIR/dist"
 
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
@@ -95,6 +97,57 @@ ensure_tls_certificates() {
     chmod 644 "$cert_path"
 }
 
+ensure_nginx_config_mount_source() {
+    local nginx_dir config_path backup_path
+    nginx_dir="$PROJECT_DIR/docker/nginx"
+    config_path="$nginx_dir/default.conf"
+
+    mkdir -p "$nginx_dir"
+
+    if [ -d "$config_path" ]; then
+        backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
+        mv "$config_path" "$backup_path"
+        log_message "WARNING: Moved unexpected directory $config_path to $backup_path"
+    fi
+
+    if [ ! -f "$config_path" ]; then
+        cat > "$config_path" <<'EOF'
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
+    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://app:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        default_type text/html;
+        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
+    }
+}
+EOF
+        log_message "Recreated missing nginx config at $config_path"
+    fi
+}
+
 create_backup() {
     log_message "Creating database backup before update..."
     if [ -x "$PROJECT_DIR/backup-docker.sh" ]; then
@@ -150,6 +203,76 @@ for asset in data.get('assets', []):
 PY
 }
 
+load_release_image() {
+    local meta_file tag image_asset image_url tmp_dir archive
+
+    meta_file="$1"
+    tag="$2"
+    image_asset="${APP_IMAGE_ASSET_PREFIX}${tag}.tar.gz"
+    image_url="$(parse_asset_url "$meta_file" "$image_asset")"
+
+    if [ -z "$image_url" ]; then
+        log_message "ERROR: Release image asset not found: $image_asset"
+        return 1
+    fi
+
+    tmp_dir="$(mktemp -d)"
+    archive="$tmp_dir/$image_asset"
+    trap 'rm -rf "${tmp_dir:-}"' RETURN
+
+    log_message "Loading app image from release asset $image_asset"
+    curl -fL "$image_url" -o "$archive"
+    docker load -i "$archive" >> "$LOG_FILE" 2>&1
+
+    trap - RETURN
+}
+
+find_local_dist_image_archive() {
+    local tag="$1"
+    local archive
+
+    if [ ! -d "$DIST_DIR" ]; then
+        return 1
+    fi
+
+    for archive in \
+        "$DIST_DIR/inventarsystem-image-$tag.tar.gz" \
+        "$DIST_DIR/inventarsystem-image-$tag.tar" \
+        "$DIST_DIR/inventarsystem-image.tar.gz" \
+        "$DIST_DIR/inventarsystem-image.tar"; do
+        if [ -f "$archive" ]; then
+            echo "$archive"
+            return 0
+        fi
+    done
+
+    archive="$(find "$DIST_DIR" -maxdepth 1 -type f \( -name 'inventarsystem-image-*.tar.gz' -o -name 'inventarsystem-image-*.tar' \) | sort | tail -n1)"
+    if [ -n "$archive" ]; then
+        echo "$archive"
+        return 0
+    fi
+
+    return 1
+}
+
+load_local_dist_image() {
+    local tag="$1"
+    local archive
+
+    archive="$(find_local_dist_image_archive "$tag" || true)"
+    if [ -z "$archive" ]; then
+        return 1
+    fi
+
+    log_message "Loading app image from local dist artifact: $archive"
+    if docker load -i "$archive" >> "$LOG_FILE" 2>&1; then
+        return 0
+    fi
+
+    log_message "WARNING: Failed to load local dist artifact: $archive"
+    return 1
+}
+
 download_and_extract_bundle() {
     local url tmp_dir archive
     url="$1"
@@ -182,6 +305,7 @@ download_and_extract_bundle() {
 
 deploy() {
     local tag="$1"
+    local meta_file="$2"
     local app_image="${APP_IMAGE_REPO}:${tag}"
 
     cd "$PROJECT_DIR"
@@ -198,7 +322,17 @@ EOF
         printf '\nINVENTAR_APP_IMAGE=%s\n' "$app_image" >> "$ENV_FILE"
     fi
 
-    docker compose --env-file "$ENV_FILE" pull app nginx mongodb >> "$LOG_FILE" 2>&1
+    if ! load_local_dist_image "$tag"; then
+        if ! load_release_image "$meta_file" "$tag"; then
+            log_message "Falling back to tagged GHCR image $app_image"
+            if ! docker pull "$app_image" >> "$LOG_FILE" 2>&1; then
+                log_message "Falling back to local Docker build for $app_image"
+                docker build -t "$app_image" "$PROJECT_DIR" >> "$LOG_FILE" 2>&1
+            fi
+        fi
+    fi
+
+    docker compose --env-file "$ENV_FILE" pull nginx mongodb >> "$LOG_FILE" 2>&1
     docker compose --env-file "$ENV_FILE" up -d --remove-orphans >> "$LOG_FILE" 2>&1
 }
 
@@ -233,6 +367,7 @@ verify_stack_health() {
 main() {
     ensure_runtime_dependencies
     ensure_tls_certificates
+    ensure_nginx_config_mount_source
 
     require_cmd curl
     require_cmd tar
@@ -245,16 +380,20 @@ main() {
     tmp_dir="$(mktemp -d)"
     meta_file="$tmp_dir/release.json"
 
-    trap 'rm -rf "$tmp_dir"' EXIT
+    trap 'rm -rf "${tmp_dir:-}"' EXIT
 
     log_message "Checking latest GitHub release for $REPO_SLUG..."
     if ! fetch_release_metadata "$meta_file"; then
-        log_message "WARNING: Could not fetch release metadata. Falling back to image-only deployment."
-        deploy "latest"
-        if verify_stack_health; then
-            log_message "Fallback deployment completed"
+        log_message "WARNING: Could not fetch release metadata. Falling back to self-healing start path."
+        if INVENTAR_SETUP_CRON=0 bash "$PROJECT_DIR/start.sh" >> "$LOG_FILE" 2>&1; then
+            if verify_stack_health; then
+                log_message "Fallback deployment completed"
+            else
+                log_message "ERROR: Fallback deployment failed health check"
+                exit 1
+            fi
         else
-            log_message "ERROR: Fallback deployment failed health check"
+            log_message "ERROR: Fallback start path failed"
             exit 1
         fi
         exit 0
@@ -262,12 +401,16 @@ main() {
 
     latest_tag="$(parse_latest_tag "$meta_file")"
     if [ -z "$latest_tag" ]; then
-        log_message "WARNING: Could not determine latest release tag. Falling back to image-only deployment."
-        deploy "latest"
-        if verify_stack_health; then
-            log_message "Fallback deployment completed"
+        log_message "WARNING: Could not determine latest release tag. Falling back to self-healing start path."
+        if INVENTAR_SETUP_CRON=0 bash "$PROJECT_DIR/start.sh" >> "$LOG_FILE" 2>&1; then
+            if verify_stack_health; then
+                log_message "Fallback deployment completed"
+            else
+                log_message "ERROR: Fallback deployment failed health check"
+                exit 1
+            fi
         else
-            log_message "ERROR: Fallback deployment failed health check"
+            log_message "ERROR: Fallback start path failed"
             exit 1
         fi
         exit 0
@@ -280,7 +423,7 @@ main() {
 
     if [ "$current_tag" = "$latest_tag" ]; then
         log_message "Already on latest release ($latest_tag). Refreshing containers from prebuilt image."
-        deploy "$latest_tag"
+        deploy "$latest_tag" "$meta_file"
         if verify_stack_health; then
             log_message "Container refresh completed"
         else
@@ -292,12 +435,16 @@ main() {
 
     bundle_url="$(parse_asset_url "$meta_file" "$BUNDLE_ASSET")"
     if [ -z "$bundle_url" ]; then
-        log_message "WARNING: Release asset not found: $BUNDLE_ASSET. Falling back to image-only deployment."
-        deploy "$latest_tag"
-        if verify_stack_health; then
-            log_message "Image-only deployment completed"
+        log_message "WARNING: Release asset not found: $BUNDLE_ASSET. Falling back to self-healing start path."
+        if INVENTAR_SETUP_CRON=0 bash "$PROJECT_DIR/start.sh" >> "$LOG_FILE" 2>&1; then
+            if verify_stack_health; then
+                log_message "Image-only deployment completed"
+            else
+                log_message "ERROR: Image-only fallback failed health check"
+                exit 1
+            fi
         else
-            log_message "ERROR: Image-only fallback failed health check"
+            log_message "ERROR: Fallback start path failed"
             exit 1
         fi
         exit 0
@@ -305,7 +452,7 @@ main() {
 
     log_message "Updating from release $latest_tag"
     download_and_extract_bundle "$bundle_url" "$tmp_dir"
-    deploy "$latest_tag"
+    deploy "$latest_tag" "$meta_file"
     if ! verify_stack_health; then
         log_message "ERROR: Updated stack failed health check"
         exit 1

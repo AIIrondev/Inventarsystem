@@ -258,26 +258,22 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('my_borrowed_items') }}">Persönliche Aktuelle Ausleihungen</a>
                         </li>
-                        {% if library_module_enabled %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="libraryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                📚 Bibliothek
-                            </a>
-                            <ul class="dropdown-menu" aria-labelledby="libraryDropdown">
-                                <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Tabellenansicht</a></li>
-                                {% if session.get('admin', False) %}
-                                <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Medien hochladen</a></li>
-                                {% if student_cards_module_enabled %}
-                                <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
-                                {% endif %}
-                                {% endif %}
-                            </ul>
-                        </li>
-                        {% endif %}
                     {% endif %}
                     {% if 'username' in session and session.get('admin', False) %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="quickAccessDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Schnellzugriff
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="quickAccessDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('upload_admin') }}">Artikel hochladen</a></li>
+                            {% if library_module_enabled %}
+                            <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliothek öffnen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bibliothek hochladen</a></li>
+                            {% if student_cards_module_enabled %}
+                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
+                            {% endif %}
+                            {% endif %}
+                        </ul>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">

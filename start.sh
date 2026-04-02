@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 ENV_FILE="$SCRIPT_DIR/.docker-build.env"
+APP_IMAGE_REPO="ghcr.io/aiirondev/inventarsystem"
+DIST_DIR="$SCRIPT_DIR/dist"
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
@@ -113,6 +115,10 @@ ensure_runtime_dependencies() {
         missing+=(curl)
     fi
 
+    if ! command -v python3 >/dev/null 2>&1; then
+        missing+=(python3)
+    fi
+
     if cron_setup_enabled && ! command -v crontab >/dev/null 2>&1; then
         missing+=(cron)
     fi
@@ -190,6 +196,105 @@ ensure_tls_certificates() {
     chmod 644 "$cert_path"
 }
 
+ensure_nginx_config_mount_source() {
+    local nginx_dir config_path backup_path
+    nginx_dir="$SCRIPT_DIR/docker/nginx"
+    config_path="$nginx_dir/default.conf"
+
+    mkdir -p "$nginx_dir"
+
+    if [ -d "$config_path" ]; then
+        backup_path="${config_path}.dir.$(date +%Y%m%d-%H%M%S).bak"
+        mv "$config_path" "$backup_path"
+        echo "Warning: moved unexpected directory $config_path to $backup_path"
+    fi
+
+    if [ ! -f "$config_path" ]; then
+        cat > "$config_path" <<'EOF'
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/certs/inventarsystem.crt;
+    ssl_certificate_key /etc/nginx/certs/inventarsystem.key;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://app:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
+    }
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        default_type text/html;
+        return 200 '<!doctype html><html><head><meta charset="utf-8"><title>Server Error</title></head><body><h1>Server Error</h1><p>The service is temporarily unavailable.</p></body></html>';
+    }
+}
+EOF
+        echo "Recreated missing nginx config at $config_path"
+    fi
+}
+
+ensure_app_image_loaded() {
+    if docker image inspect "$APP_IMAGE_VALUE" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local image_archive
+    image_archive="$(find_local_dist_image_archive || true)"
+    if [ -n "$image_archive" ]; then
+        echo "Loading app image from local dist artifact: $image_archive"
+        if docker load -i "$image_archive" >/dev/null 2>&1 && docker image inspect "$APP_IMAGE_VALUE" >/dev/null 2>&1; then
+            return 0
+        fi
+        echo "Warning: failed to load expected app image from $image_archive"
+    fi
+
+    echo "Error: local app image not found: $APP_IMAGE_VALUE"
+    echo "Run ./update.sh so the nightly updater loads the release image first."
+    exit 1
+}
+
+find_local_dist_image_archive() {
+    local tag archive
+
+    if [ ! -d "$DIST_DIR" ]; then
+        return 1
+    fi
+
+    tag="${APP_IMAGE_VALUE##*:}"
+    for archive in \
+        "$DIST_DIR/inventarsystem-image-$tag.tar.gz" \
+        "$DIST_DIR/inventarsystem-image-$tag.tar" \
+        "$DIST_DIR/inventarsystem-image.tar.gz" \
+        "$DIST_DIR/inventarsystem-image.tar"; do
+        if [ -f "$archive" ]; then
+            echo "$archive"
+            return 0
+        fi
+    done
+
+    archive="$(find "$DIST_DIR" -maxdepth 1 -type f \( -name 'inventarsystem-image-*.tar.gz' -o -name 'inventarsystem-image-*.tar' \) | sort | tail -n1)"
+    if [ -n "$archive" ]; then
+        echo "$archive"
+        return 0
+    fi
+
+    return 1
+}
+
 configure_nuitka_mode() {
     local nuitka_mode
 
@@ -212,6 +317,32 @@ configure_nuitka_mode() {
         echo "Nuitka service mode: enabled (compiled app module)"
     else
         echo "Nuitka service mode: disabled (standard Python app module)"
+    fi
+}
+
+resolve_app_image() {
+    local env_image release_tag
+
+    if [ -f "$ENV_FILE" ]; then
+        env_image="$(awk -F= '/^INVENTAR_APP_IMAGE=/{print $2}' "$ENV_FILE" | tail -n1 | tr -d ' ' || true)"
+        if [ -n "$env_image" ] && [ "$env_image" != "ghcr.io/aiirondev/inventarsystem:latest" ]; then
+            APP_IMAGE_VALUE="$env_image"
+            return 0
+        fi
+    fi
+
+    release_tag=""
+    if [ -f "$SCRIPT_DIR/.release-version" ]; then
+        release_tag="$(tr -d '[:space:]' < "$SCRIPT_DIR/.release-version")"
+    fi
+
+    if [ -n "$release_tag" ]; then
+        APP_IMAGE_VALUE="ghcr.io/aiirondev/inventarsystem:$release_tag"
+        return 0
+    fi
+
+    if [ -n "$env_image" ]; then
+        APP_IMAGE_VALUE="$env_image"
     fi
 }
 
@@ -360,13 +491,15 @@ parse_args "$@"
 
 ensure_runtime_dependencies
 ensure_tls_certificates
+ensure_nginx_config_mount_source
 setup_scheduled_jobs
 configure_nuitka_mode
+resolve_app_image
 configure_host_ports
+ensure_app_image_loaded
 write_env_file
 
 echo "Starting Inventarsystem Docker stack (app + mongodb)..."
-docker compose --env-file "$ENV_FILE" pull app nginx mongodb
 docker compose --env-file "$ENV_FILE" up -d --remove-orphans
 
 verify_stack_health

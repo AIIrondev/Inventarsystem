@@ -185,7 +185,7 @@ jobs:
 
             app:
               image: ${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/inventarsystem:latest}
-              pull_policy: always
+              pull_policy: never
               container_name: inventarsystem-app
               restart: unless-stopped
               depends_on:

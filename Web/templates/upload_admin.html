@@ -710,17 +710,6 @@
 
 <div class="upload-container">
     <a href="{{ url_for(back_target|default('home_admin')) }}" class="nav-back-button">← Zurück zur Artikelübersicht</a>
-    {% if library_module_enabled %}
-        {% if show_library_features %}
-        <a href="{{ url_for('upload_admin') }}" class="nav-back-button" style="margin-left:8px;">Zur Artikel-Seite</a>
-        <a href="{{ url_for('library_view') }}" class="nav-back-button" style="margin-left:8px;">Zur Bibliotheks-Ansicht</a>
-        {% if student_cards_module_enabled %}
-        <a href="{{ url_for('student_cards_admin') }}" class="nav-back-button" style="margin-left:8px;">Schülerausweise verwalten</a>
-        {% endif %}
-        {% else %}
-        <a href="{{ url_for('library_admin') }}" class="nav-back-button" style="margin-left:8px;">Zur Bibliothek-Seite</a>
-        {% endif %}
-    {% endif %}
     
     <div class="upload-form">
         <h1>{{ page_title|default('Artikel hochladen') }}</h1>
