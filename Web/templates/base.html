@@ -259,7 +259,7 @@
                             <a class="nav-link" href="{{ url_for('my_borrowed_items') }}">Persönliche Aktuelle Ausleihungen</a>
                         </li>
                     {% endif %}
-                    {% if 'username' in session and session.get('admin', False) %}
+                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="quickAccessDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Schnellzugriff

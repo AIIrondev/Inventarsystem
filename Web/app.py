@@ -103,11 +103,18 @@ APP_VERSION = __version__
 @app.context_processor
 def inject_version():
     """Inject global template variables."""
+    is_admin = False
+    if 'username' in session:
+        try:
+            is_admin = us.check_admin(session['username'])
+        except Exception:
+            is_admin = False
     return {
         'APP_VERSION': APP_VERSION,
         'school_periods': SCHOOL_PERIODS,
         'library_module_enabled': cfg.LIBRARY_MODULE_ENABLED,
-        'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED
+        'student_cards_module_enabled': cfg.STUDENT_CARDS_MODULE_ENABLED,
+        'is_admin': is_admin
     }
 
 # Create necessary directories at startup
@@ -784,7 +791,7 @@ def home():
         return render_template(
             'main.html',
             username=session['username'],
-            student_cards_module_enabled=False,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
         )
@@ -810,7 +817,7 @@ def home_admin():
     return render_template(
         'main_admin.html',
         username=session['username'],
-        student_cards_module_enabled=False,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
@@ -1173,6 +1180,7 @@ def upload_admin():
         username=session['username'],
         duplicate_data=duplicate_data,
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         show_library_features=False,
         upload_mode='item',
         page_title='Artikel hochladen',
@@ -1237,6 +1245,7 @@ def library_admin():
         username=session['username'],
         duplicate_data=duplicate_data,
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         show_library_features=True,
         upload_mode='library',
         page_title='Buch hochladen',
@@ -1366,7 +1375,9 @@ def student_cards_admin():
         student_cards=all_cards,
         edit_mode=edit_mode,
         form_data=form_data,
-        config={'default': cfg.STUDENT_DEFAULT_BORROW_DAYS}
+        config={'default': cfg.STUDENT_DEFAULT_BORROW_DAYS},
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
     )
 
 
@@ -1392,8 +1403,10 @@ def login():
 
         if user:
             session['username'] = username
-            if user['Admin']:
-                session['admin'] = True
+            is_admin_user = bool(user.get('Admin', False))
+            session['admin'] = is_admin_user
+            session['is_admin'] = is_admin_user
+            if is_admin_user:
                 # Create JWT token and set as cookie
                 access_token = create_access_token(identity=username)
                 resp = make_response(redirect(url_for('home_admin')))
@@ -1490,6 +1503,7 @@ def logout():
     """
     session.pop('username', None)
     session.pop('admin', None)
+    session.pop('is_admin', None)
     resp = make_response(redirect(url_for('login')))
     unset_jwt_cookies(resp)
     return resp
@@ -4035,6 +4049,7 @@ def register():
             return redirect(url_for('home'))
         return render_template(
             'register.html',
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
             student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
@@ -4094,7 +4109,12 @@ def user_del():
                 'last_name': last_name
             })
     
-    return render_template('user_del.html', users=users_list)
+    return render_template(
+        'user_del.html',
+        users=users_list,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
 
 
 @app.route('/delete_user', methods=['POST'])
@@ -4211,7 +4231,12 @@ def admin_borrowings():
 
     client.close()
 
-    return render_template('admin_borrowings.html', entries=entries)
+    return render_template(
+        'admin_borrowings.html',
+        entries=entries,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
 
 
 @app.route('/admin/reset_borrowing/<borrow_id>', methods=['POST'])
@@ -4480,7 +4505,12 @@ def logs():
 
     formatted_items.sort(key=lambda entry: parse_sort_date(entry.get('Start')), reverse=True)
     
-    return render_template('logs.html', items=formatted_items)
+    return render_template(
+        'logs.html',
+        items=formatted_items,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
 
 
 @app.route('/get_logs', methods=['GET'])
@@ -4540,9 +4570,13 @@ def manage_filters():
     filter1_values = it.get_predefined_filter_values(1)
     filter2_values = it.get_predefined_filter_values(2)
     
-    return render_template('manage_filters.html', 
-                          filter1_values=filter1_values, 
-                          filter2_values=filter2_values)
+    return render_template(
+        'manage_filters.html',
+        filter1_values=filter1_values,
+        filter2_values=filter2_values,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
 
 @app.route('/add_filter_value/<int:filter_num>', methods=['POST'])
 def add_filter_value(filter_num):
@@ -5129,8 +5163,12 @@ def manage_locations():
     # Get predefined location values
     location_values = it.get_predefined_locations()
     
-    return render_template('manage_locations.html', 
-                          location_values=location_values)
+    return render_template(
+        'manage_locations.html',
+        location_values=location_values,
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
+    )
 
 @app.route('/check_code_unique/<code>')
 def check_code_unique(code):
