@@ -25,8 +25,9 @@ services:
       retries: 10
 
   app:
-    image: ${INVENTAR_APP_IMAGE:-ghcr.io/aiirondev/inventarsystem:latest}
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: inventarsystem-app
     restart: unless-stopped
     depends_on:
@@ -41,6 +42,7 @@ services:
     expose:
       - "8000"
     volumes:
+      - ./Web:/app/Web
       - app_uploads:/app/Web/uploads
       - app_thumbnails:/app/Web/thumbnails
       - app_previews:/app/Web/previews

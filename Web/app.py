@@ -26,7 +26,7 @@ Features:
 """
 
 from flask_jwt_extended import JWTManager, create_access_token, set_access_cookies, unset_jwt_cookies
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response, send_file
 from werkzeug.utils import secure_filename
 import user as us
 import items as it
@@ -1379,6 +1379,411 @@ def student_cards_admin():
         library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED
     )
+
+
+@app.route('/student_cards_print', methods=['GET'])
+def student_cards_print():
+    """
+    Generate a printable template for all student library cards (Schülerausweise).
+    Only accessible by admins and only when the student cards module is enabled.
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    student_cards = db['student_cards']
+
+    # Get all student cards sorted by ID
+    all_cards = list(student_cards.find().sort('AusweisId', 1))
+    client.close()
+
+    return render_template(
+        'student_cards_print.html',
+        student_cards=all_cards,
+        current_datetime=datetime.datetime.now()
+    )
+
+
+@app.route('/student_card_barcode_print', methods=['GET'])
+def student_card_barcode_print():
+    """
+    Generate a barcode-based print template for student library cards.
+    Only accessible by admins and only when the student cards module is enabled.
+    """
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+    db = client[cfg.MONGODB_DB]
+    student_cards = db['student_cards']
+
+    # Get all student cards sorted by ID
+    all_cards = list(student_cards.find().sort('AusweisId', 1))
+    client.close()
+
+    return render_template(
+        'student_card_barcode_print.html',
+        student_cards=all_cards,
+        current_datetime=datetime.datetime.now(),
+        download_link=url_for('student_card_barcode_download')
+    )
+
+
+@app.route('/student_card_barcode_download', methods=['GET'])
+def student_card_barcode_download():
+    """
+    Download PDF with all student card barcodes (simplified version).
+    """
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Zugriff verweigert.', 'error')
+        return redirect(url_for('login'))
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import mm
+        from reportlab.lib.colors import HexColor, white, black
+        from io import BytesIO
+        import barcode
+        from barcode.writer import ImageWriter
+        import tempfile
+        import os
+        
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        student_cards = db['student_cards']
+        all_cards = list(student_cards.find().sort('AusweisId', 1))
+        client.close()
+
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=A4)
+        
+        page_width, page_height = A4
+        margin = 10 * mm
+        card_width = 88 * mm
+        card_height = 56 * mm
+        cols = 2
+        gap_x = 8 * mm
+        gap_y = 8 * mm
+        x_positions = [margin, margin + card_width + gap_x]
+        y_start = page_height - margin
+        y_pos = y_start
+        col_idx = 0
+        
+        # Professional color palette
+        header_color = HexColor("#0F172A")  # Sehr dunkles blau
+        accent_color = HexColor("#2563EB")  # Helles blau
+        light_bg = HexColor("#F8FAFC")      # Sehr heller grau
+        card_bg_color = HexColor("#FFFFFF") # Weiß
+        text_dark = HexColor("#1E293B")     # Dunkler text
+        text_gray = HexColor("#64748B")     # Grauer text
+        
+        for i, card in enumerate(all_cards):
+            if col_idx == 0 and i > 0:
+                y_pos -= (card_height + gap_y)
+            
+            # New page if needed
+            if y_pos - card_height < margin:
+                c.showPage()
+                y_pos = y_start
+                col_idx = 0
+            
+            x_pos = x_positions[col_idx]
+            
+            # Card shadow effect (unter border)
+            c.setFillColor(HexColor("#E2E8F0"))
+            c.rect(x_pos + 0.5*mm, y_pos - card_height - 0.5*mm, card_width, card_height, fill=1, stroke=0)
+            
+            # Card background
+            c.setLineWidth(1)
+            c.setFillColor(card_bg_color)
+            c.setStrokeColor(HexColor("#CBD5E1"))
+            c.rect(x_pos, y_pos - card_height, card_width, card_height, fill=1, stroke=1)
+            
+            # Left info section (38mm)
+            info_width = 38 * mm
+            c.setFillColor(light_bg)
+            c.rect(x_pos, y_pos - card_height, info_width, card_height, fill=1, stroke=0)
+            
+            # Header bar
+            c.setFillColor(header_color)
+            c.rect(x_pos, y_pos - 10*mm, card_width, 10*mm, fill=1, stroke=0)
+            
+            # Header accent line
+            c.setStrokeColor(accent_color)
+            c.setLineWidth(2)
+            c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
+            
+            # "SCHÜLERAUSWEIS" text in header
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColor(white)
+            c.drawString(x_pos + 3*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+            
+            # Student name - large and bold
+            c.setFillColor(text_dark)
+            c.setFont("Helvetica-Bold", 10)
+            name = card['SchülerName'][:20]
+            c.drawString(x_pos + 3*mm, y_pos - 14*mm, name)
+            
+            # ID with label
+            c.setFont("Helvetica", 8)
+            c.setFillColor(text_gray)
+            c.drawString(x_pos + 3*mm, y_pos - 18*mm, "Ausweis ID:")
+            c.setFillColor(text_dark)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(x_pos + 3*mm, y_pos - 21*mm, str(card['AusweisId']))
+            
+            # Class with label
+            if card.get('Klasse'):
+                c.setFont("Helvetica", 8)
+                c.setFillColor(text_gray)
+                c.drawString(x_pos + 3*mm, y_pos - 25*mm, "Klasse:")
+                c.setFillColor(text_dark)
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(x_pos + 3*mm, y_pos - 28*mm, card['Klasse'])
+            
+            # Right barcode section with border highlight
+            barcode_x_start = x_pos + info_width + 1*mm
+            c.setFillColor(accent_color)
+            c.setLineWidth(0)
+            c.rect(barcode_x_start - 1*mm, y_pos - card_height, 
+                   card_width - info_width + 1*mm, 2*mm, fill=1, stroke=0)
+            
+            # Generate and add larger barcode
+            try:
+                temp_dir = tempfile.gettempdir()
+                barcode_path = os.path.join(temp_dir, f"barcode_{card['AusweisId']}")
+                
+                # Generate barcode with higher module width for better scanning
+                barcode_obj = barcode.get('code128', str(card['AusweisId']), writer=ImageWriter())
+                barcode_obj.save(barcode_path)
+                barcode_file = f"{barcode_path}.png"
+                
+                if os.path.exists(barcode_file):
+                    # Larger barcode taking up most of right section
+                    barcode_width = (card_width - info_width - 4*mm)
+                    barcode_height = 16*mm
+                    barcode_y = y_pos - card_height + (card_height - barcode_height) / 2 + 2*mm
+                    
+                    c.drawImage(barcode_file, 
+                               barcode_x_start + 1*mm, 
+                               barcode_y, 
+                               width=barcode_width, 
+                               height=barcode_height, 
+                               preserveAspectRatio=True)
+                    os.remove(barcode_file)
+                else:
+                    raise Exception("Barcode file not created")
+            except Exception as e:
+                c.setFont("Helvetica", 7)
+                c.setFillColor(HexColor("#DC2626"))
+                c.drawString(barcode_x_start + 2*mm, y_pos - card_height + 20*mm, "⚠️ Barcode Error")
+            
+            col_idx += 1
+            if col_idx >= cols:
+                col_idx = 0
+        
+        c.save()
+        pdf_buffer.seek(0)
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'schuelerausweise_all_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        )
+    except Exception as e:
+        flash(f'Fehler beim PDF-Download: {str(e)}', 'error')
+        return redirect(url_for('student_cards_admin'))
+
+
+@app.route('/student_card_single_barcode_download/<card_id>', methods=['GET'])
+def student_card_single_barcode_download(card_id):
+    """
+    Download PDF with single student card barcode.
+    """
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Zugriff verweigert.', 'error')
+        return redirect(url_for('login'))
+    if not cfg.STUDENT_CARDS_MODULE_ENABLED:
+        flash('Schülerausweis-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.units import mm
+        from reportlab.lib.colors import HexColor, white, black
+        from io import BytesIO
+        from bson.objectid import ObjectId
+        import barcode
+        from barcode.writer import ImageWriter
+        import tempfile
+        import os
+        
+        client = MongoClient(cfg.MONGODB_HOST, cfg.MONGODB_PORT)
+        db = client[cfg.MONGODB_DB]
+        student_cards = db['student_cards']
+        card = student_cards.find_one({'_id': ObjectId(card_id)})
+        client.close()
+        
+        if not card:
+            flash('Ausweis nicht gefunden.', 'error')
+            return redirect(url_for('student_cards_admin'))
+
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=A4)
+        
+        page_width, page_height = A4
+        margin = 20 * mm
+        card_width = 105 * mm
+        card_height = 70 * mm
+        x_pos = (page_width - card_width) / 2
+        y_pos = (page_height - card_height) / 2
+        
+        # Professional color palette
+        header_color = HexColor("#0F172A")  # Sehr dunkles blau
+        accent_color = HexColor("#2563EB")  # Helles blau
+        light_bg = HexColor("#F8FAFC")      # Sehr heller grau
+        card_bg_color = HexColor("#FFFFFF") # Weiß
+        text_dark = HexColor("#1E293B")     # Dunkler text
+        text_gray = HexColor("#64748B")     # Grauer text
+        
+        # Card shadow effect
+        c.setFillColor(HexColor("#E2E8F0"))
+        c.rect(x_pos + 1*mm, y_pos - card_height - 1*mm, card_width, card_height, fill=1, stroke=0)
+        
+        # Card background
+        c.setLineWidth(1.5)
+        c.setFillColor(card_bg_color)
+        c.setStrokeColor(HexColor("#CBD5E1"))
+        c.rect(x_pos, y_pos, card_width, card_height, fill=1, stroke=1)
+        
+        # Left info section (50mm)
+        info_width = 50 * mm
+        c.setFillColor(light_bg)
+        c.rect(x_pos, y_pos - card_height, info_width, card_height, fill=1, stroke=0)
+        
+        # Vertical divider line
+        c.setStrokeColor(accent_color)
+        c.setLineWidth(3)
+        c.line(x_pos + info_width, y_pos - card_height, x_pos + info_width, y_pos)
+        
+        # Header bar
+        c.setFillColor(header_color)
+        c.rect(x_pos, y_pos - 10*mm, card_width, 10*mm, fill=1, stroke=0)
+        
+        # Header accent line
+        c.setStrokeColor(accent_color)
+        c.setLineWidth(2.5)
+        c.line(x_pos, y_pos - 10*mm, x_pos + card_width, y_pos - 10*mm)
+        
+        # "SCHÜLERAUSWEIS" text in header
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(white)
+        c.drawString(x_pos + 4*mm, y_pos - 6.5*mm, "SCHÜLERAUSWEIS")
+        
+        # Student name - large and prominent
+        c.setFillColor(text_dark)
+        c.setFont("Helvetica-Bold", 12)
+        name = card['SchülerName'][:25]
+        c.drawString(x_pos + 4*mm, y_pos - 16*mm, name)
+        
+        # ID section with label
+        c.setFont("Helvetica", 9)
+        c.setFillColor(text_gray)
+        c.drawString(x_pos + 4*mm, y_pos - 21*mm, "Ausweis-ID:")
+        
+        c.setFillColor(text_dark)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(x_pos + 4*mm, y_pos - 25*mm, str(card['AusweisId']))
+        
+        # Class section
+        if card.get('Klasse'):
+            c.setFont("Helvetica", 9)
+            c.setFillColor(text_gray)
+            c.drawString(x_pos + 4*mm, y_pos - 30*mm, "Klasse:")
+            
+            c.setFillColor(text_dark)
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(x_pos + 4*mm, y_pos - 34*mm, card['Klasse'])
+        
+        # Barcode section - right side with blue accent
+        barcode_x_start = x_pos + info_width + 3*mm
+        c.setFillColor(accent_color)
+        c.setLineWidth(0)
+        c.rect(x_pos + info_width, y_pos - card_height, 
+               card_width - info_width, 3*mm, fill=1, stroke=0)
+        
+        # Generate and add large barcode
+        try:
+            temp_dir = tempfile.gettempdir()
+            barcode_path = os.path.join(temp_dir, f"barcode_{card['AusweisId']}")
+            
+            # Generate barcode with better sizing
+            barcode_obj = barcode.get('code128', str(card['AusweisId']), writer=ImageWriter())
+            barcode_obj.save(barcode_path)
+            barcode_file = f"{barcode_path}.png"
+            
+            if os.path.exists(barcode_file):
+                # Large barcode on right side
+                barcode_width = (card_width - info_width - 8*mm)
+                barcode_height = 20*mm
+                barcode_y_offset = (card_height - 10*mm - barcode_height) / 2
+                
+                c.drawImage(barcode_file, 
+                           barcode_x_start, 
+                           y_pos - card_height + barcode_y_offset + 5*mm, 
+                           width=barcode_width, 
+                           height=barcode_height, 
+                           preserveAspectRatio=True)
+                os.remove(barcode_file)
+            else:
+                raise Exception("Barcode file not created")
+        except Exception as e:
+            c.setFont("Helvetica", 9)
+            c.setFillColor(HexColor("#DC2626"))
+            c.drawString(barcode_x_start + 2*mm, y_pos - card_height + 25*mm, "⚠️ Barcode Error")
+        
+        # Bottom info line
+        c.setStrokeColor(HexColor("#CBD5E1"))
+        c.setLineWidth(0.5)
+        c.line(x_pos, y_pos - card_height + 3*mm, x_pos + card_width, y_pos - card_height + 3*mm)
+        
+        c.save()
+        pdf_buffer.seek(0)
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'ausweis_{card["AusweisId"]}.pdf'
+        )
+    except Exception as e:
+        flash(f'Fehler beim PDF-Download: {str(e)}', 'error')
+        return redirect(url_for('student_cards_admin'))
 
 
 @app.route('/login', methods=['GET', 'POST'])
