@@ -259,6 +259,11 @@
         color: #e65100;
     }
 
+    .status-damaged {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
     /* Actions */
     .table-actions {
         display: flex;
@@ -469,6 +474,7 @@
                     <option value="">-- Alle Status --</option>
                     <option value="available">Verfügbar</option>
                     <option value="borrowed">Ausgeliehen</option>
+                    <option value="damaged">Defekt/Zerstört</option>
                 </select>
             </div>
         </div>
@@ -551,24 +557,33 @@
 
         emptyState.style.display = 'none';
         tbody.innerHTML = items.map(item => `
+            ${(() => {
+                const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+                const statusClass = statusKey === 'damaged' ? 'status-damaged' : (statusKey === 'borrowed' ? 'status-borrowed' : 'status-available');
+                const statusText = statusKey === 'damaged' ? 'Defekt/Zerstört' : (statusKey === 'borrowed' ? 'Ausgeliehen' : 'Verfügbar');
+                const actionLabel = statusKey === 'available' ? 'Ausleihen' : (statusKey === 'borrowed' ? 'Reservieren' : 'Nicht ausleihbar');
+                const actionDisabled = statusKey === 'damaged' ? 'disabled' : '';
+                return `
             <tr>
                 <td class="table-title">${escapeHtml(item.Name || 'Untitled')}</td>
                 <td>${escapeHtml(item.Autor || item.Author || '-')}</td>
                 <td>${escapeHtml(item.ISBN || item.Code4 || '-')}</td>
                 <td>${getItemTypeLabel(item.ItemType || 'book')}</td>
                 <td>
-                    <span class="table-status ${item.Verfuegbar === false ? 'status-borrowed' : 'status-available'}">
-                        ${item.Verfuegbar === false ? 'Ausgeliehen' : 'Verfügbar'}
+                    <span class="table-status ${statusClass}">
+                        ${statusText}
                     </span>
                 </td>
                 <td class="table-actions">
                     <button class="button" onclick="showItemDetail('${item._id}')">Details</button>
-                    <button class="button" style="background: #28a745; color: white;" onclick="borrowItem('${item._id}')">
-                        ${item.Verfuegbar === false ? 'Reservieren' : 'Ausleihen'}
+                    <button class="button" style="background: #28a745; color: white;" onclick="borrowItem('${item._id}')" ${actionDisabled}>
+                        ${actionLabel}
                     </button>
                     ${canEditLibraryItems ? `<button class="button" style="background:#0ea5e9;color:#fff;" onclick="openEditLibraryItem('${item._id}')">Bearbeiten</button>` : ''}
                 </td>
             </tr>
+                `;
+            })()}
         `).join('');
     }
 
@@ -592,7 +607,8 @@
             const authorMatch = !author || (item.Autor || item.Author || '').toLowerCase().includes(author);
             const isbnMatch = !isbn || (item.ISBN || item.Code4 || '').toLowerCase().includes(isbn);
             const typeMatch = !type || (item.ItemType || 'book') === type;
-            const statusMatch = !status || (status === 'available' ? item.Verfuegbar !== false : item.Verfuegbar === false);
+            const statusKey = item.LibraryDisplayStatus || (item.Verfuegbar === false ? 'borrowed' : 'available');
+            const statusMatch = !status || statusKey === status;
             return authorMatch && isbnMatch && typeMatch && statusMatch;
         });
 
@@ -648,6 +664,12 @@
     }
 
     function borrowItem(itemId) {
+        const selectedItem = (libraryItems || []).find(item => item._id === itemId);
+        if (selectedItem && selectedItem.LibraryDisplayStatus === 'damaged') {
+            alert('Dieses Medium ist als defekt/zerstört markiert und kann nicht ausgeliehen werden.');
+            return;
+        }
+
         const defaultCardId = activeStudentCardId || '';
         const cardId = (window.prompt('Bitte Schülerausweis-ID eingeben:', defaultCardId) || '').trim().toUpperCase();
         if (!cardId) {

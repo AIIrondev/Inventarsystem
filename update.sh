@@ -161,12 +161,12 @@ archive_logs() {
 
 create_backup() {
     log_message "Creating database backup before update..."
-    if [ -x "$PROJECT_DIR/backup-docker.sh" ]; then
-        if "$PROJECT_DIR/backup-docker.sh" >> "$LOG_FILE" 2>&1; then
-            log_message "Docker backup completed"
+    if [ -x "$PROJECT_DIR/backup.sh" ]; then
+        if "$PROJECT_DIR/backup.sh" --mode auto >> "$LOG_FILE" 2>&1; then
+            log_message "Universal backup completed"
             return 0
         else
-            log_message "WARNING: Docker backup failed; trying legacy backup path"
+            log_message "WARNING: Universal backup failed; trying legacy backup path"
         fi
     fi
 
@@ -304,14 +304,11 @@ download_and_extract_bundle() {
         cp -f "$tmp_dir/restart.sh" "$PROJECT_DIR/restart.sh"
     fi
 
-    if [ -f "$tmp_dir/backup-docker.sh" ]; then
-        cp -f "$tmp_dir/backup-docker.sh" "$PROJECT_DIR/backup-docker.sh"
-    fi
     if [ -f "$tmp_dir/update.sh" ]; then
         cp -f "$tmp_dir/update.sh" "$PROJECT_DIR/update.sh"
     fi
 
-    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/backup-docker.sh" "$PROJECT_DIR/update.sh"
+    chmod +x "$PROJECT_DIR/start.sh" "$PROJECT_DIR/stop.sh" "$PROJECT_DIR/restart.sh" "$PROJECT_DIR/update.sh" "$PROJECT_DIR/backup.sh"
 }
 
 deploy() {

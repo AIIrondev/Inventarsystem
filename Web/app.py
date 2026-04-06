@@ -93,12 +93,172 @@ SSL_CERT = cfg.SSL_CERT
 SSL_KEY = cfg.SSL_KEY
 
 LIBRARY_ITEM_TYPES = ['book', 'cd', 'dvd', 'media']
+INVOICE_CURRENCY = 'EUR'
 
 
 SCHOOL_PERIODS = cfg.SCHOOL_PERIODS
 
 # Apply the configuration for general use throughout the app
 APP_VERSION = __version__
+
+
+def _parse_money_value(value):
+    """Parse a user-facing money value into a float when possible."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    cleaned = re.sub(r'[^0-9,\.\-]', '', text)
+    if ',' in cleaned and '.' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+    else:
+        cleaned = cleaned.replace(',', '.')
+
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _format_money_value(value):
+    """Format a money value in German notation for display."""
+    parsed_value = _parse_money_value(value)
+    if parsed_value is None:
+        return '-'
+    formatted = f"{parsed_value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    return f"{formatted} {INVOICE_CURRENCY}"
+
+
+def _build_invoice_number(borrow_id, created_at):
+    """Build a stable, human-readable invoice number."""
+    short_id = str(borrow_id)[-6:].upper()
+    return f"INV-{created_at.strftime('%Y%m%d-%H%M%S')}-{short_id}"
+
+
+def _build_invoice_pdf(invoice_data):
+    """Render a PDF invoice for a damaged borrowed item."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor, black, white
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfgen import canvas
+
+    pdf_buffer = io.BytesIO()
+    c = canvas.Canvas(pdf_buffer, pagesize=A4)
+    page_width, page_height = A4
+
+    margin_x = 20 * mm
+    margin_top = 20 * mm
+    usable_width = page_width - (2 * margin_x)
+    current_y = page_height - margin_top
+
+    dark_color = HexColor('#0F172A')
+    accent_color = HexColor('#B91C1C')
+    light_color = HexColor('#F8FAFC')
+    border_color = HexColor('#CBD5E1')
+    text_color = HexColor('#1E293B')
+    muted_color = HexColor('#64748B')
+
+    def draw_wrapped_lines(text, x_pos, y_pos, width, font_name='Helvetica', font_size=11, leading=14, color=text_color):
+        if not text:
+            return y_pos
+        c.setFont(font_name, font_size)
+        c.setFillColor(color)
+        for line in simpleSplit(str(text), font_name, font_size, width):
+            c.drawString(x_pos, y_pos, line)
+            y_pos -= leading
+        return y_pos
+
+    def draw_label_value(label, value, x_pos, y_pos, label_width=45 * mm):
+        c.setFont('Helvetica-Bold', 10)
+        c.setFillColor(muted_color)
+        c.drawString(x_pos, y_pos, label)
+        c.setFont('Helvetica', 10)
+        c.setFillColor(text_color)
+        c.drawString(x_pos + label_width, y_pos, str(value or '-'))
+        return y_pos - 7 * mm
+
+    c.setFillColor(light_color)
+    c.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+
+    c.setFillColor(dark_color)
+    c.rect(0, page_height - 28 * mm, page_width, 28 * mm, fill=1, stroke=0)
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 20)
+    c.drawString(margin_x, page_height - 16 * mm, 'RECHNUNG')
+    c.setFont('Helvetica', 10)
+    c.drawString(margin_x, page_height - 23 * mm, 'Inventarsystem - Schadensersatz für zerstörtes Ausleihobjekt')
+
+    current_y = page_height - 40 * mm
+    c.setStrokeColor(border_color)
+    c.setLineWidth(1)
+    c.line(margin_x, current_y, page_width - margin_x, current_y)
+    current_y -= 12 * mm
+
+    invoice_number = invoice_data.get('invoice_number', '-')
+    created_at = invoice_data.get('created_at_display', '-')
+    borrower = invoice_data.get('borrower', '-')
+    item_name = invoice_data.get('item_name', '-')
+    item_code = invoice_data.get('item_code', '-')
+    item_id = invoice_data.get('item_id', '-')
+    damage_reason = invoice_data.get('damage_reason', '-')
+    amount_text = invoice_data.get('amount_text', '-')
+
+    current_y = draw_label_value('Rechnungsnummer:', invoice_number, margin_x, current_y)
+    current_y = draw_label_value('Datum:', created_at, margin_x, current_y)
+    current_y = draw_label_value('Empfänger:', borrower, margin_x, current_y)
+    current_y = draw_label_value('Ausleihe / Element:', item_name, margin_x, current_y)
+    current_y = draw_label_value('Element-ID:', item_id, margin_x, current_y)
+    current_y = draw_label_value('Code:', item_code, margin_x, current_y)
+    current_y = current_y - 3 * mm
+
+    c.setFillColor(dark_color)
+    c.setFont('Helvetica-Bold', 12)
+    c.drawString(margin_x, current_y, 'Schadensbeschreibung')
+    current_y -= 6 * mm
+    current_y = draw_wrapped_lines(damage_reason, margin_x, current_y, usable_width, font_size=10, leading=13, color=text_color)
+    current_y -= 4 * mm
+
+    c.setFillColor(dark_color)
+    c.setFont('Helvetica-Bold', 12)
+    c.drawString(margin_x, current_y, 'Rechnungsbetrag')
+    current_y -= 8 * mm
+
+    c.setFillColor(accent_color)
+    c.setStrokeColor(accent_color)
+    c.rect(margin_x, current_y - 12 * mm, usable_width, 16 * mm, fill=1, stroke=0)
+    c.setFillColor(white)
+    c.setFont('Helvetica-Bold', 16)
+    c.drawString(margin_x + 5 * mm, current_y - 2 * mm, amount_text)
+    current_y -= 20 * mm
+
+    current_y = draw_wrapped_lines(
+        'Bitte begleichen Sie diesen Betrag zeitnah bei der Verwaltung. Der Betrag ergibt sich aus dem zerstörten Ausleihobjekt und der dokumentierten Schadensmeldung.',
+        margin_x,
+        current_y,
+        usable_width,
+        font_size=10,
+        leading=13,
+        color=muted_color,
+    )
+
+    footer_y = 18 * mm
+    c.setStrokeColor(border_color)
+    c.setLineWidth(0.8)
+    c.line(margin_x, footer_y + 8 * mm, page_width - margin_x, footer_y + 8 * mm)
+    c.setFillColor(muted_color)
+    c.setFont('Helvetica', 9)
+    c.drawString(margin_x, footer_y, 'Inventarsystem - Rechnungserstellung')
+    c.drawRightString(page_width - margin_x, footer_y, f'{amount_text}')
+
+    c.save()
+    pdf_buffer.seek(0)
+    return pdf_buffer
 
 @app.context_processor
 def inject_version():
@@ -862,16 +1022,49 @@ def api_library_items():
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_db = db['items']
+        ausleihungen_db = db['ausleihungen']
         
         library_items = list(items_db.find({
             'ItemType': {'$in': ['book', 'cd', 'dvd', 'media']}
         }))
+
+        item_ids = [str(item.get('_id')) for item in library_items if item.get('_id')]
+        active_records = []
+        if item_ids:
+            active_records = list(ausleihungen_db.find(
+                {'Item': {'$in': item_ids}, 'Status': 'active'},
+                {'Item': 1, 'User': 1}
+            ))
+
+        active_item_ids = set()
+        active_user_by_item = {}
+        for rec in active_records:
+            item_id = str(rec.get('Item') or '')
+            if not item_id:
+                continue
+            active_item_ids.add(item_id)
+            if item_id not in active_user_by_item:
+                active_user_by_item[item_id] = rec.get('User', '')
         
         client.close()
         
         # Convert ObjectId to string for JSON serialization
         for item in library_items:
-            item['_id'] = str(item['_id'])
+            item_id = str(item['_id'])
+            item['_id'] = item_id
+
+            condition_value = str(item.get('Condition', '')).strip().lower()
+            has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
+            has_active_borrow = item_id in active_item_ids
+
+            if has_damage and not has_active_borrow:
+                item['LibraryDisplayStatus'] = 'damaged'
+            elif has_active_borrow or item.get('Verfuegbar') is False:
+                item['LibraryDisplayStatus'] = 'borrowed'
+            else:
+                item['LibraryDisplayStatus'] = 'available'
+
+            item['BorrowedBy'] = active_user_by_item.get(item_id) or item.get('User', '')
         
         return jsonify(library_items), 200
     except Exception as e:
@@ -1022,6 +1215,31 @@ def api_item_detail(item_id):
         item = it.get_item(item_id)
         if not item:
             return jsonify({'error': 'Item not found'}), 404
+
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen_col = db['ausleihungen']
+
+        active_borrow = ausleihungen_col.find_one(
+            {'Item': str(item.get('_id')), 'Status': 'active'},
+            {'User': 1}
+        )
+        client.close()
+
+        condition_value = str(item.get('Condition', '')).strip().lower()
+        has_damage = bool(item.get('HasDamage')) or condition_value == 'destroyed'
+        if has_damage and not active_borrow:
+            status_label = 'Defekt/Zerstört'
+        elif item.get('Verfuegbar') is False or active_borrow:
+            status_label = 'Ausgeliehen'
+        else:
+            status_label = 'Verfügbar'
+
+        borrower_value = ''
+        if active_borrow:
+            borrower_value = active_borrow.get('User', '')
+        elif item.get('User'):
+            borrower_value = item.get('User')
         
         # Basic detail HTML
         detail_html = f"""
@@ -1029,7 +1247,8 @@ def api_item_detail(item_id):
         <p><strong>Autor/Künstler:</strong> {html.escape(item.get('Autor', item.get('Author', '-')))}</p>
         <p><strong>ISBN:</strong> {html.escape(item.get('ISBN', item.get('Code4', '-')))}</p>
         <p><strong>Beschreibung:</strong> {html.escape(item.get('Beschreibung', '-'))}</p>
-        <p><strong>Status:</strong> {'Verfügbar' if item.get('Verfuegbar') != False else 'Ausgeliehen'}</p>
+        <p><strong>Status:</strong> {html.escape(status_label)}</p>
+        {f'<p><strong>Ausgeliehen von:</strong> {html.escape(str(borrower_value))}</p>' if borrower_value and status_label == 'Ausgeliehen' else ''}
         """
         return detail_html, 200
     except Exception as e:
@@ -4612,26 +4831,41 @@ def admin_borrowings():
         except Exception:
             return str(dt) if dt else ''
 
+    def fmt_money(value):
+        return _format_money_value(value)
+
     entries = []
     for r in records:
         it_id = r.get('Item')
-        id = it.get_item(it_id)
+        item_doc = it.get_item(it_id)
+        invoice_data = r.get('InvoiceData') or {}
         try:
-            item_id = id.get('Code_4')
-            item_name = id.get('Name')
+            item_code = item_doc.get('Code_4')
+            item_name = item_doc.get('Name')
+            item_cost = item_doc.get('Anschaffungskosten')
         except:
-            item_id = None
+            item_code = None
             item_name = None
+            item_cost = None
         entries.append({
             'id': str(r.get('_id')),
-            'item_id': str(item_id),
-            'item_name': str(item_name),
+            'item_id': str(item_doc.get('_id')) if item_doc and item_doc.get('_id') else str(it_id or ''),
+            'item_code': str(item_code) if item_code is not None else '',
+            'item_name': str(item_name or ''),
+            'item_cost': fmt_money(item_cost),
+            'item_cost_raw': item_cost if item_cost is not None else '',
             'user': r.get('User', ''),
             'status': r.get('Status', ''),
             'start': fmt_dt(r.get('Start')),
             'end': fmt_dt(r.get('End')),
             'period': r.get('Period') if r.get('Period') is not None else '',
-            'notes': r.get('Notes', '')
+            'notes': r.get('Notes', ''),
+            'invoice_number': invoice_data.get('invoice_number', ''),
+            'invoice_amount': fmt_money(invoice_data.get('amount')) if invoice_data.get('amount') is not None else fmt_money(item_cost),
+            'invoice_reason': invoice_data.get('damage_reason', ''),
+            'invoice_created_at': fmt_dt(invoice_data.get('created_at')) if isinstance(invoice_data.get('created_at'), datetime.datetime) else '',
+            'invoice_paid': bool(invoice_data.get('paid', False)),
+            'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
         })
 
     client.close()
@@ -4692,6 +4926,214 @@ def admin_reset_borrowing(borrow_id):
         flash(f'Fehler beim Zurücksetzen: {str(e)}', 'error')
 
     return redirect(url_for('admin_borrowings'))
+
+
+@app.route('/admin/borrowings/<borrow_id>/invoice', methods=['POST'])
+def admin_create_invoice(borrow_id):
+    """Create a PDF invoice for a destroyed borrowed item."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        borrow_doc = ausleihungen.find_one({'_id': ObjectId(borrow_id)})
+        if not borrow_doc:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        item_id = borrow_doc.get('Item')
+        item_doc = None
+        if item_id:
+            try:
+                item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+            except Exception:
+                item_doc = items_col.find_one({'_id': item_id})
+
+        if not item_doc:
+            flash('Zugehöriges Element nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        if borrow_doc.get('Status') not in ['active', 'completed'] and not borrow_doc.get('InvoiceData'):
+            flash('Eine Rechnung kann nur für aktive oder bereits dokumentierte Ausleihungen erstellt werden.', 'warning')
+            return redirect(url_for('admin_borrowings'))
+
+        amount_raw = request.form.get('invoice_amount') or request.form.get('amount') or item_doc.get('Anschaffungskosten')
+        amount_value = _parse_money_value(amount_raw)
+        if amount_value is None or amount_value <= 0:
+            flash('Bitte einen gültigen Rechnungsbetrag angeben.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        damage_reason = str(request.form.get('damage_reason', '')).strip() or 'Das ausgeliehene Element wurde beschädigt oder zerstört.'
+        if len(damage_reason) > 2000:
+            flash('Die Schadensbeschreibung ist zu lang.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        mark_destroyed = request.form.get('mark_destroyed') == 'on'
+        close_borrowing = request.form.get('close_borrowing') == 'on'
+        now = datetime.datetime.now()
+
+        existing_invoice = borrow_doc.get('InvoiceData') or {}
+        invoice_number = existing_invoice.get('invoice_number') or _build_invoice_number(borrow_doc['_id'], now)
+        borrower = borrow_doc.get('User', '')
+        item_name = item_doc.get('Name', '')
+        item_code = item_doc.get('Code_4', '')
+
+        invoice_data = {
+            'invoice_number': invoice_number,
+            'amount': round(amount_value, 2),
+            'amount_text': _format_money_value(amount_value),
+            'damage_reason': damage_reason,
+            'created_at': now,
+            'created_by': session.get('username', ''),
+            'borrower': borrower,
+            'item_id': str(item_doc['_id']),
+            'item_name': item_name,
+            'item_code': item_code,
+            'mark_destroyed': mark_destroyed,
+            'status_before_invoice': borrow_doc.get('Status', ''),
+            'paid': False,
+            'paid_at': None,
+            'paid_by': '',
+        }
+
+        update_fields = {
+            'InvoiceData': invoice_data,
+            'LastUpdated': now,
+        }
+        if close_borrowing:
+            update_fields['Status'] = 'completed'
+            update_fields['End'] = now
+
+        ausleihungen.update_one({'_id': borrow_doc['_id']}, {'$set': update_fields})
+
+        if mark_destroyed:
+            damage_entry = {
+                'description': damage_reason,
+                'reported_by': session['username'],
+                'reported_at': now,
+                'invoice_number': invoice_number,
+                'invoice_amount': round(amount_value, 2),
+                'source': 'invoice'
+            }
+            items_col.update_one(
+                {'_id': item_doc['_id']},
+                {
+                    '$push': {'DamageReports': {'$each': [damage_entry], '$position': 0}},
+                    '$set': {
+                        'HasDamage': True,
+                        'Verfuegbar': False,
+                        'LastUpdated': now,
+                        'Condition': 'destroyed'
+                    },
+                    '$unset': {'User': ''}
+                }
+            )
+
+        try:
+            logs_collection = db['system_logs']
+            logs_collection.insert_one({
+                'type': 'damage_invoice',
+                'timestamp': now.isoformat(),
+                'user': session.get('username'),
+                'borrow_id': borrow_id,
+                'item_id': str(item_doc['_id']),
+                'item_name': item_name,
+                'invoice_number': invoice_number,
+                'amount': round(amount_value, 2),
+                'ip': request.remote_addr,
+            })
+        except Exception as log_err:
+            app.logger.warning(f"Damage invoice log write failed for borrow {borrow_id}: {log_err}")
+
+        pdf_buffer = _build_invoice_pdf(invoice_data)
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'rechnung_{invoice_number}.pdf'
+        )
+    except Exception as e:
+        app.logger.error(f"Error creating damage invoice for borrow {borrow_id}: {e}")
+        flash('Fehler beim Erstellen der Rechnung.', 'error')
+        return redirect(url_for('admin_borrowings'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/borrowings/<borrow_id>/invoice/mark-paid', methods=['POST'])
+def admin_mark_invoice_paid(borrow_id):
+    """Mark an existing invoice as paid."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+
+        borrow_doc = ausleihungen.find_one({'_id': ObjectId(borrow_id)}, {'InvoiceData': 1})
+        if not borrow_doc:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        invoice_data = borrow_doc.get('InvoiceData') or {}
+        if not invoice_data:
+            flash('Für diese Ausleihung existiert keine Rechnung.', 'warning')
+            return redirect(url_for('admin_borrowings'))
+
+        if invoice_data.get('paid') is True:
+            flash('Rechnung ist bereits als bezahlt markiert.', 'info')
+            return redirect(url_for('admin_borrowings'))
+
+        now = datetime.datetime.now()
+        result = ausleihungen.update_one(
+            {'_id': borrow_doc['_id']},
+            {
+                '$set': {
+                    'InvoiceData.paid': True,
+                    'InvoiceData.paid_at': now,
+                    'InvoiceData.paid_by': session.get('username', ''),
+                    'LastUpdated': now,
+                }
+            }
+        )
+
+        if result.matched_count == 0:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        try:
+            logs_collection = db['system_logs']
+            logs_collection.insert_one({
+                'type': 'damage_invoice_paid',
+                'timestamp': now.isoformat(),
+                'user': session.get('username'),
+                'borrow_id': borrow_id,
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'amount': invoice_data.get('amount'),
+                'ip': request.remote_addr,
+            })
+        except Exception as log_err:
+            app.logger.warning(f"Damage invoice paid log write failed for borrow {borrow_id}: {log_err}")
+
+        flash('Rechnung wurde als bezahlt markiert.', 'success')
+        return redirect(url_for('admin_borrowings'))
+    except Exception as e:
+        app.logger.error(f"Error marking invoice paid for borrow {borrow_id}: {e}")
+        flash('Fehler beim Markieren als bezahlt.', 'error')
+        return redirect(url_for('admin_borrowings'))
+    finally:
+        if client:
+            client.close()
 
 
 @app.route('/admin_reset_user_password', methods=['POST'])

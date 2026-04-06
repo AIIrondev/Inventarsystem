@@ -149,20 +149,20 @@ setup_scheduled_jobs() {
 
     local update_line backup_line
     update_line="0 3 * * * cd $SCRIPT_DIR && ./update.sh >> $SCRIPT_DIR/logs/update.log 2>&1"
-    backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup-docker.sh >> $SCRIPT_DIR/logs/backup.log 2>&1"
+    backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup.sh --mode auto >> $SCRIPT_DIR/logs/backup.log 2>&1"
 
     local existing_cron
     if [ "$(id -u)" -eq 0 ]; then
         existing_cron="$(crontab -l 2>/dev/null || true)"
         {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
             echo "$backup_line"
             echo "$update_line"
         } | crontab -
     else
         existing_cron="$($SUDO crontab -l 2>/dev/null || true)"
         {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
             echo "$backup_line"
             echo "$update_line"
         } | $SUDO crontab -
