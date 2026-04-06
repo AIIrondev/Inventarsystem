@@ -209,24 +209,49 @@ run_recovery_backup() {
 }
 
 post_start_self_heal_check() {
-    if check_http_health; then
-        echo "✓ HTTP health check passed"
-        return 0
-    fi
+    local retry_count=0 max_retries=2 attempt=0 max_attempts=30 interval=2
 
-    echo "Detected unhealthy HTTP response (for example 502). Initiating recovery..."
-    restart_app_stack
+    # Try health check with retries (up to 2 attempts with 30 retries each)
+    while [[ $retry_count -lt $max_retries ]]; do
+        echo "Health check attempt $((retry_count + 1))/$max_retries..."
+        
+        # Try HTTP health check multiple times per attempt
+        for ((attempt=1; attempt<=$max_attempts; attempt++)); do
+            if check_http_health; then
+                echo "✓ HTTP health check passed (attempt $attempt/$max_attempts)"
+                return 0
+            fi
+            
+            if [[ $attempt -lt $max_attempts ]]; then
+                sleep $interval
+            fi
+        done
 
+        # First failure: attempt recovery by restarting services
+        if [[ $retry_count -eq 0 ]]; then
+            echo "Health check failed. Attempting to restart services..."
+            restart_app_stack
+            ((retry_count++))
+        else
+            break
+        fi
+    done
+
+    # All attempts exhausted; try backup recovery
+    echo "Health checks failed after restart attempt. Running recovery backup..."
     if run_recovery_backup; then
         echo "✓ Recovery backup created"
     else
         echo "Warning: Recovery backup could not be created"
     fi
 
+    # Final health verification
     if check_http_health; then
-        echo "✓ Service recovered after restart"
+        echo "✓ Service recovered after restart and backup"
+        return 0
     else
-        echo "Warning: Service still unhealthy after recovery restart"
+        echo "Warning: Service still unhealthy after all recovery attempts"
+        return 1
     fi
 }
 

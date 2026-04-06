@@ -25,7 +25,6 @@ Features:
 - Booking and reservation of items
 """
 
-from flask_jwt_extended import JWTManager, create_access_token, set_access_cookies, unset_jwt_cookies
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, get_flashed_messages, jsonify, Response, make_response
 from werkzeug.utils import secure_filename
 import user as us
@@ -68,13 +67,7 @@ app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
 app.config['THUMBNAIL_FOLDER'] = cfg.THUMBNAIL_FOLDER
 app.config['PREVIEW_FOLDER'] = cfg.PREVIEW_FOLDER
 app.config['ALLOWED_EXTENSIONS'] = set(cfg.ALLOWED_EXTENSIONS)
-app.config["JWT_SECRET_KEY"] = cfg.SECRET_KEY
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = False  # No expiration for session cookies
-app.config["JWT_TOKEN_LOCATION"] = ["cookies"]  # Store JWT in cookies
-app.config["JWT_COOKIE_SECURE"] = cfg.SSL_ENABLED or not cfg.DEBUG  # HTTPS in production or non-debug
-app.config["JWT_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access
-app.config["JWT_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
-jwt = JWTManager(app)
+# JWT configuration removed - using Flask sessions instead
 # app.config['QR_CODE_FOLDER'] = cfg.QR_CODE_FOLDER  # QR Code storage deactivated
 
 # Thumbnail sizes
@@ -289,25 +282,6 @@ if cfg.SCHEDULER_ENABLED:
 # Register shutdown handler to stop scheduler when app is terminated
 import atexit
 atexit.register(lambda: scheduler.shutdown() if cfg.SCHEDULER_ENABLED else None)
-
-# JWT Error handlers
-@jwt.unauthorized_loader
-def missing_token_callback(error):
-    """Handle missing JWT token."""
-    flash('Login erforderlich. Bitte melden Sie sich an.', 'error')
-    return redirect(url_for('login'))
-
-@jwt.invalid_token_loader
-def invalid_token_callback(error):
-    """Handle invalid JWT token."""
-    flash('Ungültiger Token. Bitte melden Sie sich erneut an.', 'error')
-    return redirect(url_for('login'))
-
-@jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_data):
-    """Handle expired JWT token."""
-    flash('Token abgelaufen. Bitte melden Sie sich erneut an.', 'error')
-    return redirect(url_for('login'))
 
 def allowed_file(filename, file_content=None, max_size_mb=cfg.MAX_UPLOAD_MB):
     """
@@ -853,17 +827,9 @@ def login():
             session['username'] = username
             if user['Admin']:
                 session['admin'] = True
-                # Create JWT token and set as cookie
-                access_token = create_access_token(identity=username)
-                resp = make_response(redirect(url_for('home_admin')))
-                set_access_cookies(resp, access_token)
-                return resp
+                return redirect(url_for('home_admin'))
             else:
-                # Create JWT token and set as cookie
-                access_token = create_access_token(identity=username)
-                resp = make_response(redirect(url_for('home')))
-                set_access_cookies(resp, access_token)
-                return resp
+                return redirect(url_for('home'))
         else:
             flash('Ungültige Anmeldedaten', 'error')
             get_flashed_messages()
@@ -949,9 +915,7 @@ def logout():
     """
     session.pop('username', None)
     session.pop('admin', None)
-    resp = make_response(redirect(url_for('login')))
-    unset_jwt_cookies(resp)
-    return resp
+    return redirect(url_for('login'))
 
 
 @app.route('/get_items', methods=['GET'])
