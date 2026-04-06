@@ -260,6 +260,43 @@ def _build_invoice_pdf(invoice_data):
     pdf_buffer.seek(0)
     return pdf_buffer
 
+
+def _prepare_invoice_pdf_payload(invoice_data, borrow_doc=None, item_doc=None):
+    """Normalize stored invoice data for robust PDF rendering."""
+    borrow_doc = borrow_doc or {}
+    item_doc = item_doc or {}
+
+    created_at_raw = invoice_data.get('created_at')
+    created_at_display = ''
+    if isinstance(created_at_raw, datetime.datetime):
+        created_at_display = created_at_raw.strftime('%d.%m.%Y %H:%M')
+    elif created_at_raw:
+        created_at_display = str(created_at_raw)
+
+    amount_value = _parse_money_value(invoice_data.get('amount'))
+    if amount_value is None:
+        amount_value = _parse_money_value(invoice_data.get('amount_text'))
+    amount_text = invoice_data.get('amount_text')
+    if not amount_text:
+        amount_text = _format_money_value(amount_value)
+
+    item_id = invoice_data.get('item_id')
+    if not item_id and item_doc.get('_id'):
+        item_id = str(item_doc.get('_id'))
+
+    return {
+        'invoice_number': invoice_data.get('invoice_number') or _build_invoice_number(borrow_doc.get('_id', ''), datetime.datetime.now()),
+        'created_at': created_at_raw,
+        'created_at_display': created_at_display,
+        'borrower': invoice_data.get('borrower') or borrow_doc.get('User', '-'),
+        'item_name': invoice_data.get('item_name') or item_doc.get('Name', '-'),
+        'item_code': invoice_data.get('item_code') or item_doc.get('Code_4', '-'),
+        'item_id': str(item_id or '-'),
+        'damage_reason': invoice_data.get('damage_reason') or 'Keine Schadensbeschreibung hinterlegt.',
+        'amount': amount_value,
+        'amount_text': amount_text or '-',
+    }
+
 @app.context_processor
 def inject_version():
     """Inject global template variables."""
@@ -1007,6 +1044,125 @@ def library_view():
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
+
+
+@app.route('/library_loans_admin')
+def library_loans_admin():
+    """Admin overview for library borrowings and damaged library items."""
+    if 'username' not in session:
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    def fmt_dt(dt):
+        try:
+            return dt.strftime('%d.%m.%Y %H:%M') if dt else ''
+        except Exception:
+            return str(dt) if dt else ''
+
+    def fmt_money(value):
+        return _format_money_value(value)
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
+
+        library_items = list(items_col.find(
+            {'ItemType': {'$in': LIBRARY_ITEM_TYPES}},
+            {'Name': 1, 'Code_4': 1, 'Anschaffungskosten': 1, 'Condition': 1, 'HasDamage': 1, 'DamageReports': 1, 'Verfuegbar': 1, 'User': 1, 'ItemType': 1, 'Author': 1, 'ISBN': 1}
+        ))
+        item_map = {str(item['_id']): item for item in library_items if item.get('_id')}
+        item_ids = list(item_map.keys())
+
+        active_records = []
+        if item_ids:
+            active_records = list(ausleihungen_col.find(
+                {'Item': {'$in': item_ids}, 'Status': {'$in': ['active', 'planned', 'completed']}},
+                {'User': 1, 'Item': 1, 'Status': 1, 'Start': 1, 'End': 1, 'Period': 1, 'Notes': 1, 'InvoiceData': 1}
+            ).sort('Start', -1))
+
+        active_item_ids = set()
+        loan_entries = []
+        for record in active_records:
+            item_id = str(record.get('Item') or '')
+            item_doc = item_map.get(item_id)
+            if item_id and record.get('Status') == 'active':
+                active_item_ids.add(item_id)
+
+            if not item_doc:
+                continue
+
+            invoice_data = record.get('InvoiceData') or {}
+            condition_value = str(item_doc.get('Condition', '')).strip().lower()
+            item_has_damage = bool(item_doc.get('HasDamage')) or condition_value == 'destroyed' or bool(item_doc.get('DamageReports'))
+            damage_reports = item_doc.get('DamageReports', []) or []
+
+            loan_entries.append({
+                'id': str(record.get('_id')),
+                'item_id': item_id,
+                'item_name': item_doc.get('Name', ''),
+                'item_code': item_doc.get('Code_4', ''),
+                'item_author': item_doc.get('Author', ''),
+                'item_isbn': item_doc.get('ISBN', ''),
+                'user': record.get('User', ''),
+                'status': record.get('Status', ''),
+                'start': fmt_dt(record.get('Start')),
+                'end': fmt_dt(record.get('End')),
+                'period': record.get('Period', ''),
+                'notes': record.get('Notes', ''),
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'invoice_amount': fmt_money(invoice_data.get('amount')) if invoice_data.get('amount') is not None else fmt_money(item_doc.get('Anschaffungskosten')),
+                'invoice_paid': bool(invoice_data.get('paid', False)),
+                'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
+                'has_damage': item_has_damage,
+                'damage_count': len(damage_reports),
+                'damage_text': (damage_reports[0].get('description', '') if damage_reports else ''),
+            })
+
+        damaged_items = []
+        for item_doc in library_items:
+            item_id = str(item_doc.get('_id') or '')
+            condition_value = str(item_doc.get('Condition', '')).strip().lower()
+            damage_reports = item_doc.get('DamageReports', []) or []
+            item_has_damage = bool(item_doc.get('HasDamage')) or condition_value == 'destroyed' or bool(damage_reports)
+            if not item_has_damage or item_id in active_item_ids:
+                continue
+
+            damaged_items.append({
+                'id': item_id,
+                'name': item_doc.get('Name', ''),
+                'code': item_doc.get('Code_4', ''),
+                'author': item_doc.get('Author', ''),
+                'isbn': item_doc.get('ISBN', ''),
+                'condition': item_doc.get('Condition', ''),
+                'damage_count': len(damage_reports),
+                'damage_text': (damage_reports[0].get('description', '') if damage_reports else ''),
+                'available': bool(item_doc.get('Verfuegbar', False)),
+                'last_updated': fmt_dt(item_doc.get('LastUpdated')),
+            })
+
+        return render_template(
+            'library_borrowings_admin.html',
+            loan_entries=loan_entries,
+            damaged_items=damaged_items,
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading library loans admin view: {e}")
+        flash('Fehler beim Laden der Bibliotheksverwaltung.', 'error')
+        return redirect(url_for('home_admin'))
+    finally:
+        if client:
+            client.close()
 
 
 @app.route('/api/library_items')
@@ -3679,6 +3835,7 @@ def mark_damage_repaired(id):
         client = MongoClient(MONGODB_HOST, MONGODB_PORT)
         db = client[MONGODB_DB]
         items_col = db['items']
+        ausleihungen_col = db['ausleihungen']
 
         item = items_col.find_one({'_id': ObjectId(id)}, {'DamageReports': 1, 'DamageRepairs': 1})
         if not item:
@@ -3688,6 +3845,7 @@ def mark_damage_repaired(id):
         if not open_reports:
             return jsonify({'success': False, 'message': 'Keine offenen Schäden vorhanden.'}), 400
 
+        active_borrow = ausleihungen_col.find_one({'Item': str(id), 'Status': 'active'}, {'_id': 1})
         now = datetime.datetime.now()
         repair_entry = {
             'repaired_by': session['username'],
@@ -3702,10 +3860,19 @@ def mark_damage_repaired(id):
                 '$set': {
                     'DamageReports': [],
                     'HasDamage': False,
-                    'LastUpdated': now
+                    'LastUpdated': now,
+                    **({} if active_borrow else {'Verfuegbar': True}),
                 }
             }
         )
+
+        if not active_borrow:
+            items_col.update_one(
+                {'_id': ObjectId(id)},
+                {
+                    '$unset': {'User': '', 'Condition': ''}
+                }
+            )
 
         if result.matched_count == 0:
             return jsonify({'success': False, 'message': 'Objekt nicht gefunden.'}), 404
@@ -4843,10 +5010,13 @@ def admin_borrowings():
             item_code = item_doc.get('Code_4')
             item_name = item_doc.get('Name')
             item_cost = item_doc.get('Anschaffungskosten')
+            condition_value = str(item_doc.get('Condition', '')).strip().lower()
+            has_damage = bool(item_doc.get('HasDamage')) or condition_value == 'destroyed' or bool(item_doc.get('DamageReports'))
         except:
             item_code = None
             item_name = None
             item_cost = None
+            has_damage = False
         entries.append({
             'id': str(r.get('_id')),
             'item_id': str(item_doc.get('_id')) if item_doc and item_doc.get('_id') else str(it_id or ''),
@@ -4866,6 +5036,7 @@ def admin_borrowings():
             'invoice_created_at': fmt_dt(invoice_data.get('created_at')) if isinstance(invoice_data.get('created_at'), datetime.datetime) else '',
             'invoice_paid': bool(invoice_data.get('paid', False)),
             'invoice_paid_at': fmt_dt(invoice_data.get('paid_at')) if isinstance(invoice_data.get('paid_at'), datetime.datetime) else '',
+            'has_damage': has_damage,
         })
 
     client.close()
@@ -5131,6 +5302,250 @@ def admin_mark_invoice_paid(borrow_id):
         app.logger.error(f"Error marking invoice paid for borrow {borrow_id}: {e}")
         flash('Fehler beim Markieren als bezahlt.', 'error')
         return redirect(url_for('admin_borrowings'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/borrowings/<borrow_id>/invoice/finalize', methods=['POST'])
+def admin_finalize_invoice_and_repair(borrow_id):
+    """Mark invoice as paid and item as repaired in one action."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        borrow_doc = ausleihungen.find_one({'_id': ObjectId(borrow_id)})
+        if not borrow_doc:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('admin_borrowings'))
+
+        invoice_data = borrow_doc.get('InvoiceData') or {}
+        if not invoice_data:
+            flash('Für diese Ausleihung existiert keine Rechnung.', 'warning')
+            return redirect(url_for('admin_borrowings'))
+
+        item_doc = None
+        item_id = borrow_doc.get('Item')
+        if item_id:
+            try:
+                item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+            except Exception:
+                item_doc = items_col.find_one({'_id': item_id})
+
+        now = datetime.datetime.now()
+
+        update_fields = {
+            'LastUpdated': now,
+        }
+        if invoice_data.get('paid') is not True:
+            update_fields.update({
+                'InvoiceData.paid': True,
+                'InvoiceData.paid_at': now,
+                'InvoiceData.paid_by': session.get('username', ''),
+            })
+        if borrow_doc.get('Status') == 'active':
+            update_fields['Status'] = 'completed'
+            update_fields['End'] = now
+
+        ausleihungen.update_one({'_id': borrow_doc['_id']}, {'$set': update_fields})
+
+        repaired = False
+        resolved_count = 0
+        if item_doc:
+            open_reports = item_doc.get('DamageReports', []) or []
+            resolved_count = len(open_reports)
+            item_update = {
+                '$set': {
+                    'DamageReports': [],
+                    'HasDamage': False,
+                    'Verfuegbar': True,
+                    'LastUpdated': now,
+                },
+                '$unset': {
+                    'User': '',
+                    'Condition': '',
+                },
+            }
+            if open_reports:
+                repair_entry = {
+                    'repaired_by': session['username'],
+                    'repaired_at': now,
+                    'resolved_reports': open_reports,
+                }
+                item_update['$push'] = {'DamageRepairs': {'$each': [repair_entry], '$position': 0}}
+
+            item_result = items_col.update_one({'_id': item_doc['_id']}, item_update)
+            repaired = item_result.matched_count > 0
+
+        try:
+            logs_collection = db['system_logs']
+            logs_collection.insert_one({
+                'type': 'damage_invoice_finalize',
+                'timestamp': now.isoformat(),
+                'user': session.get('username'),
+                'borrow_id': borrow_id,
+                'item_id': str(item_doc.get('_id')) if item_doc else '',
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'amount': invoice_data.get('amount'),
+                'repaired': repaired,
+                'resolved_damage_reports': resolved_count,
+                'ip': request.remote_addr,
+            })
+        except Exception as log_err:
+            app.logger.warning(f"Damage invoice finalize log write failed for borrow {borrow_id}: {log_err}")
+
+        if repaired:
+            flash('Rechnung als bezahlt markiert und Element als repariert abgeschlossen.', 'success')
+        else:
+            flash('Rechnung als bezahlt markiert. Element konnte nicht repariert werden (nicht gefunden).', 'warning')
+        return redirect(url_for('admin_borrowings'))
+    except Exception as e:
+        app.logger.error(f"Error finalizing invoice/repair for borrow {borrow_id}: {e}")
+        flash('Fehler beim Kombinieren von bezahlt und repariert.', 'error')
+        return redirect(url_for('admin_borrowings'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/borrowings/<borrow_id>/invoice/pdf', methods=['GET'])
+def admin_view_invoice_pdf(borrow_id):
+    """View a previously created invoice PDF for a borrowing."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        ausleihungen = db['ausleihungen']
+        items_col = db['items']
+
+        borrow_doc = ausleihungen.find_one({'_id': ObjectId(borrow_id)}, {'InvoiceData': 1, 'Item': 1, 'User': 1})
+        if not borrow_doc:
+            flash('Ausleihung nicht gefunden.', 'error')
+            return redirect(url_for('library_loans_admin'))
+
+        invoice_data = borrow_doc.get('InvoiceData') or {}
+        if not invoice_data:
+            flash('Für diese Ausleihe wurde noch keine Rechnung erstellt.', 'warning')
+            return redirect(url_for('library_loans_admin'))
+
+        item_doc = None
+        item_id = borrow_doc.get('Item')
+        if item_id:
+            try:
+                item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+            except Exception:
+                item_doc = items_col.find_one({'_id': item_id})
+
+        pdf_payload = _prepare_invoice_pdf_payload(invoice_data, borrow_doc=borrow_doc, item_doc=item_doc)
+        invoice_number = pdf_payload.get('invoice_number', 'rechnung')
+        pdf_buffer = _build_invoice_pdf(pdf_payload)
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=f'rechnung_{invoice_number}.pdf'
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading stored invoice PDF for borrow {borrow_id}: {e}")
+        flash('Fehler beim Öffnen der Rechnung.', 'error')
+        return redirect(url_for('library_loans_admin'))
+    finally:
+        if client:
+            client.close()
+
+
+@app.route('/admin/library/items/<item_id>/invoices', methods=['GET'])
+def library_item_invoices(item_id):
+    """Show all stored invoices for one specific library item."""
+    if 'username' not in session or not us.check_admin(session['username']):
+        flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
+        return redirect(url_for('login'))
+    if not cfg.LIBRARY_MODULE_ENABLED:
+        flash('Bibliotheks-Modul ist deaktiviert.', 'error')
+        return redirect(url_for('home_admin'))
+
+    client = None
+    try:
+        client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+        db = client[MONGODB_DB]
+        items_col = db['items']
+        ausleihungen = db['ausleihungen']
+
+        try:
+            item_doc = items_col.find_one({'_id': ObjectId(item_id)})
+        except Exception:
+            item_doc = items_col.find_one({'_id': item_id})
+
+        if not item_doc:
+            flash('Bibliotheksmedium nicht gefunden.', 'error')
+            return redirect(url_for('library_loans_admin'))
+
+        borrow_docs = list(ausleihungen.find(
+            {
+                'Item': str(item_doc.get('_id')),
+                'InvoiceData': {'$exists': True, '$ne': {}}
+            },
+            {
+                'Status': 1,
+                'User': 1,
+                'Start': 1,
+                'End': 1,
+                'InvoiceData': 1,
+            }
+        ).sort('InvoiceData.created_at', -1))
+
+        entries = []
+        for borrow_doc in borrow_docs:
+            invoice_data = borrow_doc.get('InvoiceData') or {}
+            created_at = invoice_data.get('created_at')
+            created_at_display = created_at.strftime('%d.%m.%Y %H:%M') if isinstance(created_at, datetime.datetime) else (str(created_at) if created_at else '')
+            paid_at = invoice_data.get('paid_at')
+            paid_at_display = paid_at.strftime('%d.%m.%Y %H:%M') if isinstance(paid_at, datetime.datetime) else (str(paid_at) if paid_at else '')
+
+            entries.append({
+                'borrow_id': str(borrow_doc.get('_id')),
+                'borrow_status': borrow_doc.get('Status', ''),
+                'borrow_user': borrow_doc.get('User', ''),
+                'borrow_start': borrow_doc.get('Start').strftime('%d.%m.%Y %H:%M') if isinstance(borrow_doc.get('Start'), datetime.datetime) else '',
+                'borrow_end': borrow_doc.get('End').strftime('%d.%m.%Y %H:%M') if isinstance(borrow_doc.get('End'), datetime.datetime) else '',
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'invoice_amount': _format_money_value(invoice_data.get('amount')),
+                'invoice_reason': invoice_data.get('damage_reason', ''),
+                'invoice_created_at': created_at_display,
+                'invoice_created_by': invoice_data.get('created_by', ''),
+                'invoice_paid': bool(invoice_data.get('paid', False)),
+                'invoice_paid_at': paid_at_display,
+                'invoice_paid_by': invoice_data.get('paid_by', ''),
+            })
+
+        return render_template(
+            'library_item_invoices.html',
+            item={
+                'id': str(item_doc.get('_id')),
+                'name': item_doc.get('Name', ''),
+                'code': item_doc.get('Code_4', ''),
+                'author': item_doc.get('Author', ''),
+                'isbn': item_doc.get('ISBN', ''),
+            },
+            invoices=entries,
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+            student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading invoice history for item {item_id}: {e}")
+        flash('Fehler beim Laden der Rechnungshistorie.', 'error')
+        return redirect(url_for('library_loans_admin'))
     finally:
         if client:
             client.close()

@@ -269,6 +269,7 @@
                             {% if library_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliothek öffnen</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bibliothek hochladen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Bibliotheks-Ausleihen</a></li>
                             {% if student_cards_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
                             {% endif %}

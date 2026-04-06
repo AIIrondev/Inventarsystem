@@ -115,9 +115,17 @@
         <td style="padding:8px; border-bottom:1px solid #eee;">
           <div style="display:flex; flex-wrap:wrap; gap:8px;">
             <button type="button" class="btn btn-danger" onclick="openInvoiceModal(this)" {% if e.status != 'active' %}disabled{% endif %}>Rechnung erstellen</button>
-            {% if e.invoice_number and not e.invoice_paid %}
-            <form method="post" action="{{ url_for('admin_mark_invoice_paid', borrow_id=e.id) }}" onsubmit="return confirm('Rechnung als bezahlt markieren?');">
-              <button type="submit" class="btn btn-success">Als bezahlt markieren</button>
+            {% if e.invoice_number and ((not e.invoice_paid) or e.has_damage) %}
+            <form method="post" action="{{ url_for('admin_finalize_invoice_and_repair', borrow_id=e.id) }}" onsubmit="return confirm('Rechnung als bezahlt und Element als repariert markieren?');">
+              <button type="submit" class="btn btn-success">
+                {% if not e.invoice_paid and e.has_damage %}
+                  Bezahlt + repariert
+                {% elif not e.invoice_paid %}
+                  Als bezahlt markieren
+                {% else %}
+                  Als repariert markieren
+                {% endif %}
+              </button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('admin_reset_borrowing', borrow_id=e.id) }}" onsubmit="return confirm('Ausleihe zurücksetzen?');">
