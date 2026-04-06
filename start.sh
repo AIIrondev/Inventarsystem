@@ -484,6 +484,7 @@ verify_stack_health() {
     echo "Error: stack health check failed."
     docker compose "${compose_args[@]}" ps || true
     docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
+    ./restart.sh
     return 1
 }
 
