@@ -462,29 +462,44 @@ EOF
 }
 
 verify_stack_health() {
-    local compose_args running_services
+    local compose_args running_services retry_count=0
     compose_args=(--env-file "$ENV_FILE")
 
-    echo "Waiting for containers to become healthy..."
-    for _ in $(seq 1 60); do
-        running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
-        if printf '%s\n' "$running_services" | grep -Fxq app && \
-           printf '%s\n' "$running_services" | grep -Fxq nginx && \
-           printf '%s\n' "$running_services" | grep -Fxq mongodb; then
-            if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
-                if curl -kfsS "https://127.0.0.1:$HTTPS_PORT_VALUE" >/dev/null 2>&1; then
-                    echo "Health check passed."
-                    return 0
+    # Try health check with optional restart on first failure
+    while [[ $retry_count -lt 2 ]]; do
+        echo "Waiting for containers to become healthy... (attempt $((retry_count + 1))/2)"
+        for _ in $(seq 1 60); do
+            running_services="$(docker compose "${compose_args[@]}" ps --status running --services 2>/dev/null || true)"
+            if printf '%s\n' "$running_services" | grep -Fxq app && \
+               printf '%s\n' "$running_services" | grep -Fxq nginx && \
+               printf '%s\n' "$running_services" | grep -Fxq mongodb; then
+                if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
+                    if curl -kfsS "https://127.0.0.1:$HTTPS_PORT_VALUE" >/dev/null 2>&1; then
+                        echo "Health check passed."
+                        return 0
+                    fi
                 fi
             fi
+            sleep 2
+        done
+
+        # First failure: attempt recovery by restarting containers
+        if [[ $retry_count -eq 0 ]]; then
+            echo "Health check failed. Attempting to restart containers..."
+            docker compose "${compose_args[@]}" ps || true
+            docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
+            docker compose "${compose_args[@]}" restart app nginx mongodb
+            sleep 3
+            ((retry_count++))
+        else
+            break
         fi
-        sleep 2
     done
 
-    echo "Error: stack health check failed."
+    # Final failure
+    echo "Error: stack health check failed after restart attempt."
     docker compose "${compose_args[@]}" ps || true
     docker compose "${compose_args[@]}" logs --tail=120 app nginx mongodb || true
-    ./restart.sh
     return 1
 }
 
