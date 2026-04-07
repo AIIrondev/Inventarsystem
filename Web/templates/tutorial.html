@@ -81,45 +81,15 @@
     height: fit-content;
   }
 
-  .progress-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-
-  .progress-label-row h2 {
-    margin: 0;
+  .tutorial-side h2 {
+    margin: 0 0 8px;
     font-size: 1.08rem;
     color: #0f172a;
     font-weight: 800;
   }
 
-  .progress-label-row span {
-    font-size: 0.93rem;
-    color: #475569;
-    font-weight: 700;
-  }
-
-  .tutorial-progress-track {
-    width: 100%;
-    height: 9px;
-    background: #e2e8f0;
-    border-radius: 999px;
-    overflow: hidden;
-    margin-bottom: 10px;
-  }
-
-  .tutorial-progress-fill {
-    width: 0;
-    height: 100%;
-    background: linear-gradient(90deg, #2563eb, #0ea5e9);
-    transition: width 280ms ease;
-  }
-
   .tutorial-side p {
-    margin: 0 0 10px;
+    margin: 0 0 14px;
     color: #334155;
     font-size: 1rem;
   }
@@ -161,118 +131,6 @@
     gap: 12px;
   }
 
-  .workflow-mode-panel {
-    grid-column: span 12;
-    background: #ffffff;
-    border: 1px solid #cfdbe8;
-    border-radius: 16px;
-    padding: 16px;
-    display: grid;
-    gap: 12px;
-  }
-
-  .workflow-mode-panel h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #0f172a;
-  }
-
-  .workflow-mode-panel p {
-    margin: 0;
-    color: #334155;
-  }
-
-  .workflow-mode-switch {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .workflow-mode-switch button {
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #0f172a;
-    border-radius: 12px;
-    padding: 10px 14px;
-    font-size: 1rem;
-    font-weight: 800;
-    cursor: pointer;
-    transition: all 160ms ease;
-  }
-
-  .workflow-mode-switch button.active {
-    background: #dbeafe;
-    border-color: #60a5fa;
-    color: #1d4ed8;
-  }
-
-  .workflow-mode-switch button:hover {
-    transform: translateY(-1px);
-  }
-
-  .workflow-demo-grid {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .workflow-demo-card {
-    grid-column: span 12;
-    border: 1px solid #dbe3ee;
-    border-radius: 14px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    padding: 14px;
-    transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease;
-  }
-
-  .workflow-demo-card h4 {
-    margin: 0 0 6px;
-    font-size: 1.1rem;
-    color: #0f172a;
-  }
-
-  .workflow-demo-card .demo-badge {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 0.86rem;
-    font-weight: 800;
-    color: #0c4a6e;
-    background: #ecfeff;
-    border: 1px solid #bae6fd;
-    margin-bottom: 8px;
-  }
-
-  .workflow-demo-card .demo-list {
-    margin: 0;
-    padding-left: 18px;
-    color: #334155;
-  }
-
-  .workflow-demo-card .demo-list li {
-    margin-bottom: 5px;
-  }
-
-  .workflow-demo-card.fade-out {
-    opacity: 0.45;
-    transform: scale(0.99);
-    border-color: #e2e8f0;
-  }
-
-  .workflow-demo-card.active-mode {
-    border-color: #93c5fd;
-    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
-  }
-
-  .workflow-demo-note {
-    background: #f8fafc;
-    border: 1px solid #dbe3ee;
-    border-radius: 12px;
-    padding: 12px;
-    color: #334155;
-  }
-
   .workflow-step {
     grid-column: span 12;
     background: #ffffff;
@@ -292,26 +150,6 @@
     transform: translateY(0) scale(1);
     pointer-events: auto;
     max-height: 1300px;
-  }
-
-  .step-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-
-  .step-badge {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    font-size: 0.86rem;
-    font-weight: 800;
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
-    padding: 5px 12px;
   }
 
   .workflow-step h3 {
@@ -337,37 +175,6 @@
     margin-bottom: 5px;
   }
 
-  .step-tasks {
-    margin-top: 10px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .task-btn {
-    border: 1px solid #dbe3ee;
-    background: #ffffff;
-    color: #0f172a;
-    border-radius: 12px;
-    padding: 11px 14px;
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 150ms ease;
-  }
-
-  .task-btn:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    transform: translateY(-1px);
-  }
-
-  .task-btn.done {
-    background: #ecfdf3;
-    border-color: #86efac;
-    color: #166534;
-  }
-
   .tutorial-actions {
     margin-top: 12px;
     display: flex;
@@ -391,61 +198,6 @@
 
   .workflow-controls .btn {
     min-width: 120px;
-  }
-
-  .micro-sim {
-    margin-top: 10px;
-    border: 1px dashed #cbd5e1;
-    border-radius: 14px;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-    padding: 14px;
-  }
-
-  .micro-sim h4 {
-    margin: 0 0 6px;
-    font-size: 1rem;
-    color: #0f172a;
-    font-weight: 800;
-  }
-
-  .sim-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .sim-chip {
-    border-radius: 999px;
-    padding: 9px 14px;
-    font-size: 0.96rem;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #334155;
-    cursor: pointer;
-    transition: all 150ms ease;
-  }
-
-  .sim-chip:hover {
-    background: #eff6ff;
-    border-color: #93c5fd;
-  }
-
-  .sim-chip.active {
-    background: #dbeafe;
-    border-color: #60a5fa;
-    color: #1d4ed8;
-    transform: scale(1.02);
-  }
-
-  .sim-output {
-    margin-top: 9px;
-    font-size: 1rem;
-    color: #334155;
-    background: #ffffff;
-    border: 1px solid #dbe3ee;
-    border-radius: 12px;
-    padding: 12px;
-    min-height: 50px;
   }
 
   .tutorial-note {
@@ -482,14 +234,8 @@
 
   <div class="tutorial-grid">
     <aside class="tutorial-side">
-      <div class="progress-label-row">
-        <h2>Fortschritt</h2>
-        <span id="workflowProgressLabel">0%</span>
-      </div>
-      <div class="tutorial-progress-track" aria-hidden="true">
-        <div class="tutorial-progress-fill" id="workflowProgressFill"></div>
-      </div>
-      <p>Gehen Sie in Ruhe durch jeden Schritt. Ein Klick reicht aus, um weiterzukommen.</p>
+      <h2>Schritte</h2>
+      <p>Folgen Sie einfach jedem Schritt. Sie koennen jederzeit vor- oder zurueckgehen.</p>
 
       <div class="workflow-nav" id="workflowNav">
         <button type="button" data-target-step="0">1. Startseite</button>
@@ -501,65 +247,21 @@
       </div>
 
       <div class="workflow-controls">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="prevStepBtn">Zuruck</button>
-        <button type="button" class="btn btn-primary btn-sm" id="nextStepBtn">Weiter</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="prevStepBtn">Zurueck</button>
+        <button type="button" class="btn btn-primary btn-sm" id="nextStepBtn">Naechster Schritt</button>
       </div>
     </aside>
 
     <section class="workflow-main" id="workflowMain">
-      <section class="workflow-mode-panel">
-        <h3>Demo-Workflow ohne Risiko</h3>
-        <p>Hier sehen Sie eine fest eingebaute Simulation. Sie zeigt den normalen Ablauf und den Admin-Ablauf getrennt voneinander, ohne die echte Anwendung zu veraendern.</p>
-
-        <div class="workflow-mode-switch" role="tablist" aria-label="Workflow-Modus waehlen">
-          <button type="button" id="modeNormalBtn" class="active" data-workflow-mode="normal">Normaler Ablauf</button>
-          <button type="button" id="modeAdminBtn" data-workflow-mode="admin">Admin-Ablauf</button>
-        </div>
-
-        <div class="workflow-demo-note" id="workflowDemoDescription">
-          Im normalen Modus sehen Sie den typischen Tagesablauf fuer Nutzer ohne Verwaltung.
-        </div>
-
-        <div class="workflow-demo-grid">
-          <article class="workflow-demo-card active-mode" data-demo-card="normal">
-            <div class="demo-badge">Normaler Nutzer</div>
-            <h4>So arbeitet ein normaler Nutzer</h4>
-            <ul class="demo-list">
-              <li>Startet auf der eigenen Uebersicht.</li>
-              <li>Sieht nur seine aktuellen Ausleihen.</li>
-              <li>Kann Artikel suchen und bei Bedarf reservieren.</li>
-              <li>Braucht keine Administrationsrechte.</li>
-            </ul>
-          </article>
-
-          <article class="workflow-demo-card fade-out" data-demo-card="admin">
-            <div class="demo-badge">Admin</div>
-            <h4>So arbeitet eine Admin-Person</h4>
-            <ul class="demo-list">
-              <li>Verwaltet Artikel, Ausleihen und Protokolle.</li>
-              <li>Sieht zusaetzliche Menues und Auswertungen.</li>
-              <li>Kann Bucher, Defekte und Rueckgaben direkt bearbeiten.</li>
-              <li>Arbeitet mit der gleichen Technik, aber mit mehr Funktionen.</li>
-            </ul>
-          </article>
-        </div>
-      </section>
 
       <article class="workflow-step" data-step-index="0" data-step-key="dashboard">
-        <div class="step-top">
-          <span class="step-badge">Schritt 1 · kurz und einfach</span>
-        </div>
-        <h3>Dashboard verstehen</h3>
-        <p>Hier sehen Sie sofort die wichtigsten Bereiche. Der Startpunkt fuer die meisten Aufgaben.</p>
+        <h3>Startbereich</h3>
+        <p>Hier starten Sie. Das ist der sichere Ausgangspunkt fuer alle weiteren Schritte.</p>
         <ul>
-          <li>Home zeigt Ihre wichtigsten Informationen.</li>
-          <li>Oben finden Sie die wichtigsten Bereiche schnell wieder.</li>
-          <li>Alles ist so aufgebaut, dass man sich leicht zurechtfindet.</li>
+          <li>Sie sehen den Ueberblick.</li>
+          <li>Oben liegen die wichtigsten Wege.</li>
+          <li>Alles ist gross und einfach lesbar.</li>
         </ul>
-
-        <div class="step-tasks">
-          <button type="button" class="task-btn" data-task-id="dash-open">Ich habe die Startseite verstanden</button>
-        </div>
 
         <div class="tutorial-actions">
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Startseite oeffnen</a>
@@ -567,81 +269,62 @@
       </article>
 
       <article class="workflow-step" data-step-index="1" data-step-key="items">
-        <div class="step-top">
-          <span class="step-badge">Schritt 2 · praktisch</span>
-        </div>
-        <h3>Artikelprozess interaktiv erleben</h3>
-        <p>Hier sehen Sie in Ruhe, wie man einen Artikel anlegt und danach wiederfindet.</p>
-
-        <div class="micro-sim">
-          <h4>Mini-Simulation</h4>
-          <div class="sim-row" id="itemSimRow">
-            <button type="button" class="sim-chip" data-sim-stage="upload">Upload</button>
-            <button type="button" class="sim-chip" data-sim-stage="filter">Filter</button>
-            <button type="button" class="sim-chip" data-sim-stage="borrow">Ausleihe</button>
-          </div>
-          <div class="sim-output" id="itemSimOutput">Wählen Sie einen Schritt aus. Dann erscheint die kurze Erklärung.</div>
-        </div>
-
-        <div class="step-tasks">
-          <button type="button" class="task-btn" data-task-id="item-sim">Ich kenne jetzt den Ablauf</button>
-        </div>
+        <h3>Artikel anlegen</h3>
+        <p>Hier legen Sie einen neuen Artikel an. Es sind nur wenige Felder erforderlich.</p>
+        <ul>
+          <li><strong>Name:</strong> Wie heisst der Artikel?</li>
+          <li><strong>Ort:</strong> Wo soll er gelagert werden?</li>
+          <li><strong>Beschreibung:</strong> Was ist daran interessant?</li>
+          <li><strong>Code:</strong> Eine Nummer zum schnellen Finden.</li>
+        </ul>
 
         <div class="tutorial-actions">
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('upload_admin') }}">Artikel oeffnen</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('upload_admin') }}">Neuen Artikel anlegen</a>
           <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home_admin') if is_admin else url_for('home') }}">Zurueck</a>
         </div>
       </article>
 
       {% if library_module_enabled %}
       <article class="workflow-step" data-step-index="2" data-step-key="library">
-        <div class="step-top">
-          <span class="step-badge">Schritt 3 · einfach</span>
-        </div>
-        <h3>Bibliotek-Workflow</h3>
-        <p>Wenn das Bibliotek-Modul aktiv ist, sehen Sie hier den einfachen Ablauf fuer Bucher und Ausleihen.</p>
+        <h3>Bibliotek-Bereich</h3>
+        <p>Dieser Bereich ist speziell fuer Buecher und Ausleihverwaltung.</p>
         <ul>
-          <li>Bucher hochladen und ordentlich einsortieren.</li>
-          <li>Ausleihen verwalten und rueckfuehren.</li>
-          <li>Defekte Medien und Rechnungen an einem Ort bearbeiten.</li>
+          <li><strong>Bucher hochladen:</strong> Neue Buecher in die Sammlung aufnehmen.</li>
+          <li><strong>Ausleihen ansehen:</strong> Wer hat welches Buch ausgeliehen?</li>
+          <li><strong>Defekte bearbeiten:</strong> Defekte Buecher markieren oder reparieren.</li>
+          <li><strong>Rechnungen:</strong> Kosten und Rechnungen verwalten.</li>
         </ul>
 
-        <div class="step-tasks">
-          <button type="button" class="task-btn" data-task-id="lib-check">Ich kenne den Bibliotek-Bereich</button>
-        </div>
-
         <div class="tutorial-actions">
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('library_view') }}">Bibliotek oeffnen</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('library_view') }}">Zur Bibliotek</a>
           <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('library_loans_admin') }}">Ausleihen ansehen</a>
         </div>
       </article>
       {% endif %}
 
       <article class="workflow-step" data-step-index="{{ '3' if library_module_enabled else '2' }}" data-step-key="daily">
-        <div class="step-top">
-          <span class="step-badge">Schritt {{ '4' if library_module_enabled else '3' }} · Alltag</span>
-        </div>
-        <h3>Tagesroutine fur den Schulalltag</h3>
-        <p>Hier bekommen Sie eine einfache Empfehlung fuer den Tagesablauf.</p>
-
-        <div class="micro-sim">
-          <h4>Tagessimulation</h4>
-          <div class="sim-row" id="daySimRow">
-            <button type="button" class="sim-chip" data-day-stage="morgens">Morgens</button>
-            <button type="button" class="sim-chip" data-day-stage="mittags">Mittags</button>
-            <button type="button" class="sim-chip" data-day-stage="nachmittags">Nachmittags</button>
-          </div>
-          <div class="sim-output" id="daySimOutput">Waehlen Sie eine Tageszeit aus. Dann sehen Sie den passenden Hinweis.</div>
+        <h3>Taegliche Aufgaben</h3>
+        <p>Das ist der gewoennliche Arbeitsablauf waehrend eines Schultages.</p>
+        
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Morgens:</p>
+          <p style="margin: 0; color: #334155;">Oeffnen Sie die Startseite und pruefen Sie offene Reservierungen oder Rueckgabefristen.</p>
         </div>
 
-        <div class="step-tasks">
-          <button type="button" class="task-btn" data-task-id="day-flow">Ich kenne den Tagesablauf</button>
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Mittags:</p>
+          <p style="margin: 0; color: #334155;">Neue Artikel oder Buecher hinzufuegen oder Ausleihungen begruenden.</p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
+          <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Nachmittags:</p>
+          <p style="margin: 0; color: #334155;">Rueckgaben buchen und kurz pruefen, ob alles in Ordnung ist.</p>
         </div>
 
         <div class="tutorial-actions">
           {% if is_admin %}
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_borrowings') }}">Ausleihungen verwalten</a>
-          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('logs') }}">Protokolle ansehen</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_borrowings') }}">Admin-Bereich</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('logs') }}">Protokolle</a>
           {% else %}
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a>
           {% endif %}
@@ -651,7 +334,7 @@
   </div>
 
   <div class="tutorial-note">
-    Tipp: Der Fortschritt bleibt gespeichert. Sie können das Tutorial jederzeit erneut starten und in Ruhe noch einmal ansehen.
+    Tipp: Sie koennen das Training jederzeit wieder oeffnen und in Ruhe weiterklicken.
   </div>
 </div>
 
@@ -659,21 +342,14 @@
   (function () {
     const stepEls = Array.from(document.querySelectorAll('.workflow-step'));
     const navBtns = Array.from(document.querySelectorAll('#workflowNav button[data-target-step]'));
-    const modeButtons = Array.from(document.querySelectorAll('[data-workflow-mode]'));
-    const demoDescription = document.getElementById('workflowDemoDescription');
-    const demoCards = Array.from(document.querySelectorAll('[data-demo-card]'));
     const nextBtn = document.getElementById('nextStepBtn');
     const prevBtn = document.getElementById('prevStepBtn');
-    const progressFill = document.getElementById('workflowProgressFill');
-    const progressLabel = document.getElementById('workflowProgressLabel');
-    const tutorialStateKey = 'inventarsystem_tutorial_state_v2_{{ username }}';
+    const tutorialStateKey = 'inventarsystem_tutorial_state_v3_{{ username }}';
 
     if (!stepEls.length) return;
 
     let currentStep = 0;
-    let taskDone = {};
     let prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let workflowMode = 'normal';
 
     function loadState() {
       try {
@@ -681,34 +357,15 @@
         if (!raw) return;
         const parsed = JSON.parse(raw);
         currentStep = Number.isInteger(parsed.currentStep) ? parsed.currentStep : 0;
-        taskDone = parsed.taskDone && typeof parsed.taskDone === 'object' ? parsed.taskDone : {};
-        workflowMode = parsed.workflowMode === 'admin' ? 'admin' : 'normal';
       } catch (e) {
         currentStep = 0;
-        taskDone = {};
-        workflowMode = 'normal';
       }
     }
 
     function saveState() {
       localStorage.setItem(tutorialStateKey, JSON.stringify({
-        currentStep: currentStep,
-        taskDone: taskDone,
-        workflowMode: workflowMode
+        currentStep: currentStep
       }));
-    }
-
-    function computeProgressPercent() {
-      const totalTasks = document.querySelectorAll('.task-btn[data-task-id]').length;
-      if (!totalTasks) return 0;
-      const doneCount = Object.values(taskDone).filter(Boolean).length;
-      return Math.round((doneCount / totalTasks) * 100);
-    }
-
-    function updateProgress() {
-      const percent = computeProgressPercent();
-      progressFill.style.width = percent + '%';
-      progressLabel.textContent = percent + '%';
     }
 
     function clampStep() {
@@ -735,94 +392,8 @@
       });
 
       prevBtn.disabled = currentStep <= 0;
-      nextBtn.textContent = currentStep >= stepEls.length - 1 ? 'Abschliessen' : 'Weiter';
-      updateProgress();
+      nextBtn.textContent = currentStep >= stepEls.length - 1 ? 'Fertig' : 'Naechster Schritt';
       saveState();
-    }
-
-    function renderWorkflowMode() {
-      modeButtons.forEach(function (btn) {
-        btn.classList.toggle('active', btn.dataset.workflowMode === workflowMode);
-      });
-
-      demoCards.forEach(function (card) {
-        const isActive = card.dataset.demoCard === workflowMode;
-        card.classList.toggle('active-mode', isActive);
-        card.classList.toggle('fade-out', !isActive);
-      });
-
-      if (demoDescription) {
-        if (workflowMode === 'admin') {
-          demoDescription.textContent = 'Im Admin-Modus sehen Sie Verwaltung, Ausleihen, Protokolle und Bearbeitung. Alles bleibt eine sichere Demo.';
-        } else {
-          demoDescription.textContent = 'Im normalen Modus sehen Sie den typischen Alltag ohne Verwaltungsfunktionen.';
-        }
-      }
-
-      saveState();
-    }
-
-    function toggleTask(button) {
-      const taskId = button.dataset.taskId;
-      if (!taskId) return;
-      taskDone[taskId] = !taskDone[taskId];
-      button.classList.toggle('done', !!taskDone[taskId]);
-      button.textContent = taskDone[taskId]
-        ? 'Erledigt: ' + button.textContent.replace(/^Erledigt:\s*/, '').replace(/^Aufgabe:\s*/, '')
-        : 'Aufgabe: ' + button.textContent.replace(/^Erledigt:\s*/, '').replace(/^Aufgabe:\s*/, '');
-      updateProgress();
-      saveState();
-    }
-
-    function initTasks() {
-      document.querySelectorAll('.task-btn[data-task-id]').forEach(function (btn) {
-        const taskId = btn.dataset.taskId;
-        if (taskDone[taskId]) {
-          btn.classList.add('done');
-          btn.textContent = 'Erledigt: ' + btn.textContent.replace(/^Aufgabe:\s*/, '');
-        }
-        btn.addEventListener('click', function () {
-          toggleTask(btn);
-        });
-      });
-    }
-
-    function initSims() {
-      const itemOutput = document.getElementById('itemSimOutput');
-      document.querySelectorAll('#itemSimRow .sim-chip').forEach(function (chip) {
-        chip.addEventListener('click', function () {
-          document.querySelectorAll('#itemSimRow .sim-chip').forEach(function (c) {
-            c.classList.remove('active');
-          });
-          chip.classList.add('active');
-          const stage = chip.dataset.simStage;
-          if (stage === 'upload') {
-            itemOutput.textContent = 'Upload: Name, Ort, Beschreibung und Code erfassen. Danach speichern.';
-          } else if (stage === 'filter') {
-            itemOutput.textContent = 'Filter: Fach, Jahrgang und Thema vergeben. So bleibt die Suche spaeter einfach.';
-          } else {
-            itemOutput.textContent = 'Ausleihe: Artikel auswaehlen, Zeitraum setzen, dann direkt ausleihen oder reservieren.';
-          }
-        });
-      });
-
-      const dayOutput = document.getElementById('daySimOutput');
-      document.querySelectorAll('#daySimRow .sim-chip').forEach(function (chip) {
-        chip.addEventListener('click', function () {
-          document.querySelectorAll('#daySimRow .sim-chip').forEach(function (c) {
-            c.classList.remove('active');
-          });
-          chip.classList.add('active');
-          const stage = chip.dataset.dayStage;
-          if (stage === 'morgens') {
-            dayOutput.textContent = 'Morgens: offene Reservierungen pruefen und aktive Ausleihen kontrollieren.';
-          } else if (stage === 'mittags') {
-            dayOutput.textContent = 'Mittags: neue Artikel oder Buecher einpflegen und sauber kategorisieren.';
-          } else {
-            dayOutput.textContent = 'Nachmittags: Rueckgaben buchen, Defekte dokumentieren und bei Bedarf kurz nachsehen.';
-          }
-        });
-      });
     }
 
     navBtns.forEach(function (btn) {
@@ -832,36 +403,18 @@
       });
     });
 
-    modeButtons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        workflowMode = btn.dataset.workflowMode === 'admin' ? 'admin' : 'normal';
-        renderWorkflowMode();
-      });
-    });
-
     prevBtn.addEventListener('click', function () {
       currentStep -= 1;
       renderStep();
     });
 
     nextBtn.addEventListener('click', function () {
-      if (currentStep >= stepEls.length - 1) {
-        updateProgress();
-        nextBtn.classList.remove('btn-primary');
-        nextBtn.classList.add('btn-success');
-        nextBtn.textContent = 'Workflow abgeschlossen';
-        saveState();
-        return;
-      }
       currentStep += 1;
       renderStep();
     });
 
     loadState();
-    initTasks();
-    initSims();
     renderStep();
-    renderWorkflowMode();
   })();
 </script>
 {% endblock %}
