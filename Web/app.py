@@ -1019,6 +1019,24 @@ def home_admin():
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
     )
 
+
+@app.route('/tutorial')
+def tutorial_page():
+    """Guided onboarding page (2-5 minutes) for first-time users."""
+    if 'username' not in session:
+        flash('Bitte mit registriertem Konto anmelden!', 'error')
+        return redirect(url_for('login'))
+
+    return render_template(
+        'tutorial.html',
+        username=session['username'],
+        is_admin=us.check_admin(session['username']),
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
+        student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
+        student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
+        student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
+    )
+
 @app.route('/library')
 def library_view():
     """
@@ -1623,7 +1641,7 @@ def library_admin():
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         show_library_features=True,
         upload_mode='library',
-        page_title='Buch hochladen',
+        page_title='Bücher hochladen',
         back_target='home_admin'
     )
 
