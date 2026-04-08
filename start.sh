@@ -136,6 +136,49 @@ ensure_runtime_dependencies() {
     fi
 }
 
+setup_boot_autostart_service() {
+    local service_path
+    local service_name="inventarsystem-docker.service"
+
+    if [ "${INVENTAR_SKIP_AUTOSTART_SETUP:-0}" = "1" ]; then
+        return 0
+    fi
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    service_path="/etc/systemd/system/$service_name"
+
+    if [ ! -f "$service_path" ] || ! grep -Fq "$SCRIPT_DIR/start.sh --no-cron" "$service_path"; then
+        $SUDO tee "$service_path" >/dev/null <<EOF
+[Unit]
+Description=Inventarsystem Docker Stack Autostart
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=$SCRIPT_DIR
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$SCRIPT_DIR
+Environment=INVENTAR_SKIP_AUTOSTART_SETUP=1
+Environment=INVENTAR_SETUP_CRON=0
+ExecStart=/bin/bash "$SCRIPT_DIR/start.sh" --no-cron
+ExecStop=/bin/bash "$SCRIPT_DIR/stop.sh"
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        $SUDO systemctl daemon-reload
+    fi
+
+    $SUDO systemctl enable "$service_name" >/dev/null 2>&1 || true
+}
+
 setup_scheduled_jobs() {
     if ! cron_setup_enabled; then
         echo "Cron job setup disabled (INVENTAR_SETUP_CRON=$CRON_SETUP_VALUE)"
@@ -149,20 +192,20 @@ setup_scheduled_jobs() {
 
     local update_line backup_line
     update_line="0 3 * * * cd $SCRIPT_DIR && ./update.sh >> $SCRIPT_DIR/logs/update.log 2>&1"
-    backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup-docker.sh >> $SCRIPT_DIR/logs/backup.log 2>&1"
+    backup_line="30 2 * * * cd $SCRIPT_DIR && ./backup.sh --mode auto >> $SCRIPT_DIR/logs/backup.log 2>&1"
 
     local existing_cron
     if [ "$(id -u)" -eq 0 ]; then
         existing_cron="$(crontab -l 2>/dev/null || true)"
         {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
             echo "$backup_line"
             echo "$update_line"
         } | crontab -
     else
         existing_cron="$($SUDO crontab -l 2>/dev/null || true)"
         {
-            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" || true
+            printf '%s\n' "$existing_cron" | grep -vF "$SCRIPT_DIR/update.sh" | grep -vF "$SCRIPT_DIR/backup-docker.sh" | grep -vF "$SCRIPT_DIR/backup.sh" || true
             echo "$backup_line"
             echo "$update_line"
         } | $SUDO crontab -
@@ -364,6 +407,20 @@ find_free_port() {
     echo "$port"
 }
 
+stack_owns_host_port() {
+    local requested_port="$1"
+    local container_port="$2"
+    local mapped_port
+
+    mapped_port="$(docker compose --env-file "$ENV_FILE" port nginx "$container_port" 2>/dev/null | tail -n1 || true)"
+    if [ -z "$mapped_port" ]; then
+        return 1
+    fi
+
+    mapped_port="${mapped_port##*:}"
+    [ "$mapped_port" = "$requested_port" ]
+}
+
 stop_host_nginx_services() {
     local stopped_any=false
     local service_name
@@ -381,18 +438,6 @@ stop_host_nginx_services() {
 
     if [ "$stopped_any" = true ]; then
         sleep 2
-    fi
-
-    # Some systems run nginx directly (not via systemd unit).
-    if pgrep -x nginx >/dev/null 2>&1; then
-        echo "Stopping unmanaged host nginx process to free web ports..."
-        $SUDO nginx -s quit >/dev/null 2>&1 || true
-        sleep 1
-        if pgrep -x nginx >/dev/null 2>&1; then
-            $SUDO pkill -x nginx >/dev/null 2>&1 || true
-            sleep 1
-        fi
-        stopped_any=true
     fi
 
     if [ "$stopped_any" = true ]; then
@@ -413,16 +458,9 @@ configure_host_ports() {
         requested_http="80"
     fi
 
-    requested_https=""
-    if [ -f "$ENV_FILE" ]; then
-        requested_https="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
-    fi
-
-    if [ -z "$requested_https" ]; then
-        requested_https="443"
-    fi
-
-    if port_in_use "$requested_http"; then
+    if stack_owns_host_port "$requested_http" "80"; then
+        HTTP_PORT_VALUE="$requested_http"
+    elif port_in_use "$requested_http"; then
         stop_host_nginx_services || true
 
         if ! port_in_use "$requested_http"; then
@@ -436,7 +474,18 @@ configure_host_ports() {
         HTTP_PORT_VALUE="$requested_http"
     fi
 
-    if port_in_use "$requested_https"; then
+    requested_https=""
+    if [ -f "$ENV_FILE" ]; then
+        requested_https="$(awk -F= '/^INVENTAR_HTTPS_PORT=/{print $2}' "$ENV_FILE" | tr -d ' ' || true)"
+    fi
+
+    if [ -z "$requested_https" ]; then
+        requested_https="443"
+    fi
+
+    if stack_owns_host_port "$requested_https" "443"; then
+        HTTPS_PORT_VALUE="$requested_https"
+    elif port_in_use "$requested_https"; then
         stop_host_nginx_services || true
 
         if ! port_in_use "$requested_https"; then
@@ -506,6 +555,7 @@ verify_stack_health() {
 parse_args "$@"
 
 ensure_runtime_dependencies
+setup_boot_autostart_service
 ensure_tls_certificates
 ensure_nginx_config_mount_source
 setup_scheduled_jobs

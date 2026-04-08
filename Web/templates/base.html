@@ -247,8 +247,8 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="mainNavList">
+                    <li class="nav-item" data-nav-fixed="true">
                         <a class="nav-link" href="{{ url_for('home') }}">Home</a>
                     </li>
                     {% if 'username' in session %}
@@ -261,20 +261,33 @@
                     {% endif %}
                     {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="quickAccessDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Schnellzugriff
+                        <a class="nav-link dropdown-toggle" href="#" id="basicFunctionsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Grundfunktionen
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="quickAccessDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('upload_admin') }}">Artikel hochladen</a></li>
-                            {% if library_module_enabled %}
-                            <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliothek öffnen</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bibliothek hochladen</a></li>
-                            {% if student_cards_module_enabled %}
+                        <ul class="dropdown-menu" aria-labelledby="basicFunctionsDropdown">
+                            {% if student_cards_module_enabled and not library_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
-                            {% endif %}
                             {% endif %}
                         </ul>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
+                    </li>
+                    {% if library_module_enabled %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="bibliotekDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Bibliotek
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="bibliotekDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliotek öffnen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bücher hochladen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Bibliotek-Ausleihen</a></li>
+                            {% if student_cards_module_enabled %}
+                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                    {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Benutzer Management
@@ -297,6 +310,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('logs') }}">Logs</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('tutorial_page') }}">Tutorial</a>
+                    </li>
                     {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('impressum') }}">Impressum</a>
@@ -304,6 +320,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('license') }}">License</a>
                     </li>
+                    <li class="nav-item d-none" id="nav-overflow-anchor" aria-hidden="true"></li>
                 </ul>
                 <div class="d-flex">
                     {% if 'username' in session %}
@@ -345,6 +362,69 @@
         #cookie-banner .btn-decline { background:transparent; border:2px solid #ffc107; color:#ffc107; padding:6px 12px; border-radius:4px; cursor:pointer; }
         #cookie-banner .btn-accept:hover { background:#218838; border-color:#218838; }
         #cookie-banner .btn-decline:hover { background:#ffc107; color:#212529; }
+
+        #onboarding-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2100;
+            padding: 16px;
+        }
+
+        #onboarding-modal {
+            width: min(680px, 100%);
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #dbe3ee;
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
+            padding: 20px;
+        }
+
+        #onboarding-modal h3 {
+            margin: 0 0 8px;
+            color: #0f172a;
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+
+        #onboarding-modal p {
+            margin: 0;
+            color: #334155;
+            line-height: 1.45;
+        }
+
+        .onboarding-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .onboarding-actions .btn {
+            border-radius: 10px;
+        }
+
+        .dynamic-overflow-control .dropdown-menu {
+            min-width: 240px;
+            max-width: min(420px, 85vw);
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .dynamic-overflow-control .dropdown-header {
+            font-weight: 800;
+            color: #334155;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .dynamic-overflow-entry.sub-item {
+            padding-left: 24px;
+        }
     </style>
     <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">
         <div class="cb-inner">
@@ -357,6 +437,21 @@
             </div>
         </div>
     </div>
+
+    <div id="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Tutorial Vorschlag">
+        <div id="onboarding-modal">
+            <h3>Wollen Sie eine Vorstellung des Produkts?</h3>
+            <p>
+                Wir empfehlen ein kurzes Tutorial (2-5 Minuten), damit Sie die Kernfunktionen anhand einer vorgefertigten Seite kennenlernen und gut auf den Schulalltagsbetrieb vorbereitet sind.
+            </p>
+            <div class="onboarding-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="onboarding-start">Ja, Tutorial starten</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="onboarding-later">Spater erinnern</button>
+                <button type="button" class="btn btn-outline-dark btn-sm" id="onboarding-dismiss">Nicht mehr anzeigen</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function(){
             function getCookie(name){
@@ -386,6 +481,197 @@
                 setCookie('cookie_consent','declined',365);
                 window.location.href = 'https://www.ecosia.org/';
             });
+
+            const username = {{ (session['username'] if 'username' in session else '')|tojson }};
+            const isTutorialPage = window.location.pathname === {{ url_for('tutorial_page')|tojson }};
+            const isLoginPage = window.location.pathname === {{ url_for('login')|tojson }};
+            const onboardingKey = username ? ('inventarsystem_tutorial_prompt_v1_' + username) : null;
+            const onboardingOverlay = document.getElementById('onboarding-overlay');
+
+            function showOnboarding(){
+                if (onboardingOverlay) {
+                    onboardingOverlay.style.display = 'flex';
+                }
+            }
+
+            function hideOnboarding(){
+                if (onboardingOverlay) {
+                    onboardingOverlay.style.display = 'none';
+                }
+            }
+
+            if (onboardingKey && !isTutorialPage && !isLoginPage) {
+                const decision = localStorage.getItem(onboardingKey);
+                if (!decision || decision === 'later') {
+                    showOnboarding();
+                }
+            }
+
+            document.getElementById('onboarding-start')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'started');
+                }
+                window.location.href = {{ url_for('tutorial_page')|tojson }};
+            });
+
+            document.getElementById('onboarding-later')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'later');
+                }
+                hideOnboarding();
+            });
+
+            document.getElementById('onboarding-dismiss')?.addEventListener('click', function(){
+                if (onboardingKey) {
+                    localStorage.setItem(onboardingKey, 'dismissed');
+                }
+                hideOnboarding();
+            });
+
+            const navList = document.getElementById('mainNavList');
+            const navOverflowAnchor = document.getElementById('nav-overflow-anchor');
+            const overflowSourceCapacity = 3;
+
+            function collectTopLevelNavSources() {
+                if (!navList) return [];
+                return Array.from(navList.children).filter(function(li){
+                    if (!(li instanceof HTMLElement)) return false;
+                    if (!li.classList.contains('nav-item')) return false;
+                    if (li.id === 'nav-overflow-anchor') return false;
+                    if (li.dataset.navFixed === 'true') return false;
+                    if (li.dataset.overflowControl === 'true') return false;
+                    return li.style.display !== 'none';
+                });
+            }
+
+            function clearOverflowControls() {
+                if (!navList) return;
+                navList.querySelectorAll('[data-overflow-control="true"]').forEach(function(node){
+                    node.remove();
+                });
+            }
+
+            function restoreAllNavItems() {
+                if (!navList) return;
+                navList.querySelectorAll('li.nav-item').forEach(function(li){
+                    if (li.id === 'nav-overflow-anchor') return;
+                    if (li.dataset.overflowControl === 'true') return;
+                    li.style.display = '';
+                });
+                clearOverflowControls();
+            }
+
+            function createOverflowControl(label, index) {
+                const li = document.createElement('li');
+                li.className = 'nav-item dropdown dynamic-overflow-control';
+                li.dataset.overflowControl = 'true';
+
+                const toggleId = 'dynamicOverflowDropdown' + index;
+                li.innerHTML =
+                    '<a class="nav-link dropdown-toggle" href="#" id="' + toggleId + '" role="button" data-bs-toggle="dropdown" aria-expanded="false">' +
+                    label +
+                    '</a>' +
+                    '<ul class="dropdown-menu" aria-labelledby="' + toggleId + '"></ul>';
+
+                return li;
+            }
+
+            function appendSourceToOverflowMenu(sourceItem, menu) {
+                const topLink = sourceItem.querySelector(':scope > a.nav-link');
+                if (!topLink) return;
+
+                const childMenu = sourceItem.querySelector(':scope > ul.dropdown-menu');
+                const sourceLabel = topLink.textContent.trim();
+
+                if (!childMenu) {
+                    const entry = document.createElement('li');
+                    entry.innerHTML = '<a class="dropdown-item dynamic-overflow-entry" href="' + topLink.getAttribute('href') + '">' + sourceLabel + '</a>';
+                    menu.appendChild(entry);
+                    return;
+                }
+
+                const header = document.createElement('li');
+                header.innerHTML = '<h6 class="dropdown-header">' + sourceLabel + '</h6>';
+                menu.appendChild(header);
+
+                childMenu.querySelectorAll(':scope > li > a.dropdown-item').forEach(function(subLink){
+                    const subEntry = document.createElement('li');
+                    subEntry.innerHTML = '<a class="dropdown-item dynamic-overflow-entry sub-item" href="' + subLink.getAttribute('href') + '">' + subLink.textContent.trim() + '</a>';
+                    menu.appendChild(subEntry);
+                });
+
+                const divider = document.createElement('li');
+                divider.innerHTML = '<hr class="dropdown-divider">';
+                menu.appendChild(divider);
+            }
+
+            function rebuildOverflowControls(hiddenSources) {
+                clearOverflowControls();
+                if (!navList || !navOverflowAnchor || hiddenSources.length === 0) return;
+
+                let dropdownIndex = 0;
+                for (let start = 0; start < hiddenSources.length; start += overflowSourceCapacity) {
+                    dropdownIndex += 1;
+                    const label = dropdownIndex === 1 ? 'Mehr' : ('Mehr ' + dropdownIndex);
+                    const control = createOverflowControl(label, dropdownIndex);
+                    const menu = control.querySelector('ul.dropdown-menu');
+                    const chunk = hiddenSources.slice(start, start + overflowSourceCapacity);
+                    chunk.forEach(function(source){
+                        appendSourceToOverflowMenu(source, menu);
+                    });
+
+                    const trailingDivider = menu.querySelector('li:last-child .dropdown-divider');
+                    if (trailingDivider) {
+                        trailingDivider.parentElement.remove();
+                    }
+
+                    navList.insertBefore(control, navOverflowAnchor);
+                }
+            }
+
+            function adaptNavbarByWidth() {
+                if (!navList || !navOverflowAnchor) return;
+
+                // Bootstrap mobile layout already handles collapsing; dynamic overflow is desktop only.
+                if (window.innerWidth < 992) {
+                    restoreAllNavItems();
+                    return;
+                }
+
+                restoreAllNavItems();
+
+                const hiddenSources = [];
+                let candidates = collectTopLevelNavSources();
+
+                while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                    const toHide = candidates[candidates.length - 1];
+                    toHide.style.display = 'none';
+                    hiddenSources.unshift(toHide);
+                    candidates = collectTopLevelNavSources();
+                }
+
+                rebuildOverflowControls(hiddenSources);
+
+                candidates = collectTopLevelNavSources();
+                while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                    const toHide = candidates[candidates.length - 1];
+                    toHide.style.display = 'none';
+                    hiddenSources.unshift(toHide);
+                    rebuildOverflowControls(hiddenSources);
+                    candidates = collectTopLevelNavSources();
+                }
+            }
+
+            let navResizeTimer = null;
+            function debounceAdaptNavbar() {
+                if (navResizeTimer) {
+                    window.clearTimeout(navResizeTimer);
+                }
+                navResizeTimer = window.setTimeout(adaptNavbarByWidth, 120);
+            }
+
+            adaptNavbarByWidth();
+            window.addEventListener('resize', debounceAdaptNavbar);
         })();
     </script>
     <!-- Mobile compatibility scripts -->

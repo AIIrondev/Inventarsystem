@@ -426,14 +426,47 @@ Das System protokolliert automatisch.
 
 ### Backup erstellen
 
+Universell (empfohlen, erkennt Host/Docker automatisch):
+
 ```bash
-sudo ./update.sh
+sudo ./backup.sh --mode auto
+```
+
+Docker-only (gleiche Logik, optional):
+
+```bash
+sudo ./backup.sh --mode docker
+```
+
+Alternativ (Host-Backupskript):
+
+```bash
+sudo ./backup.sh
 ```
 
 Backup-Pfad:
 
 ```
 /var/backups/Inventarsystem-YYYY-MM-DD.tar.gz
+```
+
+Rechnungs-Archiv (separat, rechtssicher):
+
+```
+/var/backups/invoice-archive/invoices-YYYY-MM-DD_HH-MM-SS.jsonl
+/var/backups/invoice-archive/invoices-YYYY-MM-DD_HH-MM-SS.csv
+/var/backups/invoice-archive/invoices-YYYY-MM-DD_HH-MM-SS.meta.json
+```
+
+Standard-Aufbewahrung fuer Rechnungsarchive:
+
+- 3650 Tage (10 Jahre)
+
+Optional konfigurierbar:
+
+```bash
+sudo ./backup.sh --invoice-keep-days 3650
+sudo ./backup.sh --invoice-archive-dir /var/backups/invoice-archive
 ```
 
 ### Backup wiederherstellen
