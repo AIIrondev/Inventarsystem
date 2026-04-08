@@ -691,6 +691,12 @@
         cardField.value = cardId;
         form.appendChild(cardField);
 
+        const returnTargetField = document.createElement('input');
+        returnTargetField.type = 'hidden';
+        returnTargetField.name = 'return_to';
+        returnTargetField.value = 'library';
+        form.appendChild(returnTargetField);
+
         if (durationInput) {
             const durationField = document.createElement('input');
             durationField.type = 'hidden';

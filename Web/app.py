@@ -3912,13 +3912,18 @@ def ausleihen(id):
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
     
+    username = session['username']
+    requested_return_to = (request.form.get('return_to') or '').strip().lower()
+    if requested_return_to == 'library' and cfg.LIBRARY_MODULE_ENABLED:
+        redirect_target = 'library_view'
+    else:
+        redirect_target = 'home_admin' if us.check_admin(username) else 'home'
+
     item = it.get_item(id)
     if not item:
         flash('Element nicht gefunden', 'error')
-        return redirect(url_for('home'))
+        return redirect(url_for(redirect_target))
 
-    username = session['username']
-    redirect_target = 'home_admin' if us.check_admin(username) else 'home'
     effective_borrower = username
     borrow_duration_days = None
     student_card_id = us.normalize_student_card_id(request.form.get('borrower_card_id'))
@@ -4015,19 +4020,19 @@ def ausleihen(id):
 
         if not available_units:
             flash('Keine Exemplare verfügbar.', 'error')
-            return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+            return redirect(url_for(redirect_target))
 
         selected_units = []
         if specific_item_id:
             chosen = next((unit for unit in available_units if str(unit.get('_id')) == specific_item_id), None)
             if not chosen:
                 flash('Das ausgewählte Exemplar ist nicht verfügbar.', 'error')
-                return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+                return redirect(url_for(redirect_target))
             selected_units = [chosen]
         else:
             if exemplare_count > len(available_units):
                 flash(f'Nicht genügend Exemplare verfügbar. Angefordert: {exemplare_count}, Verfügbar: {len(available_units)}', 'error')
-                return redirect(url_for('home_admin' if us.check_admin(username) else 'home'))
+                return redirect(url_for(redirect_target))
             selected_units = available_units[:exemplare_count]
 
         for unit in selected_units:
@@ -4041,9 +4046,7 @@ def ausleihen(id):
         else:
             flash(f'{len(selected_units)} Exemplare erfolgreich ausgeliehen', 'success')
 
-        if 'username' in session and not us.check_admin(session['username']):
-            return redirect(url_for('home'))
-        return redirect(url_for('home_admin'))
+        return redirect(url_for(redirect_target))
     
     # Before borrowing, block if there's a conflicting planned booking
     try:
@@ -4074,13 +4077,13 @@ def ausleihen(id):
             total_exemplare = item_doc.get('Exemplare', 1) if item_doc else 1
             if total_exemplare <= 1:
                 flash('Dieses Objekt hat heute eine geplante Reservierung und kann aktuell nicht ausgeliehen werden.', 'error')
-                return redirect(url_for('home'))
+                return redirect(url_for(redirect_target))
             else:
                 # If planned count equals or exceeds remaining capacity, block
                 current_borrowed = len(item_doc.get('ExemplareStatus', [])) if item_doc else 0
                 if current_borrowed + len(upcoming_planned_today) >= total_exemplare:
                     flash('Alle Exemplare sind aufgrund geplanter Reservierungen heute belegt.', 'error')
-                    return redirect(url_for('home'))
+                    return redirect(url_for(redirect_target))
     except Exception as e:
         print(f"Warning: could not enforce planned booking guard: {e}")
 
@@ -4105,7 +4108,7 @@ def ausleihen(id):
     
     if available_count < exemplare_count:
         flash(f'Nicht genügend Exemplare verfügbar. Angefordert: {exemplare_count}, Verfügbar: {available_count}', 'error')
-        return redirect(url_for('home'))
+        return redirect(url_for(redirect_target))
     
     # If we reach here, we can borrow the requested number of exemplars
     current_date = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
@@ -4156,9 +4159,7 @@ def ausleihen(id):
         
         flash(f'{exemplare_count} Exemplare erfolgreich ausgeliehen', 'success')
     
-    if 'username' in session and not us.check_admin(session['username']):
-        return redirect(url_for('home'))
-    return redirect(url_for('home_admin'))
+    return redirect(url_for(redirect_target))
 
 
 @app.route('/zurueckgeben/<id>', methods=['POST'])

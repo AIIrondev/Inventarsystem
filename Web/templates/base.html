@@ -51,6 +51,23 @@
             font-weight: bold;
             font-size: 1.4rem;
         }
+
+        .navbar-nav .nav-link {
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.6rem 0.85rem;
+            border-radius: 8px;
+        }
+
+        .navbar-nav .nav-link:hover,
+        .navbar-nav .nav-link:focus {
+            background-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .nav-priority-link {
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid rgba(40, 167, 69, 0.45);
+        }
         
         .admin-nav-section {
             margin-left: auto;
@@ -249,76 +266,50 @@
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="mainNavList">
                     <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link" href="{{ url_for('home') }}">Home</a>
-                    </li>
-                    {% if 'username' in session %}
-                        <!--<li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('terminplan') }}">Terminplaner</a>
-                        </li> -->
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('my_borrowed_items') }}">Persönliche Aktuelle Ausleihungen</a>
-                        </li>
-                    {% endif %}
-                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="basicFunctionsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Grundfunktionen
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="basicFunctionsDropdown">
-                            {% if student_cards_module_enabled and not library_module_enabled %}
-                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
-                            {% endif %}
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
+                        <a class="nav-link" href="{{ url_for('home') }}">Start</a>
                     </li>
                     {% if library_module_enabled %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="bibliotekDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Bibliotek
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link" href="{{ url_for('library_view') }}">Bibliothek</a>
+                    </li>
+                    {% endif %}
+                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-priority-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown ms-lg-auto">
+                        <a class="nav-link dropdown-toggle" href="#" id="metaNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Mehr
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="bibliotekDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('library_view') }}">Bibliotek öffnen</a></li>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="metaNavDropdown">
+                            {% if 'username' in session %}
+                            <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                            <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
+                            {% if library_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bücher hochladen</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Bibliotek-Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Bibliothek-Ausleihen</a></li>
+                            {% endif %}
                             {% if student_cards_module_enabled %}
                             <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
                             {% endif %}
-                        </ul>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Benutzer Management
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="userManagementDropdown">
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">System</h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="systemManagementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            System Management
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="systemManagementDropdown">
                             <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihungsverwaltung</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('license') }}">License</a></li>
                         </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('logs') }}">Logs</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('tutorial_page') }}">Tutorial</a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('impressum') }}">Impressum</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('license') }}">License</a>
                     </li>
                     <li class="nav-item d-none" id="nav-overflow-anchor" aria-hidden="true"></li>
                 </ul>
