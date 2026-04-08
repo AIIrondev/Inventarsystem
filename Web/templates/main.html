@@ -1,3 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
     /* Calendar styles for detailed view */
     .calendar-wrapper {
         background: #fff;
@@ -456,6 +462,13 @@
             <h2>Termin planen</h2>
             <form id="schedule-form">
                 <input type="hidden" id="schedule-item-id" name="item_id">
+
+                <div class="form-group" id="schedule-specific-item-group" style="display:none;">
+                    <label for="schedule-specific-item">Unterartikel (optional):</label>
+                    <select id="schedule-specific-item" name="specific_item_id">
+                        <option value="">Automatisch wählen</option>
+                    </select>
+                </div>
                 
                 <div class="form-group">
                     <label for="schedule-date">Startdatum:</label>
@@ -857,8 +870,14 @@
                             }
                         }).join('') : '';
                         
-                        // Check if item is borrowed by current user
-                        const isBorrowedByMe = !item.Verfuegbar && item.User === currentUsername;
+                        const groupedCount = Number(item.GroupedDisplayCount || 1);
+                        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+                        const isGroupedItem = groupedCount > 1;
+                        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+                        const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
+
+                        // Check if item is borrowed by current user (single items only)
+                        const isBorrowedByMe = !isGroupedItem && !item.Verfuegbar && item.User === currentUsername;
                         
                         // Add borrower info badge if item is borrowed
                         let borrowerBadge = '';
@@ -895,6 +914,8 @@
                                 <p class="item-filter2-cell"><strong>Jahrgangsstufe:</strong> ${filter2Display}${filter2More}</p>
                                 <p class="item-filter3-cell"><strong>Thema:</strong> ${filter3Display}${filter3More}</p>
                                 <p class="item-code-cell"><strong>Barcode:</strong> ${item.Code_4 || '-'}</p>
+                                <p class="item-count-cell"><strong>Anzahl:</strong> ${groupedCount}</p>
+                                ${isGroupedItem ? `<p class="item-count-cell"><strong>Verfügbar:</strong> ${availableGroupedCount}</p>` : ''}
                                 <div class="image-container">
                                     ${imagesHtml}
                                 </div>
@@ -902,8 +923,18 @@
                                 ${appointmentBadge}
                             </div>
                             <div class="actions">
-                                ${item.Verfuegbar && !item.BlockedNow ? 
+                                ${isAvailableForBorrow && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}" class="inline-action-form">
+                                        ${isGroupedItem ? `
+                                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
+                                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                                            <select id="specific-item-card-${item._id}" name="specific_item_id" style="max-width:190px; padding:4px;">
+                                                <option value="">Automatisch wählen</option>
+                                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('')}
+                                            </select>
+                                        </div>` : ''}
                                         <button class="ausleihen" type="submit">Ausleihen</button>
                                     </form>` 
                                 : isBorrowedByMe ?
@@ -1234,8 +1265,12 @@
             }
         }).join('') : '';
         
+        const groupedCount = Number(item.GroupedDisplayCount || 1);
+        const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
+        const isGroupedItem = groupedCount > 1;
+        const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
         // Check if item is borrowed
-        const isBorrowed = !item.Verfuegbar;
+        const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
         
         // Build borrower info panel if applicable
         let borrowerInfoHtml = '';
@@ -1320,6 +1355,17 @@
                     <div class="detail-label">Code:</div>
                     <div class="detail-value">${item.Code_4 || '-'}</div>
                 </div>
+
+                <div class="detail-group">
+                    <div class="detail-label">Anzahl:</div>
+                    <div class="detail-value">${groupedCount}</div>
+                </div>
+
+                ${isGroupedItem ? `
+                <div class="detail-group">
+                    <div class="detail-label">Verfügbar:</div>
+                    <div class="detail-value">${availableGroupedCount}</div>
+                </div>` : ''}
                 
                 <div class="detail-group">
                     <div class="detail-label">Anschaffungsjahr:</div>
@@ -1382,11 +1428,21 @@
             </div>
             
             <div class="modal-actions">
-                ${item.Verfuegbar && !item.BlockedNow ? 
+                ${(!isBorrowed) && !item.BlockedNow ? 
                     `<form method="POST" action="/ausleihen/${item._id}">
+                        ${isGroupedItem ? `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                            <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
+                            <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:78px; padding:4px;">
+                            <label style="font-size:0.85rem; margin:0;">oder Code:</label>
+                            <select id="specific-item-modal-${item._id}" name="specific_item_id" style="max-width:220px; padding:4px;">
+                                <option value="">Automatisch wählen</option>
+                                ${groupedAvailableUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('')}
+                            </select>
+                        </div>` : ''}
                         <button class="ausleihen" type="submit">Ausleihen</button>
                     </form>` 
-                    : (item.User === currentUsername) ?
+                    : (!isGroupedItem && item.User === currentUsername) ?
                     `<form method="POST" action="/zurueckgeben/${item._id}">
                         <button class="ausleihen" type="submit">Zurückgeben</button>
                     </form>`
@@ -2227,8 +2283,26 @@
         const notesField = document.getElementById('schedule-notes');
         const startPeriodField = document.getElementById('schedule-start-period');
         const endPeriodField = document.getElementById('schedule-end-period');
+        const specificGroup = document.getElementById('schedule-specific-item-group');
+        const specificSelect = document.getElementById('schedule-specific-item');
         
         if (itemIdField) itemIdField.value = itemId;
+
+        const selectedItem = Array.isArray(allItems) ? allItems.find(item => item._id === itemId) : null;
+        const groupedCount = Number(selectedItem?.GroupedDisplayCount || 1);
+        const groupedUnits = Array.isArray(selectedItem?.GroupedAvailableUnits) ? selectedItem.GroupedAvailableUnits : [];
+
+        if (specificGroup && specificSelect) {
+            if (groupedCount > 1 && groupedUnits.length > 0) {
+                specificGroup.style.display = 'block';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>' +
+                    groupedUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('');
+            } else {
+                specificGroup.style.display = 'none';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>';
+            }
+            specificSelect.value = '';
+        }
         
         // Set default date to today
         if (dateField) {

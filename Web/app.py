@@ -6445,6 +6445,7 @@ def schedule_appointment():
     try:
         # Extract form data
         item_id = request.form.get('item_id')
+        specific_item_id = (request.form.get('specific_item_id') or '').strip()
         schedule_date = request.form.get('schedule_date')
         start_period = request.form.get('start_period')
         end_period = request.form.get('end_period')
@@ -6496,6 +6497,31 @@ def schedule_appointment():
         item = it.get_item(item_id)
         if not item:
             return jsonify({'success': False, 'message': 'Element nicht gefunden'}), 404
+
+        # Grouped inventory mode: allow scheduling for a specific physical unit.
+        try:
+            client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+            db = client[MONGODB_DB]
+            items_col = db['items']
+            grouped_children = list(items_col.find({'ParentItemId': item_id, 'IsGroupedSubItem': True}))
+            client.close()
+        except Exception:
+            grouped_children = []
+
+        if grouped_children:
+            grouped_units = [item] + [{**child, '_id': str(child.get('_id'))} for child in grouped_children]
+            available_units = [unit for unit in grouped_units if unit.get('Verfuegbar', True)]
+
+            chosen_unit = None
+            if specific_item_id:
+                chosen_unit = next((unit for unit in grouped_units if str(unit.get('_id')) == specific_item_id), None)
+                if not chosen_unit:
+                    return jsonify({'success': False, 'message': 'Der gewählte Unterartikel wurde nicht gefunden.'}), 400
+            else:
+                chosen_unit = available_units[0] if available_units else grouped_units[0]
+
+            item_id = str(chosen_unit.get('_id'))
+            item = chosen_unit
             
         # Check if item is reservable
         if not item.get('Reservierbar', True):

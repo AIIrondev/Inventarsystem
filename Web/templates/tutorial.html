@@ -224,10 +224,10 @@
 <div class="tutorial-shell">
   <section class="tutorial-hero">
     <h1>Kurzer Rundgang in 2-5 Minuten</h1>
-    <p>Die Seite ist bewusst einfach gehalten. Sie begleitet Sie Schritt fuer Schritt, ohne viel Lesen und ohne komplizierte Fachbegriffe.</p>
+    <p>Die Seite ist bewusst einfach gehalten. Sie begleitet Sie Schritt für Schritt, ohne viel Lesen und ohne komplizierte Fachbegriffe.</p>
     <div class="tutorial-meta">
       <span class="tutorial-pill">Dauer: ca. 4 Minuten</span>
-      <span class="tutorial-pill">Format: Ruhig und gefuehrt</span>
+      <span class="tutorial-pill">Format: Ruhig und geführt</span>
       <span class="tutorial-pill">Benutzer: {{ username }}</span>
     </div>
   </section>
@@ -235,11 +235,11 @@
   <div class="tutorial-grid">
     <aside class="tutorial-side">
       <h2>Schritte</h2>
-      <p>Folgen Sie einfach jedem Schritt. Sie koennen jederzeit vor- oder zurueckgehen.</p>
+      <p>Folgen Sie einfach jedem Schritt. Sie können jederzeit vor- oder zurückgehen.</p>
 
       <div class="workflow-nav" id="workflowNav">
         <button type="button" data-target-step="0">1. Startseite</button>
-        <button type="button" data-target-step="1">2. Artikel erfassen</button>
+        <button type="button" data-target-step="1">2. {{ 'Artikel erfassen' if is_admin else 'Artikel finden' }}</button>
         {% if library_module_enabled %}
         <button type="button" data-target-step="2">3. Bibliotek</button>
         {% endif %}
@@ -247,8 +247,8 @@
       </div>
 
       <div class="workflow-controls">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="prevStepBtn">Zurueck</button>
-        <button type="button" class="btn btn-primary btn-sm" id="nextStepBtn">Naechster Schritt</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="prevStepBtn">Zurück</button>
+        <button type="button" class="btn btn-primary btn-sm" id="nextStepBtn">Nächster Schritt</button>
       </div>
     </aside>
 
@@ -256,19 +256,20 @@
 
       <article class="workflow-step" data-step-index="0" data-step-key="dashboard">
         <h3>Startbereich</h3>
-        <p>Hier starten Sie. Das ist der sichere Ausgangspunkt fuer alle weiteren Schritte.</p>
+        <p>Hier starten Sie. Das ist der sichere Ausgangspunkt für alle weiteren Schritte.</p>
         <ul>
-          <li>Sie sehen den Ueberblick.</li>
+          <li>Sie sehen den Überblick.</li>
           <li>Oben liegen die wichtigsten Wege.</li>
           <li>Alles ist gross und einfach lesbar.</li>
         </ul>
 
         <div class="tutorial-actions">
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Startseite oeffnen</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Startseite öffnen</a>
         </div>
       </article>
 
       <article class="workflow-step" data-step-index="1" data-step-key="items">
+        {% if is_admin %}
         <h3>Artikel anlegen</h3>
         <p>Hier legen Sie einen neuen Artikel an. Es sind nur wenige Felder erforderlich.</p>
         <ul>
@@ -280,45 +281,69 @@
 
         <div class="tutorial-actions">
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('upload_admin') }}">Neuen Artikel anlegen</a>
-          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home_admin') if is_admin else url_for('home') }}">Zurueck</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home_admin') }}">Zurück</a>
         </div>
+        {% else %}
+        <h3>Artikel finden und ausleihen</h3>
+        <p>Als Nutzerin/Nutzer arbeiten Sie hauptsaechlich mit vorhandenen Artikeln und Ausleihen.</p>
+        <ul>
+          <li>Nutzen Sie Filter und Suche, um Material schnell zu finden.</li>
+          <li>Öffnen Sie <strong>Details</strong>, um Ort, Beschreibung und Verfügbarkeit zu sehen.</li>
+          <li>Mit <strong>Ausleihen</strong> buchen Sie den Artikel direkt.</li>
+          <li>In <strong>Meine Ausleihen</strong> sehen Sie, was aktuell auf Ihren Namen laeuft.</li>
+        </ul>
+
+        <div class="tutorial-actions">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('home') }}">Zur Startseite</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a>
+        </div>
+        {% endif %}
       </article>
 
       {% if library_module_enabled %}
       <article class="workflow-step" data-step-index="2" data-step-key="library">
         <h3>Bibliotek-Bereich</h3>
-        <p>Dieser Bereich ist speziell fuer Buecher und Ausleihverwaltung.</p>
+        <p>Dieser Bereich ist speziell für Bücher und Medienausleihe.</p>
         <ul>
-          <li><strong>Bucher hochladen:</strong> Neue Buecher in die Sammlung aufnehmen.</li>
+          {% if is_admin %}
+          <li><strong>Bücher hochladen:</strong> Neue Bücher in die Sammlung aufnehmen.</li>
           <li><strong>Ausleihen ansehen:</strong> Wer hat welches Buch ausgeliehen?</li>
-          <li><strong>Defekte bearbeiten:</strong> Defekte Buecher markieren oder reparieren.</li>
+          <li><strong>Defekte bearbeiten:</strong> Defekte Bücher markieren oder reparieren.</li>
           <li><strong>Rechnungen:</strong> Kosten und Rechnungen verwalten.</li>
+          {% else %}
+          <li><strong>Medium suchen:</strong> Titel, Autor oder Barcode direkt finden.</li>
+          <li><strong>Verfuegbarkeit pruefen:</strong> Schnell sehen, was aktuell ausleihbar ist.</li>
+          <li><strong>Ausleihen:</strong> In der Bibliothek direkt auf Ihren Namen buchen.</li>
+          <li><strong>Rückgabe-Status:</strong> Über "Meine Ausleihen" Fristen im Blick behalten.</li>
+          {% endif %}
         </ul>
 
         <div class="tutorial-actions">
           <a class="btn btn-outline-primary btn-sm" href="{{ url_for('library_view') }}">Zur Bibliotek</a>
+          {% if is_admin %}
           <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('library_loans_admin') }}">Ausleihen ansehen</a>
+          {% endif %}
         </div>
       </article>
       {% endif %}
 
       <article class="workflow-step" data-step-index="{{ '3' if library_module_enabled else '2' }}" data-step-key="daily">
-        <h3>Taegliche Aufgaben</h3>
-        <p>Das ist der gewoennliche Arbeitsablauf waehrend eines Schultages.</p>
+        <h3>Tägliche Aufgaben</h3>
+        <p>Das ist der gewöhnliche Arbeitsablauf während eines Schultages.</p>
         
         <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
           <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Morgens:</p>
-          <p style="margin: 0; color: #334155;">Oeffnen Sie die Startseite und pruefen Sie offene Reservierungen oder Rueckgabefristen.</p>
+          <p style="margin: 0; color: #334155;">Öffnen Sie die Startseite und prüfen Sie offene Reservierungen oder Rückgabefristen.</p>
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
           <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Mittags:</p>
-          <p style="margin: 0; color: #334155;">Neue Artikel oder Buecher hinzufuegen oder Ausleihungen begruenden.</p>
+          <p style="margin: 0; color: #334155;">Neue Artikel oder Bücher hinzufügen oder Ausleihungen begründen.</p>
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #dbe3ee; border-radius: 12px; padding: 14px; margin: 14px 0;">
           <p style="margin-bottom: 10px; font-weight: 700; color: #0f172a;">Nachmittags:</p>
-          <p style="margin: 0; color: #334155;">Rueckgaben buchen und kurz pruefen, ob alles in Ordnung ist.</p>
+          <p style="margin: 0; color: #334155;">Rückgaben buchen und kurz prüfen, ob alles in Ordnung ist.</p>
         </div>
 
         <div class="tutorial-actions">
@@ -334,7 +359,7 @@
   </div>
 
   <div class="tutorial-note">
-    Tipp: Sie koennen das Training jederzeit wieder oeffnen und in Ruhe weiterklicken.
+    Tipp: Sie können das Training jederzeit wieder öffnen und in Ruhe weiterklicken.
   </div>
 </div>
 
@@ -392,7 +417,7 @@
       });
 
       prevBtn.disabled = currentStep <= 0;
-      nextBtn.textContent = currentStep >= stepEls.length - 1 ? 'Fertig' : 'Naechster Schritt';
+      nextBtn.textContent = currentStep >= stepEls.length - 1 ? 'Fertig' : 'Nächster Schritt';
       saveState();
     }
 

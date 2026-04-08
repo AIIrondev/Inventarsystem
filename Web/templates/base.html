@@ -285,6 +285,7 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="metaNavDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             {% if 'username' in session and (session.get('admin', False) or is_admin) %}
@@ -304,7 +305,6 @@
                             <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihungsverwaltung</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
@@ -437,7 +437,7 @@
             </p>
             <div class="onboarding-actions">
                 <button type="button" class="btn btn-primary btn-sm" id="onboarding-start">Ja, Tutorial starten</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="onboarding-later">Spater erinnern</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="onboarding-later">Später erinnern</button>
                 <button type="button" class="btn btn-outline-dark btn-sm" id="onboarding-dismiss">Nicht mehr anzeigen</button>
             </div>
         </div>
