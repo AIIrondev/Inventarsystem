@@ -359,7 +359,7 @@ check_venv_health() {
     fi
     
     # Try importing the runtime packages required at app startup
-    if ! "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
+    if ! "$VENV_DIR/bin/python" -c "import pymongo, flask, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
         return 1
     fi
     
@@ -914,7 +914,7 @@ if [ $PYMONGO_STATUS -ne 0 ] && [ "$FIX_PYMONGO" = true ]; then
         }
         
         # Verify core runtime imports
-        if "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
+        if "$VENV_DIR/bin/python" -c "import pymongo, flask, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
             log_success "Runtime-Abhängigkeiten wurden korrekt installiert"
         else
             log_error "Runtime-Abhängigkeiten konnten nicht verifiziert werden"
@@ -938,7 +938,7 @@ if [ $PYMONGO_STATUS -ne 0 ] && [ "$FIX_PYMONGO" = true ]; then
             pip install pymongo==4.6.1 2>/dev/null || log_error "Fehler beim Installieren von pymongo"
             
             # Verify core runtime imports
-            if python -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
+            if python -c "import pymongo, flask, gunicorn, requests, PIL, apscheduler" 2>/dev/null; then
                 log_success "Runtime-Abhängigkeiten wurden korrekt installiert"
             else
                 log_error "Runtime-Abhängigkeiten konnten nicht verifiziert werden"

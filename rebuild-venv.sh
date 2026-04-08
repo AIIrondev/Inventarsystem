@@ -89,7 +89,7 @@ if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
     fi
 else
     log_message "No requirements.txt found, installing essential packages manually"
-    pip install flask werkzeug gunicorn pillow qrcode apscheduler python-dateutil pytz requests flask_jwt_extended || {
+    pip install flask werkzeug gunicorn pillow qrcode apscheduler python-dateutil pytz requests || {
         log_message "WARNING: Failed to install some essential packages"
     }
 fi
@@ -99,7 +99,7 @@ deactivate
 
 # Verify the virtual environment works correctly
 log_message "Verifying virtual environment..."
-if "$VENV_DIR/bin/python" -c "import pymongo, flask, flask_jwt_extended, gunicorn, requests, PIL, apscheduler; exit(0)" 2>/dev/null; then
+if "$VENV_DIR/bin/python" -c "import pymongo, flask, gunicorn, requests, PIL, apscheduler; exit(0)" 2>/dev/null; then
     log_message "✓ Virtual environment verification successful"
     
     # Clean up backup if everything works

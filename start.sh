@@ -473,7 +473,7 @@ verify_stack_health() {
             if printf '%s\n' "$running_services" | grep -Fxq app && \
                printf '%s\n' "$running_services" | grep -Fxq nginx && \
                printf '%s\n' "$running_services" | grep -Fxq mongodb; then
-                if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask_jwt_extended, pymongo" >/dev/null 2>&1; then
+                if docker compose "${compose_args[@]}" exec -T app python3 -c "import flask, pymongo" >/dev/null 2>&1; then
                     if curl -kfsS "https://127.0.0.1:$HTTPS_PORT_VALUE" >/dev/null 2>&1; then
                         echo "Health check passed."
                         return 0
