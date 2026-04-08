@@ -252,7 +252,7 @@
       </thead>
       <tbody>
         {% for e in loan_entries %}
-        <tr class="loan-row" data-search="{{ (e.item_name ~ ' ' ~ e.item_code ~ ' ' ~ e.user ~ ' ' ~ e.invoice_number ~ ' ' ~ e.item_author ~ ' ' ~ e.item_isbn)|lower }}" data-status="{{ e.status }}" data-has-damage="{{ '1' if e.has_damage else '0' }}">
+        <tr class="loan-row" data-borrow-id="{{ e.id }}" data-item-id="{{ e.item_id }}" data-item-name="{{ e.item_name }}" data-item-code="{{ e.item_code }}" data-item-cost="{{ e.item_cost_raw }}" data-user-name="{{ e.user }}" data-search="{{ (e.item_name ~ ' ' ~ e.item_code ~ ' ' ~ e.user ~ ' ' ~ e.invoice_number ~ ' ' ~ e.item_author ~ ' ' ~ e.item_isbn)|lower }}" data-status="{{ e.status }}" data-has-damage="{{ '1' if e.has_damage else '0' }}">
           <td>
             {% if e.status == 'active' %}
               <span class="badge-pill badge-active">Aktiv</span>
@@ -305,6 +305,9 @@
           </td>
           <td>
             <div class="row-actions">
+              {% if e.status == 'active' %}
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="openDamageReportPrompt(this)">Schaden melden</button>
+              {% endif %}
               {% if e.invoice_number and ((not e.invoice_paid) or e.has_damage) %}
               <form method="post" action="{{ url_for('admin_finalize_invoice_and_repair', borrow_id=e.id) }}" onsubmit="return confirm('Rechnung als bezahlt und Element als repariert markieren?');">
                 <button type="submit" class="btn btn-success btn-sm">
@@ -393,6 +396,60 @@
   </div>
 </div>
 
+<div id="damage-invoice-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.72); z-index:9999; padding:20px; overflow:auto;">
+  <div style="max-width:760px; margin:40px auto; background:#fff; border-radius:12px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0;">Rechnung erstellen</h2>
+        <p style="margin:6px 0 0; color:#666;">Die Rechnung nutzt das bestehende Rechnungssystem und kann direkt nach der Schadensmeldung erstellt werden.</p>
+      </div>
+      <button type="button" class="btn btn-secondary" onclick="closeDamageInvoiceModal()">Schließen</button>
+    </div>
+
+    <form id="damage-invoice-form" method="post" action="">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div>
+          <label for="damage-invoice-item" style="display:block; font-weight:700; margin-bottom:6px;">Element</label>
+          <input id="damage-invoice-item" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-borrower" style="display:block; font-weight:700; margin-bottom:6px;">Schüler</label>
+          <input id="damage-invoice-borrower" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-code" style="display:block; font-weight:700; margin-bottom:6px;">Element-ID / Code</label>
+          <input id="damage-invoice-code" type="text" readonly style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; background:#f8fafc;">
+        </div>
+        <div>
+          <label for="damage-invoice-amount" style="display:block; font-weight:700; margin-bottom:6px;">Preis</label>
+          <input id="damage-invoice-amount" name="invoice_amount" type="text" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;" placeholder="z.B. 12,50">
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label for="damage-invoice-reason" style="display:block; font-weight:700; margin-bottom:6px;">Schadensbeschreibung</label>
+        <textarea id="damage-invoice-reason" name="damage_reason" rows="5" required style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; resize:vertical;" placeholder="Beschreiben Sie kurz den Schaden oder die Zerstörung."></textarea>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-bottom:18px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input id="damage-invoice-destroyed" type="checkbox" name="mark_destroyed" checked>
+          Element als zerstört markieren
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input id="damage-invoice-close" type="checkbox" name="close_borrowing" checked>
+          Ausleihe abschließen
+        </label>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeDamageInvoiceModal()">Abbrechen</button>
+        <button type="submit" class="btn btn-danger">PDF-Rechnung erstellen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 (function() {
   const searchInput = document.getElementById('library-search');
@@ -402,6 +459,93 @@
   const damagedRows = Array.from(document.querySelectorAll('.damaged-row'));
   const loansEmpty = document.getElementById('loans-empty');
   const damagedEmpty = document.getElementById('damaged-empty');
+  const damageInvoiceModal = document.getElementById('damage-invoice-modal');
+  const damageInvoiceForm = document.getElementById('damage-invoice-form');
+  const damageInvoiceItem = document.getElementById('damage-invoice-item');
+  const damageInvoiceBorrower = document.getElementById('damage-invoice-borrower');
+  const damageInvoiceCode = document.getElementById('damage-invoice-code');
+  const damageInvoiceAmount = document.getElementById('damage-invoice-amount');
+  const damageInvoiceReason = document.getElementById('damage-invoice-reason');
+
+  function openDamageReportPrompt(button) {
+    const row = button.closest('.loan-row');
+    if (!row) {
+      return;
+    }
+
+    const itemId = row.dataset.itemId || '';
+    const itemName = row.dataset.itemName || 'Bibliotheksmedium';
+    const noteInput = prompt('Schadensmeldung für dieses Bibliotheksmedium:\nNotiz zum Schaden (optional):', '');
+
+    if (noteInput === null) {
+      return;
+    }
+
+    const description = noteInput.trim() || 'Schaden erneut gemeldet';
+
+    fetch(`/report_damage/${itemId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description })
+    })
+      .then(response => response.json().then(data => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.success) {
+          throw new Error(data.message || 'Fehler beim Speichern der Schadensmeldung.');
+        }
+
+        if (confirm('Schaden gespeichert. Soll direkt eine Rechnung erstellt werden?')) {
+          openDamageInvoiceModal(row, description);
+          return;
+        }
+
+        window.location.reload();
+      })
+      .catch(error => {
+        alert(error.message || 'Fehler beim Speichern der Schadensmeldung.');
+      });
+  }
+
+  window.openDamageReportPrompt = openDamageReportPrompt;
+
+  function openDamageInvoiceModal(row, description) {
+    if (!damageInvoiceModal || !damageInvoiceForm) {
+      return;
+    }
+
+    const borrowId = row.dataset.borrowId || '';
+    const itemName = row.dataset.itemName || '';
+    const borrower = row.dataset.userName || '';
+    const itemCode = row.dataset.itemCode || '';
+    const itemCost = row.dataset.itemCost || '';
+
+    damageInvoiceForm.action = "{{ url_for('admin_create_invoice', borrow_id='__BORROW_ID__') }}".replace('__BORROW_ID__', borrowId);
+    damageInvoiceItem.value = itemName;
+    damageInvoiceBorrower.value = borrower;
+    damageInvoiceCode.value = itemCode;
+    damageInvoiceAmount.value = String(itemCost).replace(' EUR', '').trim();
+    damageInvoiceReason.value = description || `Schaden gemeldet für ${itemName}`;
+    damageInvoiceModal.style.display = 'block';
+    damageInvoiceAmount.focus();
+  }
+
+  window.openDamageInvoiceModal = openDamageInvoiceModal;
+
+  function closeDamageInvoiceModal() {
+    if (damageInvoiceModal) {
+      damageInvoiceModal.style.display = 'none';
+    }
+  }
+
+  if (damageInvoiceModal) {
+    damageInvoiceModal.addEventListener('click', function(event) {
+      if (event.target === damageInvoiceModal) {
+        closeDamageInvoiceModal();
+      }
+    });
+  }
+
+  window.closeDamageInvoiceModal = closeDamageInvoiceModal;
 
   function applyFilters() {
     const search = (searchInput.value || '').trim().toLowerCase();

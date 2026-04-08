@@ -4018,6 +4018,22 @@ def ausleihen(id):
         grouped_units = [item] + [{**child, '_id': str(child.get('_id'))} for child in grouped_children]
         available_units = [unit for unit in grouped_units if unit.get('Verfuegbar', True)]
 
+        planned_counts = {}
+        try:
+            client = MongoClient(MONGODB_HOST, MONGODB_PORT)
+            db = client[MONGODB_DB]
+            ausleihungen_col = db['ausleihungen']
+            unit_ids = [str(unit.get('_id')) for unit in grouped_units if unit.get('_id')]
+            planned_cursor = ausleihungen_col.find({'Item': {'$in': unit_ids}, 'Status': 'planned'})
+            for planned_booking in planned_cursor:
+                planned_item_id = str(planned_booking.get('Item') or '')
+                if not planned_item_id:
+                    continue
+                planned_counts[planned_item_id] = planned_counts.get(planned_item_id, 0) + 1
+            client.close()
+        except Exception:
+            planned_counts = {}
+
         if not available_units:
             flash('Keine Exemplare verfügbar.', 'error')
             return redirect(url_for(redirect_target))
@@ -4030,6 +4046,7 @@ def ausleihen(id):
                 return redirect(url_for(redirect_target))
             selected_units = [chosen]
         else:
+            available_units.sort(key=lambda unit: (planned_counts.get(str(unit.get('_id')) or '', 0), str(unit.get('Code_4') or ''), str(unit.get('_id') or '')))
             if exemplare_count > len(available_units):
                 flash(f'Nicht genügend Exemplare verfügbar. Angefordert: {exemplare_count}, Verfügbar: {len(available_units)}', 'error')
                 return redirect(url_for(redirect_target))

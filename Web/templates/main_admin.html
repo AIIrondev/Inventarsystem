@@ -1641,6 +1641,61 @@
             display: block !important;
             object-fit: cover !important;
         }
+
+        .actions {
+            gap: 8px !important;
+            border-top: none !important;
+            padding-top: 8px !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+
+        .actions form,
+        .actions button,
+        .actions a {
+            width: 100% !important;
+        }
+
+        .grouped-borrow-controls {
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 6px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .grouped-borrow-controls label {
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        .grouped-borrow-controls input,
+        .grouped-borrow-controls select {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 40px !important;
+            padding: 8px 10px !important;
+            box-sizing: border-box !important;
+        }
+
+        .inline-action-form {
+            width: 100% !important;
+        }
+
+        .inline-action-form button,
+        .inline-action-form .ausleihen {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group select {
+            width: 100% !important;
+            max-width: none !important;
+        }
     }
 
     /* Modal image display fixes */
@@ -2345,6 +2400,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         <h2>Termin planen</h2>
         <form id="schedule-form">
             <input type="hidden" id="schedule-item-id" name="item_id">
+            <div class="form-group" id="schedule-specific-item-group" style="display:none;">
+                <label for="schedule-specific-item">Unterartikel (optional):</label>
+                <select id="schedule-specific-item" name="specific_item_id">
+                    <option value="">Automatisch wählen</option>
+                </select>
+            </div>
             
             <div class="form-group">
                 <label for="schedule-date">Startdatum:</label>
@@ -3063,6 +3124,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                         const isGroupedItem = groupedCount > 1;
                         const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
                         const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
+                        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
 
                         card.innerHTML = `
                             <div class="card-content" data-item-id="${item._id}">
@@ -3084,7 +3146,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 ${isAvailableForBorrow && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}">
                                         ${isGroupedItem ? `
-                                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                        <div class="grouped-borrow-controls" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
                                             <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
                                             <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
                                             <label style="font-size:0.85rem; margin:0;">oder Code:</label>
@@ -3107,7 +3169,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                                 </a>
                                 <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-card-${item._id}')">Bearbeiten</button>
                                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
-                                ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                             </div>
                         `;
                         itemsContainer.appendChild(card);
@@ -3617,6 +3679,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const isGroupedItem = groupedCount > 1;
         const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
         const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
+        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
         
         let borrowerInfoHtml = '';
         if (isBorrowed && item.BorrowerInfo) {
@@ -3807,7 +3870,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 <button class="edit-button" onclick="openEditModalForSelectedUnit('${item._id}', 'specific-item-modal-${item._id}')">Bearbeiten</button>
                 <button class="duplicate-button" onclick="duplicateItem('${item._id}')">Duplizieren</button>
                 ${damageReports.length > 0 ? `<button class="damage-button" onclick="markDamageAsRepaired('${item._id}')">Repariert</button>` : `<button class="damage-button" onclick="registerDamage('${item._id}')">Schaden melden</button>`}
-                ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                 <a href="/delete_item/${item._id}" onclick="return confirm('Sind Sie sicher?')">
                     <button class="delete-button">Löschen</button>
                 </a>
@@ -4422,8 +4485,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const notesField = document.getElementById('schedule-notes');
         const startPeriodField = document.getElementById('schedule-start-period');
         const endPeriodField = document.getElementById('schedule-end-period');
+        const specificGroup = document.getElementById('schedule-specific-item-group');
+        const specificSelect = document.getElementById('schedule-specific-item');
         
         if (itemIdField) itemIdField.value = itemId;
+
+        const selectedItem = Array.isArray(allItems) ? allItems.find(item => item._id === itemId) : null;
+        const groupedCount = Number(selectedItem?.GroupedDisplayCount || 1);
+        const groupedUnits = Array.isArray(selectedItem?.GroupedAvailableUnits) ? selectedItem.GroupedAvailableUnits : [];
+
+        if (specificGroup && specificSelect) {
+            if (groupedCount > 1 && groupedUnits.length > 0) {
+                specificGroup.style.display = 'block';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>' +
+                    groupedUnits.map(unit => `<option value="${unit.id}">${unit.code || '-'}</option>`).join('');
+            } else {
+                specificGroup.style.display = 'none';
+                specificSelect.innerHTML = '<option value="">Automatisch wählen</option>';
+            }
+            specificSelect.value = '';
+        }
         
         // Set default date to today
         if (dateField) {

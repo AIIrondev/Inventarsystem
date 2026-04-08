@@ -875,6 +875,7 @@
                         const isGroupedItem = groupedCount > 1;
                         const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
                         const isAvailableForBorrow = isGroupedItem ? availableGroupedCount > 0 : !!item.Verfuegbar;
+                        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
 
                         // Check if item is borrowed by current user (single items only)
                         const isBorrowedByMe = !isGroupedItem && !item.Verfuegbar && item.User === currentUsername;
@@ -926,7 +927,7 @@
                                 ${isAvailableForBorrow && !item.BlockedNow ? 
                                     `<form method="POST" action="{{ url_for('ausleihen', id='') }}${item._id}" class="inline-action-form">
                                         ${isGroupedItem ? `
-                                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                                        <div class="grouped-borrow-controls" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
                                             <label style="font-size:0.85rem; margin:0;">Anzahl:</label>
                                             <input type="number" name="exemplare_count" min="1" max="${availableGroupedCount}" value="1" style="width:74px; padding:4px;">
                                             <label style="font-size:0.85rem; margin:0;">oder Code:</label>
@@ -944,7 +945,7 @@
                                 :
                                     `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                                 }
-                                ${item.Reservierbar !== false ? `<button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                                ${canScheduleItem ? `<button class="schedule-button" type="button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                                 <button class="quick-details-button" type="button" onclick="openItemQuick('${item._id}')">Details</button>
                             </div>
                         `;
@@ -1269,6 +1270,7 @@
         const availableGroupedCount = Number(item.AvailableGroupedCount ?? (item.Verfuegbar ? 1 : 0));
         const isGroupedItem = groupedCount > 1;
         const groupedAvailableUnits = Array.isArray(item.GroupedAvailableUnits) ? item.GroupedAvailableUnits : [];
+        const canScheduleItem = isGroupedItem || item.Reservierbar !== false;
         // Check if item is borrowed
         const isBorrowed = isGroupedItem ? availableGroupedCount <= 0 : !item.Verfuegbar;
         
@@ -1448,7 +1450,7 @@
                     </form>`
                     : `<button class="ausleihen disabled-button" disabled>${item.BlockedNow ? 'Reserviert' : 'Ausgeliehen'}</button>`
                 }
-                ${item.Reservierbar !== false ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
+                ${canScheduleItem ? `<button class="schedule-button" onclick="openScheduleModal('${item._id}')">Termin planen</button>` : ''}
                 <button type="button" class="close-modal secondary-close" onclick="document.getElementById('item-modal').style.display='none';">Schließen</button>
             </div>
         `;
@@ -3848,9 +3850,44 @@
             padding-top: 8px !important;
         }
 
+        .grouped-borrow-controls {
+            width: 100% !important;
+        }
+
         .actions form,
         .actions button,
         .actions a {
+            width: 100% !important;
+        }
+
+        .grouped-borrow-controls {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 6px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .grouped-borrow-controls label {
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        .grouped-borrow-controls input,
+        .grouped-borrow-controls select {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 40px !important;
+            padding: 8px 10px !important;
+            box-sizing: border-box !important;
+        }
+
+        .inline-action-form {
+            width: 100% !important;
+        }
+
+        .inline-action-form .ausleihen,
+        .inline-action-form button {
             width: 100% !important;
         }
 
@@ -3871,6 +3908,15 @@
             border: none !important;
             border-radius: 0 !important;
             padding: 16px !important;
+        }
+
+        #schedule-specific-item-group {
+            width: 100% !important;
+        }
+
+        #schedule-specific-item-group select {
+            width: 100% !important;
+            max-width: none !important;
         }
 
         #conflict-banner {
