@@ -961,6 +961,7 @@ def home():
         return render_template(
             'main.html',
             username=session['username'],
+            library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
             student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
             student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
             student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
@@ -987,6 +988,7 @@ def home_admin():
     return render_template(
         'main_admin.html',
         username=session['username'],
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,
         student_max_borrow_days=cfg.STUDENT_MAX_BORROW_DAYS
@@ -1030,6 +1032,7 @@ def library_view():
     return render_template(
         'library_table.html',
         username=session['username'],
+        library_module_enabled=cfg.LIBRARY_MODULE_ENABLED,
         is_admin=us.check_admin(session['username']),
         student_cards_module_enabled=cfg.STUDENT_CARDS_MODULE_ENABLED,
         student_default_borrow_days=cfg.STUDENT_DEFAULT_BORROW_DAYS,

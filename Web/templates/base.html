@@ -7,7 +7,7 @@
    For commercial licensing inquiries: https://github.com/AIIrondev
 -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-module="inventory">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -25,6 +25,23 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <style>
+        /* ===== MODULE DETECTION & SETUP ===== */
+        :root {
+            --module-primary-color: #2c3e50;
+            --module-primary-light: #34495e;
+            --module-accent-color: #3498db;
+            --module-accent-light: rgba(52, 152, 219, 0.1);
+            --module-brand-icon: "📦";
+        }
+
+        html[data-module="library"] {
+            --module-primary-color: #6c4e71;
+            --module-primary-light: #7d5a8a;
+            --module-accent-color: #9b59b6;
+            --module-accent-light: rgba(155, 89, 182, 0.1);
+            --module-brand-icon: "📚";
+        }
+
         /* Global styles */
         body {
             font-family: "Manrope", "Segoe UI", "Noto Sans", sans-serif;
@@ -45,11 +62,17 @@
         /* Navigation styles */
         .navbar {
             box-shadow: 0 4px 14px rgba(2, 6, 23, 0.24);
+            background-color: var(--module-primary-color) !important;
         }
         
         .navbar-brand {
             font-weight: bold;
             font-size: 1.4rem;
+        }
+        
+        .navbar-brand::before {
+            content: attr(data-icon);
+            margin-right: 8px;
         }
 
         .navbar-nav .nav-link {
@@ -65,8 +88,8 @@
         }
 
         .nav-priority-link {
-            background: rgba(40, 167, 69, 0.2);
-            border: 1px solid rgba(40, 167, 69, 0.45);
+            background: var(--module-accent-light);
+            border: 1px solid var(--module-accent-color);
         }
         
         .admin-nav-section {
@@ -76,7 +99,7 @@
         }
 
         .admin-nav-section .nav-item {
-            background-color: #28a745;
+            background-color: var(--module-accent-color);
             color: white;
             padding: 5px 10px;
             border-radius: 4px;
@@ -85,7 +108,7 @@
         }
 
         .admin-nav-section .nav-item:hover {
-            background-color: #218838;
+            opacity: 0.8;
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -253,74 +276,210 @@
                 color: #007bff;
             }
         }
+
+        /* Module Selector Bar Styles */
+        .module-selector-bar {
+            background: linear-gradient(90deg, var(--module-primary-color) 0%, var(--module-primary-light) 100%);
+            border-bottom: 3px solid var(--module-accent-color);
+            padding: 10px 16px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 12px;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .module-selector-bar .module-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 800;
+            margin-right: 8px;
+        }
+
+        .module-selector-bar .module-tabs {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex: 1;
+        }
+
+        .module-selector-bar .module-tab {
+            padding: 7px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .module-selector-bar .module-tab:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+            color: #fff;
+            transform: translateY(-2px);
+        }
+
+        .module-selector-bar .module-tab.active {
+            background: var(--module-accent-color);
+            border-color: rgba(255, 255, 255, 0.8);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .module-separator {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.25);
+            margin: 0 4px;
+        }
+
+        @media (max-width: 768px) {
+            .module-selector-bar {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+
+            .module-selector-bar .module-label {
+                display: none;
+            }
+
+            .module-selector-bar .module-tab {
+                padding: 5px 12px;
+                font-size: 0.9rem;
+            }
+
+            .module-separator {
+                height: 18px;
+            }
+        }
     </style>
     {% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <!-- Module Selector Bar -->
+    {% if 'username' in session %}
+    <div class="module-selector-bar" id="moduleBar">
+        <span class="module-label">Module:</span>
+        <div class="module-tabs">
+            <a href="{{ url_for('home') }}" 
+               class="module-tab" 
+               id="inventoryModule" 
+               data-module="inventory">
+               📦 Inventarsystem
+            </a>
+            {% if library_module_enabled %}
+            <div class="module-separator"></div>
+            <a href="{{ url_for('library_view') }}" 
+               class="module-tab" 
+               id="libraryModule" 
+               data-module="library">
+               📚 Bibliothek
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        (function() {
+            // Detect current module based on URL and update data-module attribute
+            const currentPath = window.location.pathname;
+            const htmlTag = document.documentElement;
+            
+            // Detect module and pages
+            const isLibraryModule = currentPath.includes('/library') || 
+                                   currentPath.includes('/library_admin') ||
+                                   currentPath.includes('/library_loans') ||
+                                   currentPath.includes('/student_cards');
+            
+            const currentModule = isLibraryModule ? 'library' : 'inventory';
+            htmlTag.setAttribute('data-module', currentModule);
+            
+            // Update module selector tabs
+            const invModule = document.getElementById('inventoryModule');
+            const libModule = document.getElementById('libraryModule');
+
+            if (currentModule === 'library') {
+                if (libModule) libModule.classList.add('active');
+                if (invModule) invModule.classList.remove('active');
+            } else {
+                if (invModule) invModule.classList.add('active');
+                if (libModule) libModule.classList.remove('active');
+            }
+            
+            // Show/hide appropriate navbar based on current module
+            const invNavbar = document.getElementById('inventoryNavbar');
+            const libNavbar = document.getElementById('libraryNavbar');
+
+            if (currentModule === 'library') {
+                if (invNavbar) invNavbar.style.display = 'none';
+                if (libNavbar) libNavbar.style.display = '';
+            } else {
+                if (invNavbar) invNavbar.style.display = '';
+                if (libNavbar) libNavbar.style.display = 'none';
+            }
+        })();
+    </script>
+
+    <nav class="navbar navbar-expand-lg navbar-dark" id="inventoryNavbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home') }}">Inventarsystem</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+            <a class="navbar-brand" href="{{ url_for('home') }}" data-icon="📦">Inventarsystem</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryNavContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="mainNavList">
+            <div class="collapse navbar-collapse" id="inventoryNavContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="inventoryNavList">
                     <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link" href="{{ url_for('home') }}">Start</a>
+                        <a class="nav-link" href="{{ url_for('home') }}">Artikel</a>
                     </li>
-                    {% if library_module_enabled %}
-                    <li class="nav-item" data-nav-fixed="true">
-                        <a class="nav-link" href="{{ url_for('library_view') }}">Bibliothek</a>
-                    </li>
-                    {% endif %}
                     {% if 'username' in session and (session.get('admin', False) or is_admin) %}
                     <li class="nav-item">
-                        <a class="nav-link nav-priority-link" href="{{ url_for('upload_admin') }}">Artikel hochladen</a>
+                        <a class="nav-link nav-priority-link" href="{{ url_for('upload_admin') }}">➕ Hochladen</a>
                     </li>
                     {% endif %}
                     <li class="nav-item dropdown ms-lg-auto">
-                        <a class="nav-link dropdown-toggle" href="#" id="metaNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Mehr
+                        <a class="nav-link dropdown-toggle" href="#" id="invMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            ⋯ Mehr
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="metaNavDropdown">
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invMoreDropdown">
                             {% if 'username' in session %}
                             <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Ausleihen</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             {% if 'username' in session and (session.get('admin', False) or is_admin) %}
-                            <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
-                            {% if library_module_enabled %}
-                            <li><a class="dropdown-item" href="{{ url_for('library_admin') }}">Bücher hochladen</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Bibliothek-Ausleihen</a></li>
-                            {% endif %}
-                            {% if student_cards_module_enabled %}
-                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
-                            {% endif %}
+                            <li><h6 class="dropdown-header">Verwaltung</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihen</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><h6 class="dropdown-header">System</h6></li>
                             <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('manage_filters') }}">Filter verwalten</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('manage_locations') }}">Orte verwalten</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('admin_borrowings') }}">Ausleihungsverwaltung</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                             <li><hr class="dropdown-divider"></li>
                             {% endif %}
                             <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('license') }}">License</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item d-none" id="nav-overflow-anchor" aria-hidden="true"></li>
+                    <li class="nav-item d-none" id="inv-nav-overflow-anchor" aria-hidden="true"></li>
                 </ul>
                 <div class="d-flex">
                     {% if 'username' in session %}
-                        <span class="navbar-text text-light me-3">Welcome, {{ session['username'] }}</span>
+                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
                         <div class="dropdown me-2">
-                            <button class="btn btn-secondary dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                Account
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="invUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                👤
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="invUserMenuDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
@@ -331,6 +490,88 @@
             </div>
         </div>
     </nav>
+
+    {% if library_module_enabled %}
+    <nav class="navbar navbar-expand-lg navbar-dark" id="libraryNavbar" style="display: none;">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('library_view') }}" data-icon="📚">Bibliothek</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#libraryNavContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="libraryNavContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0" id="libraryNavList">
+                    <li class="nav-item" data-nav-fixed="true">
+                        <a class="nav-link" href="{{ url_for('library_view') }}">Medien</a>
+                    </li>
+                    {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-priority-link" href="{{ url_for('library_admin') }}">📖 Hochladen</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown ms-lg-auto">
+                        <a class="nav-link dropdown-toggle" href="#" id="libMoreDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            ⋯ Mehr
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libMoreDropdown">
+                            {% if 'username' in session %}
+                            <li><a class="dropdown-item" href="{{ url_for('my_borrowed_items') }}">Meine Medien</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('tutorial_page') }}">Tutorial</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            {% if 'username' in session and (session.get('admin', False) or is_admin) %}
+                            <li><h6 class="dropdown-header">Bibliotheks-Verwaltung</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('library_loans_admin') }}">Ausleihen</a></li>
+                            {% if student_cards_module_enabled %}
+                            <li><a class="dropdown-item" href="{{ url_for('student_cards_admin') }}">Schülerausweise</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">System</h6></li>
+                            <li><a class="dropdown-item" href="{{ url_for('user_del') }}">Benutzer verwalten</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('register') }}">Neuer Benutzer</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('impressum') }}">Impressum</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('license') }}">Lizenz</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item d-none" id="lib-nav-overflow-anchor" aria-hidden="true"></li>
+                </ul>
+                <div class="d-flex">
+                    {% if 'username' in session %}
+                        <span class="navbar-text text-light me-3">{{ session['username'] }}</span>
+                        <div class="dropdown me-2">
+                            <button class="btn btn-secondary dropdown-toggle" type="button" id="libUserMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                👤
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="libUserMenuDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Passwort ändern</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <script>
+        (function() {
+            // Show/hide appropriate navbar based on current module
+            const currentPath = window.location.pathname;
+            const invNavbar = document.getElementById('inventoryNavbar');
+            const libNavbar = document.getElementById('libraryNavbar');
+
+            if (currentPath.includes('/library')) {
+                if (invNavbar) invNavbar.style.display = 'none';
+                if (libNavbar) libNavbar.style.display = '';
+            } else {
+                if (invNavbar) invNavbar.style.display = '';
+                if (libNavbar) libNavbar.style.display = 'none';
+            }
+        })();
+    </script>
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -407,14 +648,10 @@
 
         .dynamic-overflow-control .dropdown-header {
             font-weight: 800;
-            color: #334155;
+            color: var(--module-accent-color);
             font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-        }
-
-        .dynamic-overflow-entry.sub-item {
-            padding-left: 24px;
         }
     </style>
     <div id="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-Hinweis">
@@ -519,95 +756,92 @@
                 hideOnboarding();
             });
 
-            const navList = document.getElementById('mainNavList');
-            const navOverflowAnchor = document.getElementById('nav-overflow-anchor');
-            const overflowSourceCapacity = 3;
+            const navList = document.getElementById('inventoryNavList');
+            const navOverflowAnchor = document.getElementById('inv-nav-overflow-anchor');
+            const libraryNavList = document.getElementById('libraryNavList');
+            const libNavOverflowAnchor = document.getElementById('lib-nav-overflow-anchor');
 
-            function collectTopLevelNavSources() {
-                if (!navList) return [];
-                return Array.from(navList.children).filter(function(li){
-                    if (!(li instanceof HTMLElement)) return false;
-                    if (!li.classList.contains('nav-item')) return false;
-                    if (li.id === 'nav-overflow-anchor') return false;
-                    if (li.dataset.navFixed === 'true') return false;
-                    if (li.dataset.overflowControl === 'true') return false;
-                    return li.style.display !== 'none';
-                });
-            }
+            function initNavbarOverflow(navList, navOverflowAnchor) {
+                if (!navList || !navOverflowAnchor) return;
 
-            function clearOverflowControls() {
-                if (!navList) return;
-                navList.querySelectorAll('[data-overflow-control="true"]').forEach(function(node){
-                    node.remove();
-                });
-            }
-
-            function restoreAllNavItems() {
-                if (!navList) return;
-                navList.querySelectorAll('li.nav-item').forEach(function(li){
-                    if (li.id === 'nav-overflow-anchor') return;
-                    if (li.dataset.overflowControl === 'true') return;
-                    li.style.display = '';
-                });
-                clearOverflowControls();
-            }
-
-            function createOverflowControl(label, index) {
-                const li = document.createElement('li');
-                li.className = 'nav-item dropdown dynamic-overflow-control';
-                li.dataset.overflowControl = 'true';
-
-                const toggleId = 'dynamicOverflowDropdown' + index;
-                li.innerHTML =
-                    '<a class="nav-link dropdown-toggle" href="#" id="' + toggleId + '" role="button" data-bs-toggle="dropdown" aria-expanded="false">' +
-                    label +
-                    '</a>' +
-                    '<ul class="dropdown-menu" aria-labelledby="' + toggleId + '"></ul>';
-
-                return li;
-            }
-
-            function appendSourceToOverflowMenu(sourceItem, menu) {
-                const topLink = sourceItem.querySelector(':scope > a.nav-link');
-                if (!topLink) return;
-
-                const childMenu = sourceItem.querySelector(':scope > ul.dropdown-menu');
-                const sourceLabel = topLink.textContent.trim();
-
-                if (!childMenu) {
-                    const entry = document.createElement('li');
-                    entry.innerHTML = '<a class="dropdown-item dynamic-overflow-entry" href="' + topLink.getAttribute('href') + '">' + sourceLabel + '</a>';
-                    menu.appendChild(entry);
-                    return;
+                function collectTopLevelNavSources() {
+                    if (!navList) return [];
+                    return Array.from(navList.children).filter(function(li){
+                        if (!(li instanceof HTMLElement)) return false;
+                        if (!li.classList.contains('nav-item')) return false;
+                        if (li.id === navOverflowAnchor.id) return false;
+                        if (li.dataset.overflowControl === 'true') return false;
+                        if (li.dataset.navFixed === 'true') return false;
+                        return li.style.display !== 'none';
+                    });
                 }
 
-                const header = document.createElement('li');
-                header.innerHTML = '<h6 class="dropdown-header">' + sourceLabel + '</h6>';
-                menu.appendChild(header);
+                function clearOverflowControls() {
+                    if (!navList) return;
+                    navList.querySelectorAll('[data-overflow-control="true"]').forEach(function(node){
+                        node.remove();
+                    });
+                }
 
-                childMenu.querySelectorAll(':scope > li > a.dropdown-item').forEach(function(subLink){
-                    const subEntry = document.createElement('li');
-                    subEntry.innerHTML = '<a class="dropdown-item dynamic-overflow-entry sub-item" href="' + subLink.getAttribute('href') + '">' + subLink.textContent.trim() + '</a>';
-                    menu.appendChild(subEntry);
-                });
+                function restoreAllNavItems() {
+                    if (!navList) return;
+                    navList.querySelectorAll('li.nav-item').forEach(function(li){
+                        if (li.id === navOverflowAnchor.id) return;
+                        if (li.dataset.overflowControl === 'true') return;
+                        li.style.display = '';
+                    });
+                    clearOverflowControls();
+                }
 
-                const divider = document.createElement('li');
-                divider.innerHTML = '<hr class="dropdown-divider">';
-                menu.appendChild(divider);
-            }
+                function createOverflowControl() {
+                    const li = document.createElement('li');
+                    li.className = 'nav-item dropdown';
+                    li.dataset.overflowControl = 'true';
 
-            function rebuildOverflowControls(hiddenSources) {
-                clearOverflowControls();
-                if (!navList || !navOverflowAnchor || hiddenSources.length === 0) return;
+                    li.innerHTML =
+                        '<a class="nav-link dropdown-toggle" href="#" id="overflowMenuToggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">⋮ Weitere</a>' +
+                        '<ul class="dropdown-menu" aria-labelledby="overflowMenuToggle" id="overflowMenu"></ul>';
 
-                let dropdownIndex = 0;
-                for (let start = 0; start < hiddenSources.length; start += overflowSourceCapacity) {
-                    dropdownIndex += 1;
-                    const label = dropdownIndex === 1 ? 'Mehr' : ('Mehr ' + dropdownIndex);
-                    const control = createOverflowControl(label, dropdownIndex);
+                    return li;
+                }
+
+                function appendSourceToOverflowMenu(sourceItem, menu) {
+                    const topLink = sourceItem.querySelector(':scope > a.nav-link');
+                    if (!topLink) return;
+
+                    const childMenu = sourceItem.querySelector(':scope > ul.dropdown-menu');
+                    const sourceLabel = topLink.textContent.trim();
+
+                    if (!childMenu) {
+                        const entry = document.createElement('li');
+                        entry.innerHTML = '<a class="dropdown-item" href="' + topLink.getAttribute('href') + '">' + sourceLabel + '</a>';
+                        menu.appendChild(entry);
+                        return;
+                    }
+
+                    const header = document.createElement('li');
+                    header.innerHTML = '<h6 class="dropdown-header">' + sourceLabel + '</h6>';
+                    menu.appendChild(header);
+
+                    childMenu.querySelectorAll(':scope > li > a.dropdown-item').forEach(function(subLink){
+                        const subEntry = document.createElement('li');
+                        subEntry.innerHTML = '<a class="dropdown-item" style="padding-left: 2.5rem;" href="' + subLink.getAttribute('href') + '">' + subLink.textContent.trim() + '</a>';
+                        menu.appendChild(subEntry);
+                    });
+
+                    const divider = document.createElement('li');
+                    divider.innerHTML = '<hr class="dropdown-divider">';
+                    menu.appendChild(divider);
+                }
+
+                function rebuildOverflowControl(hiddenSources) {
+                    clearOverflowControls();
+                    if (!navList || !navOverflowAnchor || hiddenSources.length === 0) return;
+
+                    const control = createOverflowControl();
                     const menu = control.querySelector('ul.dropdown-menu');
-                    const chunk = hiddenSources.slice(start, start + overflowSourceCapacity);
-                    chunk.forEach(function(source){
+
+                    hiddenSources.forEach(function(source){
                         appendSourceToOverflowMenu(source, menu);
                     });
 
@@ -618,51 +852,60 @@
 
                     navList.insertBefore(control, navOverflowAnchor);
                 }
-            }
 
-            function adaptNavbarByWidth() {
-                if (!navList || !navOverflowAnchor) return;
+                function adaptNavbarByWidth() {
+                    if (!navList || !navOverflowAnchor) return;
 
-                // Bootstrap mobile layout already handles collapsing; dynamic overflow is desktop only.
-                if (window.innerWidth < 992) {
+                    if (window.innerWidth < 992) {
+                        restoreAllNavItems();
+                        return;
+                    }
+
                     restoreAllNavItems();
-                    return;
-                }
 
-                restoreAllNavItems();
+                    const hiddenSources = [];
+                    let candidates = collectTopLevelNavSources();
 
-                const hiddenSources = [];
-                let candidates = collectTopLevelNavSources();
+                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                        const toHide = candidates[candidates.length - 1];
+                        toHide.style.display = 'none';
+                        hiddenSources.unshift(toHide);
+                        candidates = collectTopLevelNavSources();
+                    }
 
-                while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
-                    const toHide = candidates[candidates.length - 1];
-                    toHide.style.display = 'none';
-                    hiddenSources.unshift(toHide);
+                    rebuildOverflowControl(hiddenSources);
+
                     candidates = collectTopLevelNavSources();
+                    while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
+                        const toHide = candidates[candidates.length - 1];
+                        toHide.style.display = 'none';
+                        hiddenSources.unshift(toHide);
+                        rebuildOverflowControl(hiddenSources);
+                        candidates = collectTopLevelNavSources();
+                    }
                 }
 
-                rebuildOverflowControls(hiddenSources);
-
-                candidates = collectTopLevelNavSources();
-                while (navList.scrollWidth > navList.clientWidth && candidates.length > 0) {
-                    const toHide = candidates[candidates.length - 1];
-                    toHide.style.display = 'none';
-                    hiddenSources.unshift(toHide);
-                    rebuildOverflowControls(hiddenSources);
-                    candidates = collectTopLevelNavSources();
+                let resizeTimer = null;
+                function debounceAdapt() {
+                    if (resizeTimer) {
+                        window.clearTimeout(resizeTimer);
+                    }
+                    resizeTimer = window.setTimeout(adaptNavbarByWidth, 120);
                 }
+
+                adaptNavbarByWidth();
+                window.addEventListener('resize', debounceAdapt);
             }
 
-            let navResizeTimer = null;
-            function debounceAdaptNavbar() {
-                if (navResizeTimer) {
-                    window.clearTimeout(navResizeTimer);
-                }
-                navResizeTimer = window.setTimeout(adaptNavbarByWidth, 120);
+            // Initialize overflow control for inventory navbar
+            if (navList && navOverflowAnchor) {
+                initNavbarOverflow(navList, navOverflowAnchor);
             }
 
-            adaptNavbarByWidth();
-            window.addEventListener('resize', debounceAdaptNavbar);
+            // Initialize overflow control for library navbar
+            if (libraryNavList && libNavOverflowAnchor) {
+                initNavbarOverflow(libraryNavList, libNavOverflowAnchor);
+            }
         })();
     </script>
     <!-- Mobile compatibility scripts -->
