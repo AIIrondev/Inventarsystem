@@ -707,6 +707,7 @@ def home():
     Returns:
         flask.Response: Rendered template or redirect
     """
+    return redirect('https://gso3.invario-software.de')
     if 'username' not in session:
         flash('Bitte mit registriertem Konto anmelden!', 'error')
         return redirect(url_for('login'))
@@ -725,6 +726,7 @@ def home_admin():
     Returns:
         flask.Response: Rendered template or redirect
     """
+    return redirect('https://gso3.invario-software.de')
     if 'username' not in session:
         flash('Ihnen ist es nicht gestattet auf dieser Internetanwendung, die eben besuchte Adrrese zu nutzen, versuchen sie es erneut nach dem sie sich mit einem berechtigten Nutzer angemeldet haben!', 'error')
         return redirect(url_for('login'))
@@ -812,6 +814,7 @@ def login():
     Returns:
         flask.Response: Rendered template or redirect
     """
+    return redirect('https://gso3.invario-software.de')
     if 'username' in session:
         return redirect(url_for('home'))
     if request.method == 'POST':
